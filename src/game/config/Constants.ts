@@ -2,6 +2,19 @@ export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 export const ARENA = { width: 2000, height: 1200 } as const;
 export const RUN_DURATION_MS = 5 * 60 * 1000;
+export const GAMEPLAY = {
+  chestFirstMs: 30000,
+  chestIntervalMs: 45000,
+  equipmentEveryLevels: 3,
+  maxEnemies: 80,
+  maxPlayerProjectiles: 90,
+  maxEnemyProjectiles: 100,
+  maxXpOrbs: 160,
+  spawnBaseIntervalMs: 900,
+  spawnMinimumIntervalMs: 260,
+  eliteStartMs: 45000,
+  eliteMaxChance: 0.12,
+} as const;
 export const COLORS = {
   navy: 0x07111f,
   cyan: 0x21e6ff,

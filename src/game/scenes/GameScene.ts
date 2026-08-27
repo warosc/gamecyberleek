@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, COLORS, Events, GameState, RUN_DURATION_MS } from '../config/Constants';
+import { ARENA, COLORS, Events, GAMEPLAY, GameState, RUN_DURATION_MS } from '../config/Constants';
 import { Player } from '../entities/player/Player';
 import { ProjectileManager } from '../entities/projectiles/ProjectileManager';
 import { EnemyFactory } from '../entities/enemies/EnemyFactory';
@@ -43,7 +43,7 @@ export class GameScene extends Phaser.Scene {
   private pausedByEsc = false;
   private audio!: AudioManager;
   private bossSpawned = false;
-  private nextChestAt = 30000;
+  private nextChestAt = GAMEPLAY.chestFirstMs;
   private pendingEquipmentDrop = false;
   equippedWeapon = 'PULSEGUN-01';
   equippedArmor = 'SIN ARMADURA';
@@ -67,7 +67,7 @@ export class GameScene extends Phaser.Scene {
     this.pausedByEsc = false;
     this.specialLastUsed = { nova: -99999, shield: -99999, overdrive: -99999 };
     this.bossSpawned = false;
-    this.nextChestAt = 30000;
+    this.nextChestAt = GAMEPLAY.chestFirstMs;
     this.pendingEquipmentDrop = false;
     this.mobileInput.movement.set(0, 0);
     this.mobileInput.aim.set(1, 0);
@@ -90,7 +90,7 @@ export class GameScene extends Phaser.Scene {
     this.createExplosiveBarrels();
     this.orbs = this.physics.add.group({
       classType: ExperienceOrb,
-      maxSize: 160,
+      maxSize: GAMEPLAY.maxXpOrbs,
       runChildUpdate: false,
     });
     this.spawn = new SpawnSystem(new EnemyFactory(this), this.enemies);
@@ -146,31 +146,31 @@ export class GameScene extends Phaser.Scene {
     this.scene.launch('UI', { game: this });
     this.events.emit(Events.STATE_CHANGED, this.state);
   }
-  update(time: number, delta: number) {
+  update(_time: number, delta: number) {
     if (this.state !== GameState.PLAYING) return;
     this.survivalMs += delta;
     if (this.survivalMs >= RUN_DURATION_MS && !this.bossSpawned) this.spawnBoss();
     if (this.survivalMs >= this.nextChestAt && !this.bossSpawned) {
-      this.nextChestAt += 45000;
+      this.nextChestAt += GAMEPLAY.chestIntervalMs;
       this.spawnChest();
     }
-    this.updateSpecialAbilities(time);
+    this.updateSpecialAbilities(this.survivalMs);
     this.player.update(
-      time,
+      this.survivalMs,
       this.input.activePointer,
       (x, y, a) =>
-        this.projectiles.fire(x, y, a, this.player.stats, time, this.player.damageMultiplier),
+        this.projectiles.fire(x, y, a, this.player.stats, this.survivalMs, this.player.damageMultiplier),
       this.mobileInput,
     );
     this.mobileInput.dash = false;
-    this.projectiles.update(time);
-    this.enemyProjectiles.update(time);
+    this.projectiles.update(this.survivalMs);
+    this.enemyProjectiles.update(this.survivalMs);
     if (!this.bossSpawned) this.spawn.update(delta, this.player);
     this.enemies
       .getChildren()
       .forEach((object) =>
-        (object as Enemy).updateBehavior(this.player, time, (x, y, angle, speed, damage) =>
-          this.enemyProjectiles.fire(x, y, angle, speed, damage),
+        (object as Enemy).updateBehavior(this.player, this.survivalMs, (x, y, angle, speed, damage) =>
+          this.enemyProjectiles.fire(x, y, angle, speed, damage, this.survivalMs),
         ),
       );
     this.orbs.getChildren().forEach((o) => {
@@ -351,7 +351,7 @@ export class GameScene extends Phaser.Scene {
     const gainedLevels = this.xp.add(amount);
     if (gainedLevels > 0) {
       for (let level = previousLevel + 1; level <= this.xp.level; level++)
-        if (level % 3 === 0) this.pendingEquipmentDrop = true;
+        if (level % GAMEPLAY.equipmentEveryLevels === 0) this.pendingEquipmentDrop = true;
       this.openLevelUp();
     }
     this.events.emit(Events.XP_COLLECTED, this.xp.xp, this.xp.level);
@@ -446,7 +446,7 @@ export class GameScene extends Phaser.Scene {
   getSpecialCharge(id: SpecialAbilityId) {
     const definition = SPECIAL_ABILITIES.find((ability) => ability.id === id)!;
     return Phaser.Math.Clamp(
-      (this.time.now - this.specialLastUsed[id]) / definition.cooldown,
+      (this.survivalMs - this.specialLastUsed[id]) / definition.cooldown,
       0,
       1,
     );
@@ -457,7 +457,7 @@ export class GameScene extends Phaser.Scene {
         this.activateSpecial(ability.id, time);
     }
   }
-  activateSpecial(id: SpecialAbilityId, time = this.time.now) {
+  activateSpecial(id: SpecialAbilityId, time = this.survivalMs) {
     if (this.state !== GameState.PLAYING) return;
     const ability = SPECIAL_ABILITIES.find((definition) => definition.id === id)!;
     if (time - this.specialLastUsed[id] < ability.cooldown) return;

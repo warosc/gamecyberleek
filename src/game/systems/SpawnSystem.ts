@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA } from '../config/Constants';
+import { ARENA, GAMEPLAY } from '../config/Constants';
 import type { EnemyFactory } from '../entities/enemies/EnemyFactory';
 import { EnemyType } from '../entities/enemies/EnemyTypes';
 export class SpawnSystem {
@@ -12,8 +12,11 @@ export class SpawnSystem {
   update(delta: number, player: { x: number; y: number }) {
     this.elapsed += delta;
     if (this.elapsed < this.next) return;
-    this.next = this.elapsed + Math.max(260, 900 - this.elapsed / 180);
-    if (this.group.countActive(true) >= 80) return;
+    this.next = this.elapsed + Math.max(
+      GAMEPLAY.spawnMinimumIntervalMs,
+      GAMEPLAY.spawnBaseIntervalMs - this.elapsed / 180,
+    );
+    if (this.group.countActive(true) >= GAMEPLAY.maxEnemies) return;
     const angle = Math.random() * Math.PI * 2;
     const distance = 500 + Math.random() * 180;
     const x = Phaser.Math.Clamp(player.x + Math.cos(angle) * distance, 40, ARENA.width - 40);
@@ -28,7 +31,11 @@ export class SpawnSystem {
             ? EnemyType.RUNNER
             : EnemyType.GRUNT;
     const enemy = this.factory.create(type, x, y);
-    if (this.elapsed > 45000 && Math.random() < Math.min(0.12, this.elapsed / 1200000)) enemy.makeElite();
+    if (
+      this.elapsed > GAMEPLAY.eliteStartMs &&
+      Math.random() < Math.min(GAMEPLAY.eliteMaxChance, this.elapsed / 1200000)
+    )
+      enemy.makeElite();
     this.group.add(enemy);
   }
 }

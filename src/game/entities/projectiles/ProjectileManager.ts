@@ -2,12 +2,13 @@ import Phaser from 'phaser';
 import { calculateDamage } from '../../systems/CombatSystem';
 import type { PlayerStats } from '../player/PlayerStats';
 import { Projectile } from './Projectile';
+import { GAMEPLAY } from '../../config/Constants';
 export class ProjectileManager {
   readonly group: Phaser.Physics.Arcade.Group;
   constructor(private scene: Phaser.Scene) {
     this.group = scene.physics.add.group({
       classType: Projectile,
-      maxSize: 90,
+      maxSize: GAMEPLAY.maxPlayerProjectiles,
       runChildUpdate: false,
     });
   }

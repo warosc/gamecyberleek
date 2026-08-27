@@ -224,6 +224,7 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.PLAYER_DAMAGED, this.onHealth, this);
       this.gameScene.events.off(Events.XP_COLLECTED, this.onXp, this);
       this.gameScene.events.off(Events.PLAYER_LEVEL_UP, this.showAbilities, this);
+      this.gameScene.events.off(Events.STATE_CHANGED, this.onState, this);
       this.gameScene.events.off(Events.BOSS_SPAWNED, this.onBossSpawned, this);
       this.gameScene.events.off(Events.BOSS_HEALTH, this.onBossHealth, this);
       this.gameScene.events.off(Events.CHEST_OPENED, this.showChestRewards, this);
@@ -253,8 +254,13 @@ export class UIScene extends Phaser.Scene {
       `FPS ${Math.round(this.game.loop.actualFps)}`,
       `Enemies ${this.gameScene.enemies.countActive(true)}`,
       `Projectiles ${this.gameScene.projectiles.group.countActive(true)}`,
+      `XP orbs ${this.gameScene.orbs.countActive(true)}`,
+      `HP ${Math.ceil(this.gameScene.player.health.current)}/${this.gameScene.player.health.max}`,
       `Player ${Math.round(this.gameScene.player.x)}, ${Math.round(this.gameScene.player.y)}`,
       `State ${this.gameScene.state}`,
+      `Run ${Math.floor(this.gameScene.survivalMs / 1000)}s`,
+      `Weapon ${this.gameScene.player.stats.weaponName}`,
+      `Effects ${this.gameScene.player.isShieldActive() ? 'SHIELD ' : ''}${this.gameScene.player.isOverdriveActive() ? 'OVERDRIVE' : ''}`,
     ]);
   }
   private onHealth(current: number, max: number) {
