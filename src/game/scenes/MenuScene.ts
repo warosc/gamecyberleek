@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
+import { loadProfile } from '../systems/ProfileStore';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -7,6 +8,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
+    const profile = loadProfile();
     const backdrop = this.add
       .image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'menu-backdrop')
       .setDisplaySize(GAME_WIDTH, GAME_HEIGHT);
@@ -39,6 +41,9 @@ export class MenuScene extends Phaser.Scene {
       fontSize: '12px',
       color: '#7594a8',
       letterSpacing: 3,
+    });
+    this.add.text(80, 354, `BIO-CRÉDITOS  ${profile.bioCredits}   ·   MEJOR NIVEL  ${profile.bestLevel}`, {
+      fontFamily: 'Arial Black', fontSize: '12px', color: '#73ef62', letterSpacing: 1,
     });
     this.add.text(80, 270, 'CYBER VEGETABLE LAB', {
       fontFamily: 'Arial Black',

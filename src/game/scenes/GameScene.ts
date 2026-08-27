@@ -15,6 +15,7 @@ import { EnemyProjectileManager } from '../entities/projectiles/EnemyProjectileM
 import { EnemyType } from '../entities/enemies/EnemyTypes';
 import { rollEquipment, type Equipment } from '../loot/Equipment';
 import { EquipmentDrop } from '../loot/EquipmentDrop';
+import { loadProfile, saveRun } from '../systems/ProfileStore';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -23,6 +24,7 @@ export class GameScene extends Phaser.Scene {
     aim: new Phaser.Math.Vector2(1, 0),
     firing: false,
     dash: false,
+    autoFire: false,
   };
   player!: Player;
   projectiles!: ProjectileManager;
@@ -43,6 +45,9 @@ export class GameScene extends Phaser.Scene {
   private bossSpawned = false;
   private nextChestAt = 30000;
   private pendingEquipmentDrop = false;
+  equippedWeapon = 'PULSEGUN-01';
+  equippedArmor = 'SIN ARMADURA';
+  barrels!: Phaser.Physics.Arcade.StaticGroup;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private specialLastUsed: Record<SpecialAbilityId, number> = {
     nova: -99999,
@@ -68,6 +73,9 @@ export class GameScene extends Phaser.Scene {
     this.mobileInput.aim.set(1, 0);
     this.mobileInput.firing = false;
     this.mobileInput.dash = false;
+    this.mobileInput.autoFire = loadProfile().autoFire;
+    this.equippedWeapon = 'PULSEGUN-01';
+    this.equippedArmor = 'SIN ARMADURA';
   }
   create() {
     this.physics.world.setBounds(0, 0, ARENA.width, ARENA.height);
@@ -78,6 +86,8 @@ export class GameScene extends Phaser.Scene {
     this.enemies = this.physics.add.group({ runChildUpdate: false });
     this.chests = this.physics.add.group({ runChildUpdate: false });
     this.lootDrops = this.physics.add.group({ runChildUpdate: false });
+    this.barrels = this.physics.add.staticGroup();
+    this.createExplosiveBarrels();
     this.orbs = this.physics.add.group({
       classType: ExperienceOrb,
       maxSize: 160,
@@ -98,6 +108,9 @@ export class GameScene extends Phaser.Scene {
       .startFollow(this.player, true, 0.1, 0.1);
     this.physics.add.overlap(this.projectiles.group, this.enemies, (a, b) =>
       this.projectileHit(a as Phaser.GameObjects.GameObject, b as Phaser.GameObjects.GameObject),
+    );
+    this.physics.add.overlap(this.projectiles.group, this.barrels, (projectile, barrel) =>
+      this.hitBarrel(projectile as Phaser.GameObjects.GameObject, barrel as Phaser.GameObjects.GameObject),
     );
     this.physics.add.overlap(this.player, this.enemies, (_, e) =>
       this.enemyContact(e as Phaser.GameObjects.GameObject),
@@ -277,14 +290,16 @@ export class GameScene extends Phaser.Scene {
   ) {
     const p = projectileObject as import('../entities/projectiles/Projectile').Projectile;
     const e = enemyObject as Enemy;
-    if (!p.active || !e.active) return;
-    p.disableBody(true, true);
+    if (!p.active || !e.active || p.hitTargets.has(e)) return;
+    p.hitTargets.add(e);
+    if (p.hitsRemaining > 0) p.hitsRemaining--;
+    else p.disableBody(true, true);
     this.audio.tone(135, 0.035);
     this.impactEffect(p.x, p.y);
     if (e.hit(p.damage)) {
       const x = e.x,
         y = e.y,
-        xp = e.def.xp;
+        xp = e.xpReward;
       const bossDefeated = e.enemyType === EnemyType.BOSS;
       e.destroy();
       this.events.emit(Events.ENEMY_DIED);
@@ -302,6 +317,7 @@ export class GameScene extends Phaser.Scene {
         duration: 70,
       });
     }
+    if (p.mode === 'plasma' && p.splashRadius > 0) this.plasmaExplosion(e.x, e.y, p.damage * 0.55, p.splashRadius, e);
     if (e.enemyType === EnemyType.BOSS)
       this.events.emit(Events.BOSS_HEALTH, e.health.current, e.health.max);
     this.cameras.main.shake(45, 0.0015);
@@ -316,7 +332,7 @@ export class GameScene extends Phaser.Scene {
     const e = object as Enemy;
     if (this.time.now - e.lastContact < 650) return;
     e.lastContact = this.time.now;
-    this.player.takeDamage(e.def.damage);
+    this.player.takeDamage(e.contactDamage);
     this.cameras.main.shake(90, 0.004);
   }
   private spawnOrb(x: number, y: number, value: number) {
@@ -394,6 +410,8 @@ export class GameScene extends Phaser.Scene {
     const equipment: Equipment = drop.equipment;
     const oldMaxHp = this.player.stats.maxHp;
     equipment.apply(this.player.stats);
+    if (equipment.kind === 'weapon') this.equippedWeapon = equipment.name;
+    else this.equippedArmor = equipment.name;
     if (this.player.stats.maxHp > oldMaxHp) {
       const gainedHp = this.player.stats.maxHp - oldMaxHp;
       this.player.health.max = this.player.stats.maxHp;
@@ -411,6 +429,7 @@ export class GameScene extends Phaser.Scene {
     drop.destroy();
     this.audio.tone(equipment.rarity === 'LEGENDARY' ? 1040 : 720, 0.28, 0.045);
     this.events.emit(Events.LOOT_COLLECTED, equipment);
+    this.events.emit(Events.EQUIPMENT_CHANGED, this.equippedWeapon, this.equippedArmor);
   }
   selectChestReward(id: 'repair' | 'charge' | 'weapon') {
     if (id === 'repair') {
@@ -469,7 +488,7 @@ export class GameScene extends Phaser.Scene {
       const y = enemy.y;
       const damage = Math.round(this.player.stats.attackDamage * 1.75);
       if (enemy.hit(damage)) {
-        const xp = enemy.def.xp;
+        const xp = enemy.xpReward;
         const bossDefeated = enemy.enemyType === EnemyType.BOSS;
         enemy.destroy();
         this.spawnOrb(x, y, xp);
@@ -542,12 +561,48 @@ export class GameScene extends Phaser.Scene {
     this.state = GameState.GAME_OVER;
     this.physics.pause();
     this.scene.stop('UI');
+    saveRun(this.xp.level, victory);
     this.scene.start('GameOver', {
       time: this.survivalMs,
       level: this.xp.level,
       victory,
       arenaIndex: this.arenaIndex,
     });
+  }
+  private createExplosiveBarrels() {
+    const positions = [[420, 330], [1580, 340], [470, 910], [1510, 880], [1000, 250], [1000, 960]];
+    positions.forEach(([x, y]) => {
+      const barrel = this.add.rectangle(x, y, 34, 46, 0x7a2a25, 1)
+        .setStrokeStyle(3, 0xffb52e, 0.9).setDepth(5);
+      barrel.setData('armed', true);
+      this.barrels.add(barrel);
+      this.add.rectangle(x, y, 30, 8, 0xffb52e, 0.65).setDepth(6);
+    });
+  }
+  private hitBarrel(projectileObject: Phaser.GameObjects.GameObject, barrelObject: Phaser.GameObjects.GameObject) {
+    const projectile = projectileObject as import('../entities/projectiles/Projectile').Projectile;
+    const barrel = barrelObject as Phaser.GameObjects.Rectangle;
+    if (!barrel.active || !(barrel.getData('armed') as boolean)) return;
+    barrel.setData('armed', false);
+    projectile.disableBody(true, true);
+    const x = barrel.x, y = barrel.y;
+    barrel.destroy();
+    this.plasmaExplosion(x, y, 75, 175);
+    this.cameras.main.shake(180, 0.008);
+  }
+  private plasmaExplosion(x: number, y: number, damage: number, radius: number, ignored?: Enemy) {
+    const blast = this.add.circle(x, y, 18, 0xff7b35, 0.55).setStrokeStyle(5, 0xffd166).setDepth(20);
+    this.tweens.add({ targets: blast, scale: radius / 18, alpha: 0, duration: 330, onComplete: () => blast.destroy() });
+    this.enemies.getChildren().forEach((object) => {
+      const enemy = object as Enemy;
+      if (!enemy.active || enemy === ignored || Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y) > radius) return;
+      if (enemy.hit(Math.round(damage))) {
+        const ex = enemy.x, ey = enemy.y, xp = enemy.xpReward;
+        enemy.destroy();
+        this.spawnOrb(ex, ey, xp);
+      }
+    });
+    this.audio.tone(65, 0.2, 0.05);
   }
   private muzzleEffect(x: number, y: number, angle: number) {
     this.audio.tone(240, 0.025, 0.015);

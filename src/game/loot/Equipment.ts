@@ -42,6 +42,9 @@ export function rollEquipment(level: number, random = Math.random): Equipment {
           stats.criticalChance += 0.03 * multiplier;
           stats.weaponName = 'PISTOLA DE PULSO';
           stats.projectileColor = 0x73ef62;
+          stats.weaponMode = 'pulse';
+          stats.projectilePiercing = 0;
+          stats.splashRadius = 0;
         },
       },
       {
@@ -53,6 +56,9 @@ export function rollEquipment(level: number, random = Math.random): Equipment {
           stats.weaponName = 'BLÁSTER ARC';
           stats.projectileColor = 0x21e6ff;
           stats.projectileScale = 1.15;
+          stats.weaponMode = 'arc';
+          stats.projectilePiercing = 1;
+          stats.splashRadius = 0;
         },
       },
       {
@@ -64,6 +70,9 @@ export function rollEquipment(level: number, random = Math.random): Equipment {
           stats.weaponName = 'LÁSER IÓNICO';
           stats.projectileColor = 0x6ffcff;
           stats.projectileScale = 1.4;
+          stats.weaponMode = 'laser';
+          stats.projectilePiercing = 2;
+          stats.splashRadius = 0;
         },
       },
       {
@@ -74,6 +83,9 @@ export function rollEquipment(level: number, random = Math.random): Equipment {
           stats.weaponName = 'CAÑÓN DE PLASMA';
           stats.projectileColor = 0xd566ff;
           stats.projectileScale = 1.8;
+          stats.weaponMode = 'plasma';
+          stats.projectilePiercing = 0;
+          stats.splashRadius = 92;
         },
       },
     ];

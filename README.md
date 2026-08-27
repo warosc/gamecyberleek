@@ -31,6 +31,10 @@ Supply chests begin appearing during the run. Survive five minutes to summon the
 
 Every third level drops a collectible equipment capsule. Weapons include pulse pistols, ARC blasters, ion lasers, and plasma cannons; armor provides HP, mitigation, movement, or dash upgrades. Equipment can roll Common, Rare, Epic, or Legendary rarity and remains active for the current run.
 
+Weapons now have distinct behavior: ARC shots pierce, ion lasers penetrate multiple targets, and plasma rounds deal area damage. Elite enemies can appear later in a run, and marked bio-fuel barrels can be detonated to damage nearby enemies. The HUD tracks equipped weapon and armor.
+
+Run results are saved locally as best level, victories, and bio-credits. Mobile players can toggle persistent auto-fire; compatible devices provide damage vibration feedback.
+
 ### Mobile controls
 
 On touch devices, LEEK OPS displays a left movement joystick, a right aim/fire joystick, a dash button, and touch-enabled special ability buttons. The production build includes a web app manifest and service worker so supported browsers can install it as a landscape PWA.

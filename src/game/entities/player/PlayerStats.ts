@@ -15,6 +15,9 @@ export interface PlayerStats {
   weaponName: string;
   projectileColor: number;
   projectileScale: number;
+  weaponMode: 'pulse' | 'arc' | 'laser' | 'plasma';
+  projectilePiercing: number;
+  splashRadius: number;
 }
 export const createPlayerStats = (): PlayerStats => ({
   maxHp: 100,
@@ -33,4 +36,7 @@ export const createPlayerStats = (): PlayerStats => ({
   weaponName: 'PULSEGUN-01',
   projectileColor: 0x21e6ff,
   projectileScale: 1,
+  weaponMode: 'pulse',
+  projectilePiercing: 0,
+  splashRadius: 0,
 });

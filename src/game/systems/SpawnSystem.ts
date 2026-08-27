@@ -27,6 +27,8 @@ export class SpawnSystem {
           : roll < 0.52
             ? EnemyType.RUNNER
             : EnemyType.GRUNT;
-    this.group.add(this.factory.create(type, x, y));
+    const enemy = this.factory.create(type, x, y);
+    if (this.elapsed > 45000 && Math.random() < Math.min(0.12, this.elapsed / 1200000)) enemy.makeElite();
+    this.group.add(enemy);
   }
 }

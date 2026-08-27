@@ -10,6 +10,8 @@ export class Enemy extends Phaser.GameObjects.Arc {
   private healthBack: Phaser.GameObjects.Rectangle;
   private healthFill: Phaser.GameObjects.Rectangle;
   private visualPhase = Math.random() * Math.PI * 2;
+  elite = false;
+  private eliteMultiplier = 1;
   constructor(
     scene: Phaser.Scene,
     x: number,
@@ -36,7 +38,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       .setDepth(13);
   }
   chase(target: { x: number; y: number }) {
-    this.scene.physics.moveToObject(this, target, this.def.speed);
+    this.scene.physics.moveToObject(this, target, this.def.speed * this.eliteMultiplier);
     this.syncVisual(target);
   }
   updateBehavior(
@@ -47,11 +49,11 @@ export class Enemy extends Phaser.GameObjects.Arc {
     this.visualPhase += 0.075;
     const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y);
     if (this.enemyType === EnemyType.SHOOTER) {
-      if (distance > 390) this.scene.physics.moveToObject(this, target, this.def.speed);
+      if (distance > 390) this.scene.physics.moveToObject(this, target, this.def.speed * this.eliteMultiplier);
       else if (distance < 230)
         this.scene.physics.velocityFromRotation(
           Phaser.Math.Angle.Between(target.x, target.y, this.x, this.y),
-          this.def.speed,
+          this.def.speed * this.eliteMultiplier,
           (this.body as Phaser.Physics.Arcade.Body).velocity,
         );
       else (this.body as Phaser.Physics.Arcade.Body).setVelocity(0);
@@ -84,6 +86,23 @@ export class Enemy extends Phaser.GameObjects.Arc {
     this.visual.setAlpha(0.35);
     this.scene.time.delayedCall(60, () => this.active && this.visual.setAlpha(1));
     return this.health.dead;
+  }
+  makeElite() {
+    if (this.enemyType === EnemyType.BOSS || this.elite) return this;
+    this.elite = true;
+    this.eliteMultiplier = 1.28;
+    this.health.max = Math.round(this.health.max * 2.2);
+    this.health.current = this.health.max;
+    const crown = this.scene.add.graphics().lineStyle(4, 0xffb52e, 0.9).strokeCircle(0, 0, this.def.size + 13);
+    crown.setBlendMode(Phaser.BlendModes.ADD);
+    this.visual.addAt(crown, 1);
+    return this;
+  }
+  get contactDamage() {
+    return this.def.damage * (this.elite ? 1.45 : 1);
+  }
+  get xpReward() {
+    return this.def.xp * (this.elite ? 3 : 1);
   }
   destroy(fromScene?: boolean) {
     this.visual?.destroy();

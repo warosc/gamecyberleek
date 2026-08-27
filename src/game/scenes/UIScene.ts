@@ -5,6 +5,7 @@ import type { Ability } from '../abilities/AbilityRegistry';
 import type { GameScene } from './GameScene';
 import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
 import type { Equipment } from '../loot/Equipment';
+import { loadProfile, updateProfile } from '../systems/ProfileStore';
 export class UIScene extends Phaser.Scene {
   private gameScene!: GameScene;
   private hp!: Phaser.GameObjects.Text;
@@ -22,6 +23,8 @@ export class UIScene extends Phaser.Scene {
   private bossPanel!: Phaser.GameObjects.Container;
   private bossFill!: Phaser.GameObjects.Rectangle;
   private weaponText!: Phaser.GameObjects.Text;
+  private weaponSlot!: Phaser.GameObjects.Text;
+  private armorSlot!: Phaser.GameObjects.Text;
   constructor() {
     super('UI');
   }
@@ -111,6 +114,14 @@ export class UIScene extends Phaser.Scene {
         letterSpacing: 2,
       })
       .setOrigin(0.5, 0);
+    this.weaponSlot = this.add.text(GAME_WIDTH - 300, 94, '⚡ PULSEGUN-01', {
+      fontFamily: 'Arial Black', fontSize: '11px', color: '#21e6ff',
+      backgroundColor: '#06101ddd', padding: { x: 10, y: 7 },
+    }).setOrigin(0, 0);
+    this.armorSlot = this.add.text(GAME_WIDTH - 300, 130, '◆ SIN ARMADURA', {
+      fontFamily: 'Arial Black', fontSize: '11px', color: '#73ef62',
+      backgroundColor: '#06101ddd', padding: { x: 10, y: 7 },
+    }).setOrigin(0, 0);
     const bossBack = this.add
       .rectangle(GAME_WIDTH / 2, 88, 540, 48, 0x100817, 0.95)
       .setStrokeStyle(3, 0xd566ff, 0.85);
@@ -208,6 +219,7 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.BOSS_HEALTH, this.onBossHealth, this);
     this.gameScene.events.on(Events.CHEST_OPENED, this.showChestRewards, this);
     this.gameScene.events.on(Events.LOOT_COLLECTED, this.showLootBanner, this);
+    this.gameScene.events.on(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
     this.events.once('shutdown', () => {
       this.gameScene.events.off(Events.PLAYER_DAMAGED, this.onHealth, this);
       this.gameScene.events.off(Events.XP_COLLECTED, this.onXp, this);
@@ -216,6 +228,7 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.BOSS_HEALTH, this.onBossHealth, this);
       this.gameScene.events.off(Events.CHEST_OPENED, this.showChestRewards, this);
       this.gameScene.events.off(Events.LOOT_COLLECTED, this.showLootBanner, this);
+      this.gameScene.events.off(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
     });
   }
   update() {
@@ -245,6 +258,7 @@ export class UIScene extends Phaser.Scene {
     ]);
   }
   private onHealth(current: number, max: number) {
+    if (current < max && loadProfile().vibration && 'vibrate' in navigator) navigator.vibrate(35);
     this.hp
       .setText(`HP ${Math.ceil(current)} / ${max}`)
       .setColor(current / max < 0.3 ? '#ff476f' : '#eaffff');
@@ -404,6 +418,10 @@ export class UIScene extends Phaser.Scene {
       onComplete: () => banner.destroy(),
     });
   }
+  private onEquipmentChanged(weapon: string, armor: string) {
+    this.weaponSlot.setText(`⚡ ${weapon}`);
+    this.armorSlot.setText(`◆ ${armor}`);
+  }
   private onState(state: GameState) {
     if (state === GameState.PAUSED && !this.overlay) {
       const parts: Phaser.GameObjects.GameObject[] = [];
@@ -488,6 +506,19 @@ export class UIScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(62);
+    const profile = loadProfile();
+    const autoButton = this.add.rectangle(GAME_WIDTH - 285, GAME_HEIGHT - 365, 108, 42, 0x07111f, 0.82)
+      .setStrokeStyle(3, profile.autoFire ? 0x73ef62 : 0x7594a8, 0.9)
+      .setInteractive({ useHandCursor: true }).setDepth(61);
+    const autoLabel = this.add.text(autoButton.x, autoButton.y, profile.autoFire ? 'AUTO ON' : 'AUTO OFF', {
+      fontFamily: 'Arial Black', fontSize: '12px', color: '#eaffff',
+    }).setOrigin(0.5).setDepth(62);
+    autoButton.on('pointerup', () => {
+      this.gameScene.mobileInput.autoFire = !this.gameScene.mobileInput.autoFire;
+      updateProfile({ autoFire: this.gameScene.mobileInput.autoFire });
+      autoLabel.setText(this.gameScene.mobileInput.autoFire ? 'AUTO ON' : 'AUTO OFF');
+      autoButton.setStrokeStyle(3, this.gameScene.mobileInput.autoFire ? 0x73ef62 : 0x7594a8, 0.9);
+    });
 
     let movePointer = -1;
     let aimPointer = -1;

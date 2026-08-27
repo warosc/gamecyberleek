@@ -56,6 +56,7 @@ export class Player extends Phaser.GameObjects.Container {
       aim: Phaser.Math.Vector2;
       firing: boolean;
       dash: boolean;
+      autoFire: boolean;
     },
   ) {
     const v = virtual?.active
@@ -101,7 +102,7 @@ export class Player extends Phaser.GameObjects.Container {
     }
     const overdrive = time < this.overdriveUntil;
     if (
-      (virtual?.active ? virtual.firing : pointer.isDown) &&
+      (virtual?.active ? virtual.firing || virtual.autoFire : pointer.isDown) &&
       time - this.lastShot >= this.stats.attackCooldown * (overdrive ? 0.5 : 1)
     ) {
       this.lastShot = time;

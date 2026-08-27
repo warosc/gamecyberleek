@@ -28,9 +28,15 @@ export class ProjectileManager {
     p.damage = hit.amount;
     p.critical = hit.critical;
     p.born = time;
+    p.mode = stats.weaponMode;
+    p.hitsRemaining = stats.projectilePiercing;
+    p.splashRadius = stats.splashRadius;
+    p.hitTargets.clear();
     p.enableBody(true, p.x, p.y, true, true);
     p.setTint(stats.projectileColor);
-    p.setScale(stats.projectileScale * (hit.critical ? 1.5 : 1));
+    const scale = stats.projectileScale * (hit.critical ? 1.5 : 1);
+    p.setScale(stats.weaponMode === 'laser' ? scale * 2.2 : scale, stats.weaponMode === 'laser' ? scale * 0.42 : scale);
+    p.setRotation(angle);
     this.scene.physics.velocityFromRotation(angle, stats.projectileSpeed, p.body!.velocity);
     this.scene.events.emit('weapon-fired', x, y, angle);
   }

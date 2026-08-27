@@ -28,4 +28,5 @@ export const Events = {
   BOSS_HEALTH: 'boss-health',
   CHEST_OPENED: 'chest-opened',
   LOOT_COLLECTED: 'loot-collected',
+  EQUIPMENT_CHANGED: 'equipment-changed',
 } as const;
