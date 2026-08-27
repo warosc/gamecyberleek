@@ -116,11 +116,11 @@ Replacing the character rig should remain confined primarily to `PlayerAnimator`
 
 ## Combat architecture
 
-The effective pipeline is:
+The effective pipeline is now:
 
-`Player attack -> pooled projectile -> Arcade overlap -> calculateDamage -> HealthComponent -> death handling/event`
+`Player attack -> pooled projectile -> Arcade overlap -> DamagePacket/resolveDamage -> HealthComponent -> EnemyDeathResolver -> death event/reward`
 
-`CombatSystem` currently calculates only base/critical damage. Plasma area resolution and Nova death resolution remain in `GameScene`. Before adding status effects, introduce a typed `DamagePacket` and one central death-resolution service supporting damage type, source, critical modifier, armor, resistances, and status payload. Do not put enemy-specific branching into weapon definitions.
+`CombatSystem` supports typed source, damage type, critical multiplier, armor, and resistance. `EnemyDeathResolver` guarantees one destruction/reward result for projectile, Nova, plasma, and environmental kills. Plasma area targeting and Nova presentation remain in `GameScene`. Before status effects, extend `DamagePacket` with a typed status payload rather than branching inside weapon definitions.
 
 ## Equipment system
 
@@ -192,7 +192,7 @@ Debug mode remains completely gated by `VITE_DEBUG_GAME === 'true'`. The overlay
 
 1. Split `GameScene` into combat/death resolution, encounter/boss flow, world props, and effects services.
 2. Add integration tests for scene restart, player death versus boss death, pause timing, and equipment collection.
-3. Introduce typed combat events / `DamagePacket` before status effects or resistances.
+3. Add typed status payloads to `DamagePacket` before implementing status effects.
 4. Profile on representative low-end Android hardware before increasing caps.
 
 ### Medium priority

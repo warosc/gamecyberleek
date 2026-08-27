@@ -6,10 +6,23 @@ This roadmap intentionally defers new content until the current vertical slice i
 
 Goal: make existing behavior safe to extend.
 
+Progress:
+
+- [x] Extract keyboard/virtual input into `PlayerController`.
+- [x] Move runtime abilities and projectiles to a pause-safe gameplay clock.
+- [x] Introduce typed damage packets with damage type, source, critical, armor, and resistance fields.
+- [x] Centralize enemy death resolution with a duplicate-resolution guard.
+- [x] Add deterministic combat-pipeline and death-resolution tests.
+- [ ] Split `GameScene` orchestration from world props, effects, and encounter flow.
+- [ ] Split `UIScene` into focused components.
+- [ ] Add Phaser scene restart/lifecycle integration tests.
+- [ ] Convert equipment callbacks into structured modifiers.
+- [ ] Profile target mobile hardware.
+
 - Split `GameScene` orchestration from combat resolution, world props, effects, and encounter flow.
 - Split `UIScene` into focused HUD/modal/mobile/debug components.
 - Add scene lifecycle integration tests: repeated runs, pause/resume, level-up, death, victory, and menu transitions.
-- Add typed damage packets and centralized death resolution.
+- Extend typed damage packets and centralized death resolution when statuses are introduced.
 - Convert equipment to stable IDs, structured modifiers, and configurable rarity weights.
 - Profile load time, frame time, memory, and garbage collection on desktop and low-end Android.
 - Define supported entity budgets and degradation behavior.

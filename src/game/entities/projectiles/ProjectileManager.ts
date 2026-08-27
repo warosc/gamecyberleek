@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { calculateDamage } from '../../systems/CombatSystem';
+import { resolveDamage } from '../../systems/CombatSystem';
 import type { PlayerStats } from '../player/PlayerStats';
 import { Projectile } from './Projectile';
 import { GAMEPLAY } from '../../config/Constants';
@@ -25,7 +25,12 @@ export class ProjectileManager {
       y + Math.sin(angle) * 38,
     ) as Projectile | null;
     if (!p) return;
-    const hit = calculateDamage(stats.attackDamage * damageMultiplier, stats.criticalChance);
+    const hit = resolveDamage({
+      baseAmount: stats.attackDamage * damageMultiplier,
+      type: stats.weaponMode === 'plasma' ? 'plasma' : 'energy',
+      source: 'player',
+      criticalChance: stats.criticalChance,
+    });
     p.damage = hit.amount;
     p.critical = hit.critical;
     p.born = time;

@@ -16,6 +16,7 @@ import { EnemyType } from '../entities/enemies/EnemyTypes';
 import { rollEquipment, type Equipment } from '../loot/Equipment';
 import { EquipmentDrop } from '../loot/EquipmentDrop';
 import { loadProfile, saveRun } from '../systems/ProfileStore';
+import { EnemyDeathResolver } from '../systems/EnemyDeathResolver';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -45,6 +46,7 @@ export class GameScene extends Phaser.Scene {
   private bossSpawned = false;
   private nextChestAt = GAMEPLAY.chestFirstMs;
   private pendingEquipmentDrop = false;
+  private deaths = new EnemyDeathResolver();
   equippedWeapon = 'PULSEGUN-01';
   equippedArmor = 'SIN ARMADURA';
   barrels!: Phaser.Physics.Arcade.StaticGroup;
@@ -69,6 +71,7 @@ export class GameScene extends Phaser.Scene {
     this.bossSpawned = false;
     this.nextChestAt = GAMEPLAY.chestFirstMs;
     this.pendingEquipmentDrop = false;
+    this.deaths = new EnemyDeathResolver();
     this.mobileInput.movement.set(0, 0);
     this.mobileInput.aim.set(1, 0);
     this.mobileInput.firing = false;
@@ -297,18 +300,7 @@ export class GameScene extends Phaser.Scene {
     this.audio.tone(135, 0.035);
     this.impactEffect(p.x, p.y);
     if (e.hit(p.damage)) {
-      const x = e.x,
-        y = e.y,
-        xp = e.xpReward;
-      const bossDefeated = e.enemyType === EnemyType.BOSS;
-      e.destroy();
-      this.events.emit(Events.ENEMY_DIED);
-      this.spawnOrb(x, y, xp);
-      this.audio.tone(75, 0.09);
-      if (bossDefeated) {
-        this.events.emit(Events.BOSS_HEALTH, 0, e.health.max);
-        this.time.delayedCall(500, () => this.gameOver(true));
-      }
+      this.resolveEnemyDeath(e);
     } else {
       this.tweens.add({
         targets: e,
@@ -488,11 +480,7 @@ export class GameScene extends Phaser.Scene {
       const y = enemy.y;
       const damage = Math.round(this.player.stats.attackDamage * 1.75);
       if (enemy.hit(damage)) {
-        const xp = enemy.xpReward;
-        const bossDefeated = enemy.enemyType === EnemyType.BOSS;
-        enemy.destroy();
-        this.spawnOrb(x, y, xp);
-        if (bossDefeated) this.time.delayedCall(500, () => this.gameOver(true));
+        this.resolveEnemyDeath(enemy);
       }
       this.floatingText(x, y - 22, `${damage}`, '#73efff');
     }
@@ -597,9 +585,7 @@ export class GameScene extends Phaser.Scene {
       const enemy = object as Enemy;
       if (!enemy.active || enemy === ignored || Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y) > radius) return;
       if (enemy.hit(Math.round(damage))) {
-        const ex = enemy.x, ey = enemy.y, xp = enemy.xpReward;
-        enemy.destroy();
-        this.spawnOrb(ex, ey, xp);
+        this.resolveEnemyDeath(enemy);
       }
     });
     this.audio.tone(65, 0.2, 0.05);
@@ -643,5 +629,16 @@ export class GameScene extends Phaser.Scene {
       duration: 550,
       onComplete: () => t.destroy(),
     });
+  }
+  private resolveEnemyDeath(enemy: Enemy) {
+    const defeat = this.deaths.resolve(enemy);
+    if (!defeat) return;
+    this.events.emit(Events.ENEMY_DIED);
+    this.spawnOrb(defeat.x, defeat.y, defeat.xp);
+    this.audio.tone(75, 0.09);
+    if (defeat.boss) {
+      this.events.emit(Events.BOSS_HEALTH, 0, defeat.maxHealth);
+      this.time.delayedCall(500, () => this.gameOver(true));
+    }
   }
 }

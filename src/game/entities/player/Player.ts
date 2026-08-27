@@ -4,6 +4,7 @@ import { HealthComponent } from '../../components/HealthComponent';
 import { createPlayerStats } from './PlayerStats';
 import { PlayerAnimator } from './PlayerAnimator';
 import { PlayerController, type VirtualPlayerInput } from './PlayerController';
+import { resolveDamage } from '../../systems/CombatSystem';
 
 export class Player extends Phaser.GameObjects.Container {
   readonly stats = createPlayerStats();
@@ -124,8 +125,13 @@ export class Player extends Phaser.GameObjects.Container {
       this.scene.tweens.add({ targets: this.shieldVisual, scale: 1.18, duration: 70, yoyo: true });
       return;
     }
-    const mitigated = Math.max(1, amount * (1 - this.stats.damageReduction));
-    if (this.health.damage(mitigated)) {
+    const hit = resolveDamage({
+      baseAmount: amount,
+      type: 'kinetic',
+      source: 'enemy',
+      armorReduction: this.stats.damageReduction,
+    });
+    if (this.health.damage(Math.max(1, hit.amount))) {
       this.scene.events.emit(Events.PLAYER_DAMAGED, this.health.current, this.health.max);
       this.animator.hurt(this.scene.time.now);
       this.setAlpha(0.45);
