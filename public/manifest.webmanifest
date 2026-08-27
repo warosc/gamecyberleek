@@ -1,0 +1,18 @@
+{
+  "name": "LEEK OPS",
+  "short_name": "LEEK OPS",
+  "description": "Cute tactical cyberpunk action roguelite.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#050b14",
+  "theme_color": "#07111f",
+  "icons": [
+    {
+      "src": "/assets/character/leek/avatar.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

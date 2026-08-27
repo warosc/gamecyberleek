@@ -1,0 +1,16 @@
+{
+  "name": "LEEK OPS",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "game",
+  "workspaceFolder": "/app",
+  "forwardPorts": [5173],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+}
