@@ -13,9 +13,46 @@ body,
   width: 100%;
   height: 100%;
   overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+body {
+  min-height: 100dvh;
+  position: fixed;
+  inset: 0;
 }
 canvas {
   display: block;
   margin: auto;
   box-shadow: 0 0 70px #00d9ff1c;
+  touch-action: none;
+}
+#rotate-device {
+  display: none;
+}
+@media (orientation: portrait) and (pointer: coarse) {
+  #rotate-device {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    text-align: center;
+    color: #eaffff;
+    background: radial-gradient(circle at center, #10334a 0%, #030811 72%);
+  }
+  #rotate-device strong {
+    color: #73ef62;
+    font: 900 clamp(24px, 8vw, 48px) / 1 Arial Black, sans-serif;
+    text-shadow: 0 0 18px #21e6ff;
+  }
+  #rotate-device span {
+    color: #a9bbc9;
+    font-size: clamp(14px, 4vw, 22px);
+  }
 }

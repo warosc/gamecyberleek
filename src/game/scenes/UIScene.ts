@@ -147,25 +147,30 @@ export class UIScene extends Phaser.Scene {
         0x07111f,
         0.7,
       );
+    const mobileHud = this.gameScene.mobileInput.active;
+    if (mobileHud)
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 84, 430, 96, 0x04101c, 0.7)
+        .setStrokeStyle(2, 0x21e6ff, 0.22).setDepth(1);
     SPECIAL_ABILITIES.forEach((ability, index) => {
-      const x = GAME_WIDTH - 300 + index * 104;
+      const x = mobileHud ? GAME_WIDTH / 2 + (index - 1) * 120 : GAME_WIDTH - 300 + index * 104;
+      const y = mobileHud ? GAME_HEIGHT - 86 : GAME_HEIGHT - 78;
       const button = this.add
-        .rectangle(x, GAME_HEIGHT - 78, 94, 72, 0x081522, 0.96)
+        .rectangle(x, y, mobileHud ? 108 : 94, mobileHud ? 82 : 72, 0x081522, 0.96)
         .setStrokeStyle(3, ability.color, 0.8)
         .setInteractive({ useHandCursor: true });
       const fill = this.add
-        .rectangle(x - 43, GAME_HEIGHT - 51, 86, 7, ability.color, 0.9)
+        .rectangle(x - 43, y + 27, 86, 7, ability.color, 0.9)
         .setOrigin(0, 0.5);
-      this.add.circle(x - 31, GAME_HEIGHT - 97, 15, 0x06101d).setStrokeStyle(2, ability.color);
+      this.add.circle(x - 31, y - 19, mobileHud ? 18 : 15, 0x06101d).setStrokeStyle(2, ability.color);
       this.add
-        .text(x - 31, GAME_HEIGHT - 97, ability.key, {
+        .text(x - 31, y - 19, ability.key, {
           fontFamily: 'Arial Black',
           fontSize: '15px',
           color: '#ffffff',
         })
         .setOrigin(0.5);
       this.add
-        .text(x + 8, GAME_HEIGHT - 97, ability.name, {
+        .text(x + 8, y - 19, ability.name, {
           fontFamily: 'Arial Black',
           fontSize: '10px',
           color: '#eaffff',
@@ -174,7 +179,7 @@ export class UIScene extends Phaser.Scene {
         })
         .setOrigin(0.5);
       const cooldownText = this.add
-        .text(x, GAME_HEIGHT - 70, 'READY', {
+        .text(x, y + 8, 'READY', {
           fontFamily: 'Arial Black',
           fontSize: '10px',
           color: '#ffffff',
@@ -440,22 +445,22 @@ export class UIScene extends Phaser.Scene {
     return [button, text];
   }
   private createMobileControls() {
-    const moveCenter = new Phaser.Math.Vector2(120, GAME_HEIGHT - 145);
-    const aimCenter = new Phaser.Math.Vector2(GAME_WIDTH - 120, GAME_HEIGHT - 195);
+    const moveCenter = new Phaser.Math.Vector2(135, GAME_HEIGHT - 165);
+    const aimCenter = new Phaser.Math.Vector2(GAME_WIDTH - 135, GAME_HEIGHT - 170);
     const moveBase = this.add
-      .circle(moveCenter.x, moveCenter.y, 70, 0x07111f, 0.42)
+      .circle(moveCenter.x, moveCenter.y, 86, 0x07111f, 0.52)
       .setStrokeStyle(3, 0x21e6ff, 0.55)
       .setInteractive({ useHandCursor: true })
       .setDepth(60);
-    const moveKnob = this.add.circle(moveCenter.x, moveCenter.y, 30, 0x21e6ff, 0.42).setDepth(61);
+    const moveKnob = this.add.circle(moveCenter.x, moveCenter.y, 35, 0x21e6ff, 0.48).setDepth(61);
     const aimBase = this.add
-      .circle(aimCenter.x, aimCenter.y, 70, 0x07111f, 0.42)
+      .circle(aimCenter.x, aimCenter.y, 88, 0x07111f, 0.52)
       .setStrokeStyle(3, 0xff476f, 0.65)
       .setInteractive({ useHandCursor: true })
       .setDepth(60);
-    const aimKnob = this.add.circle(aimCenter.x, aimCenter.y, 30, 0xff476f, 0.42).setDepth(61);
+    const aimKnob = this.add.circle(aimCenter.x, aimCenter.y, 35, 0xff476f, 0.48).setDepth(61);
     this.add
-      .text(moveCenter.x, moveCenter.y + 88, 'MOVE', {
+      .text(moveCenter.x, moveCenter.y + 105, 'MOVE', {
         fontFamily: 'Arial Black',
         fontSize: '11px',
         color: '#8fcbd6',
@@ -463,7 +468,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(61);
     this.add
-      .text(aimCenter.x, aimCenter.y + 88, 'AIM / FIRE', {
+      .text(aimCenter.x, aimCenter.y + 107, 'AIM / FIRE', {
         fontFamily: 'Arial Black',
         fontSize: '11px',
         color: '#ff9caf',
@@ -471,7 +476,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(61);
     const dash = this.add
-      .circle(GAME_WIDTH - 235, GAME_HEIGHT - 230, 43, 0x21e6ff, 0.35)
+      .circle(GAME_WIDTH - 285, GAME_HEIGHT - 285, 54, 0x21e6ff, 0.42)
       .setStrokeStyle(3, 0x73ef62, 0.8)
       .setInteractive({ useHandCursor: true })
       .setDepth(61);
@@ -493,9 +498,9 @@ export class UIScene extends Phaser.Scene {
       output: Phaser.Math.Vector2,
     ) => {
       output.set(pointer.x - center.x, pointer.y - center.y);
-      if (output.length() > 70) output.setLength(70);
+      if (output.length() > 86) output.setLength(86);
       knob.setPosition(center.x + output.x, center.y + output.y);
-      output.scale(1 / 70);
+      output.scale(1 / 86);
     };
     moveBase.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       movePointer = pointer.id;
@@ -526,6 +531,14 @@ export class UIScene extends Phaser.Scene {
         this.gameScene.mobileInput.firing = false;
         aimKnob.setPosition(aimCenter.x, aimCenter.y);
       }
+    });
+    this.input.on('gameout', () => {
+      movePointer = -1;
+      aimPointer = -1;
+      this.gameScene.mobileInput.movement.set(0, 0);
+      this.gameScene.mobileInput.firing = false;
+      moveKnob.setPosition(moveCenter.x, moveCenter.y);
+      aimKnob.setPosition(aimCenter.x, aimCenter.y);
     });
   }
 }

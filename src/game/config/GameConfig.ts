@@ -13,6 +13,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   height: GAME_HEIGHT,
   backgroundColor: '#07111f',
   physics: { default: 'arcade', arcade: { debug: false } },
+  input: { activePointers: 4, touch: { capture: true } },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   scene: [BootScene, PreloadScene, MenuScene, GameScene, UIScene, GameOverScene],
   render: { antialias: true },
