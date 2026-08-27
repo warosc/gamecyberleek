@@ -13,7 +13,9 @@ Progress:
 - [x] Introduce typed damage packets with damage type, source, critical, armor, and resistance fields.
 - [x] Centralize enemy death resolution with a duplicate-resolution guard.
 - [x] Add deterministic combat-pipeline and death-resolution tests.
-- [ ] Split `GameScene` orchestration from world props, effects, and encounter flow.
+- [x] Extract explosive world props from `GameScene` with owned physics/lifecycle.
+- [x] Extract transient combat presentation into `CombatEffects`.
+- [ ] Finish splitting `GameScene`: extract arena presentation, loot/chests, and encounter flow.
 - [ ] Split `UIScene` into focused components.
 - [ ] Add Phaser scene restart/lifecycle integration tests.
 - [ ] Convert equipment callbacks into structured modifiers.

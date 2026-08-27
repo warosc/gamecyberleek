@@ -58,7 +58,7 @@ Status meanings: **IMPLEMENTED** works in source and is connected to the runtime
 
 ### Structure
 
-- `GameScene.ts` is oversized at roughly 650 lines. It owns orchestration, combat resolution, arena decoration, loot, barrels, boss flow, effects, chests, and transitions.
+- `GameScene.ts` remains oversized at roughly 586 lines. Combat/death resolution, explosive world props, and transient combat presentation have begun moving into focused services; arena decoration, loot, boss flow, chests, and transitions remain.
 - `UIScene.ts` is oversized at roughly 575 lines. HUD, modal cards, pause menu, mobile controls, debug UI, and loot notifications should eventually be separate components.
 - A `PlayerController` was extracted during this audit. `Player` remains responsible for entity state/effects and `PlayerAnimator` remains replaceable.
 - No runtime circular dependency was identified. `UIScene` imports `GameScene` as a type only.
@@ -94,7 +94,7 @@ Status meanings: **IMPLEMENTED** works in source and is connected to the runtime
 | XP orbs | Pooled, cap 160 |
 
 - Player and enemy projectiles and XP orbs are pooled.
-- Enemies, equipment drops, damage numbers, muzzle flashes, impact dots, dash ghosts, and explosion graphics are allocated dynamically.
+- Enemies, equipment drops, damage numbers, muzzle flashes, impact dots, dash ghosts, and explosion graphics are allocated dynamically. Transient combat visuals are now isolated behind `CombatEffects`, making later pooling possible without changing gameplay orchestration.
 - Every active enemy, projectile, and orb is iterated each gameplay frame. At current caps this is acceptable, but collision broad-phase and per-enemy multi-object visuals will dominate before raw update code.
 - `PlayerController` now reuses its movement vector, removing a per-frame vector allocation.
 - Impact effects create five circles plus tweens per hit. This is the clearest transient allocation hotspot.

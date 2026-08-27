@@ -17,6 +17,8 @@ import { rollEquipment, type Equipment } from '../loot/Equipment';
 import { EquipmentDrop } from '../loot/EquipmentDrop';
 import { loadProfile, saveRun } from '../systems/ProfileStore';
 import { EnemyDeathResolver } from '../systems/EnemyDeathResolver';
+import { CombatEffects } from '../effects/CombatEffects';
+import { ExplosiveBarrelSystem } from '../systems/ExplosiveBarrelSystem';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -49,7 +51,8 @@ export class GameScene extends Phaser.Scene {
   private deaths = new EnemyDeathResolver();
   equippedWeapon = 'PULSEGUN-01';
   equippedArmor = 'SIN ARMADURA';
-  barrels!: Phaser.Physics.Arcade.StaticGroup;
+  private effects!: CombatEffects;
+  private worldProps!: ExplosiveBarrelSystem;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private specialLastUsed: Record<SpecialAbilityId, number> = {
     nova: -99999,
@@ -89,8 +92,6 @@ export class GameScene extends Phaser.Scene {
     this.enemies = this.physics.add.group({ runChildUpdate: false });
     this.chests = this.physics.add.group({ runChildUpdate: false });
     this.lootDrops = this.physics.add.group({ runChildUpdate: false });
-    this.barrels = this.physics.add.staticGroup();
-    this.createExplosiveBarrels();
     this.orbs = this.physics.add.group({
       classType: ExperienceOrb,
       maxSize: GAMEPLAY.maxXpOrbs,
@@ -98,6 +99,11 @@ export class GameScene extends Phaser.Scene {
     });
     this.spawn = new SpawnSystem(new EnemyFactory(this), this.enemies);
     this.audio = new AudioManager(this);
+    this.effects = new CombatEffects(this);
+    this.worldProps = new ExplosiveBarrelSystem(this, (x, y, damage, radius) =>
+      this.plasmaExplosion(x, y, damage, radius),
+    );
+    this.worldProps.bindProjectiles(this.projectiles.group);
     this.mobileInput.active =
       navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
     const keyboard = this.input.keyboard!;
@@ -111,9 +117,6 @@ export class GameScene extends Phaser.Scene {
       .startFollow(this.player, true, 0.1, 0.1);
     this.physics.add.overlap(this.projectiles.group, this.enemies, (a, b) =>
       this.projectileHit(a as Phaser.GameObjects.GameObject, b as Phaser.GameObjects.GameObject),
-    );
-    this.physics.add.overlap(this.projectiles.group, this.barrels, (projectile, barrel) =>
-      this.hitBarrel(projectile as Phaser.GameObjects.GameObject, barrel as Phaser.GameObjects.GameObject),
     );
     this.physics.add.overlap(this.player, this.enemies, (_, e) =>
       this.enemyContact(e as Phaser.GameObjects.GameObject),
@@ -134,9 +137,10 @@ export class GameScene extends Phaser.Scene {
       this.collectEquipment(loot as Phaser.GameObjects.GameObject),
     );
     this.events.on(Events.PLAYER_DIED, () => this.gameOver(false));
-    this.events.on('weapon-fired', (x: number, y: number, angle: number) =>
-      this.muzzleEffect(x, y, angle),
-    );
+    this.events.on('weapon-fired', (x: number, y: number, angle: number) => {
+      this.audio.tone(240, 0.025, 0.015);
+      this.effects.muzzle(x, y, angle);
+    });
     this.input.keyboard!.on('keydown-ESC', () => this.togglePause());
     if (import.meta.env.VITE_DEBUG_GAME === 'true') {
       keyboard.on('keydown-B', () => this.spawnBoss());
@@ -298,7 +302,7 @@ export class GameScene extends Phaser.Scene {
     if (p.hitsRemaining > 0) p.hitsRemaining--;
     else p.disableBody(true, true);
     this.audio.tone(135, 0.035);
-    this.impactEffect(p.x, p.y);
+    this.effects.impact(p.x, p.y);
     if (e.hit(p.damage)) {
       this.resolveEnemyDeath(e);
     } else {
@@ -313,7 +317,7 @@ export class GameScene extends Phaser.Scene {
     if (e.enemyType === EnemyType.BOSS)
       this.events.emit(Events.BOSS_HEALTH, e.health.current, e.health.max);
     this.cameras.main.shake(45, 0.0015);
-    this.floatingText(
+    this.effects.floatingText(
       e.x,
       e.y - 20,
       `${p.critical ? 'CRIT ' : ''}${p.damage}`,
@@ -392,7 +396,7 @@ export class GameScene extends Phaser.Scene {
     const y = Phaser.Math.Clamp(this.player.y + Math.sin(angle) * distance, 70, ARENA.height - 70);
     const drop = new EquipmentDrop(this, x, y, equipment);
     this.lootDrops.add(drop);
-    this.floatingText(x, y - 82, 'EQUIPO DETECTADO', `#${equipment.color.toString(16).padStart(6, '0')}`);
+    this.effects.floatingText(x, y - 82, 'EQUIPO DETECTADO', `#${equipment.color.toString(16).padStart(6, '0')}`);
     this.audio.tone(880, 0.18, 0.035);
   }
 
@@ -482,7 +486,7 @@ export class GameScene extends Phaser.Scene {
       if (enemy.hit(damage)) {
         this.resolveEnemyDeath(enemy);
       }
-      this.floatingText(x, y - 22, `${damage}`, '#73efff');
+      this.effects.floatingText(x, y - 22, `${damage}`, '#73efff');
     }
     this.audio.tone(95, 0.24, 0.045);
     this.cameras.main.shake(180, 0.006);
@@ -557,30 +561,8 @@ export class GameScene extends Phaser.Scene {
       arenaIndex: this.arenaIndex,
     });
   }
-  private createExplosiveBarrels() {
-    const positions = [[420, 330], [1580, 340], [470, 910], [1510, 880], [1000, 250], [1000, 960]];
-    positions.forEach(([x, y]) => {
-      const barrel = this.add.rectangle(x, y, 34, 46, 0x7a2a25, 1)
-        .setStrokeStyle(3, 0xffb52e, 0.9).setDepth(5);
-      barrel.setData('armed', true);
-      this.barrels.add(barrel);
-      this.add.rectangle(x, y, 30, 8, 0xffb52e, 0.65).setDepth(6);
-    });
-  }
-  private hitBarrel(projectileObject: Phaser.GameObjects.GameObject, barrelObject: Phaser.GameObjects.GameObject) {
-    const projectile = projectileObject as import('../entities/projectiles/Projectile').Projectile;
-    const barrel = barrelObject as Phaser.GameObjects.Rectangle;
-    if (!barrel.active || !(barrel.getData('armed') as boolean)) return;
-    barrel.setData('armed', false);
-    projectile.disableBody(true, true);
-    const x = barrel.x, y = barrel.y;
-    barrel.destroy();
-    this.plasmaExplosion(x, y, 75, 175);
-    this.cameras.main.shake(180, 0.008);
-  }
   private plasmaExplosion(x: number, y: number, damage: number, radius: number, ignored?: Enemy) {
-    const blast = this.add.circle(x, y, 18, 0xff7b35, 0.55).setStrokeStyle(5, 0xffd166).setDepth(20);
-    this.tweens.add({ targets: blast, scale: radius / 18, alpha: 0, duration: 330, onComplete: () => blast.destroy() });
+    this.effects.explosion(x, y, radius);
     this.enemies.getChildren().forEach((object) => {
       const enemy = object as Enemy;
       if (!enemy.active || enemy === ignored || Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y) > radius) return;
@@ -589,46 +571,6 @@ export class GameScene extends Phaser.Scene {
       }
     });
     this.audio.tone(65, 0.2, 0.05);
-  }
-  private muzzleEffect(x: number, y: number, angle: number) {
-    this.audio.tone(240, 0.025, 0.015);
-    const flash = this.add
-      .circle(x + Math.cos(angle) * 50, y + Math.sin(angle) * 50, 8, COLORS.cyan, 0.8)
-      .setDepth(20);
-    this.tweens.add({
-      targets: flash,
-      scale: 2,
-      alpha: 0,
-      duration: 90,
-      onComplete: () => flash.destroy(),
-    });
-  }
-  private impactEffect(x: number, y: number) {
-    for (let i = 0; i < 5; i++) {
-      const dot = this.add.circle(x, y, 2, COLORS.cyan).setDepth(20);
-      const angle = Math.random() * Math.PI * 2;
-      this.tweens.add({
-        targets: dot,
-        x: x + Math.cos(angle) * 25,
-        y: y + Math.sin(angle) * 25,
-        alpha: 0,
-        duration: 180,
-        onComplete: () => dot.destroy(),
-      });
-    }
-  }
-  private floatingText(x: number, y: number, text: string, color: string) {
-    const t = this.add
-      .text(x, y, text, { fontFamily: 'Arial Black', fontSize: '18px', color })
-      .setOrigin(0.5)
-      .setDepth(30);
-    this.tweens.add({
-      targets: t,
-      y: y - 35,
-      alpha: 0,
-      duration: 550,
-      onComplete: () => t.destroy(),
-    });
   }
   private resolveEnemyDeath(enemy: Enemy) {
     const defeat = this.deaths.resolve(enemy);
