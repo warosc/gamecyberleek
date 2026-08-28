@@ -101,6 +101,7 @@ export class Player extends Phaser.GameObjects.Container {
     const overdrive = time < this.overdriveUntil;
     this.setScale(overdrive ? 1.08 : 1);
     this.shieldVisual.setVisible(time < this.shieldUntil);
+    if (time < this.shieldUntil) this.shieldVisual.setRotation(-time * 0.003);
     this.overdriveVisual.setVisible(overdrive);
     if (overdrive) this.overdriveVisual.setRotation(time * 0.004);
     if (
@@ -122,9 +123,11 @@ export class Player extends Phaser.GameObjects.Container {
   activateShield(durationMs: number) {
     this.shieldUntil = Math.max(this.shieldUntil, this.gameplayTime) + durationMs;
     this.shieldVisual.setVisible(true);
+    this.shieldVisual.setScale(0.92);
     this.scene.tweens.add({
       targets: this.shieldVisual,
-      alpha: { from: 0.45, to: 1 },
+      alpha: { from: 0.35, to: 1 },
+      scale: 1.08,
       duration: 280,
       yoyo: true,
       repeat: Math.max(1, Math.floor(durationMs / 560) - 1),
