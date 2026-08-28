@@ -11,6 +11,7 @@ export class PlayerAnimator {
   private stateUntil = 0;
   private facing = 1;
   private lastPose = '';
+  private directionalTexture = 'leek-placeholder-front';
 
   constructor(
     private scene: Phaser.Scene,
@@ -32,9 +33,16 @@ export class PlayerAnimator {
       this.visual.y = Math.sin(phase) * 1.5;
       this.visual.angle = Math.sin(phase * 0.65) * 0.8;
     } else if (this.state === 'walk') {
-      if (direction === 'up') this.setPose('leek-back', undefined, 0.2);
-      else if (direction === 'down') this.setPose('leek-placeholder-front', undefined, 0.2);
-      else this.setPose('leek-profile', undefined, 0.2);
+      if (direction === 'up') {
+        this.directionalTexture = 'leek-back';
+        this.setPose(this.directionalTexture, undefined, 0.2);
+      } else if (direction === 'down') {
+        this.directionalTexture = 'leek-placeholder-front';
+        this.setPose(this.directionalTexture, undefined, 0.2);
+      } else {
+        this.directionalTexture = 'leek-profile';
+        this.setPose(this.directionalTexture, undefined, 0.2);
+      }
       this.visual.setFlipX(direction === 'side' && movement.x < 0);
       this.visual.y = Math.abs(Math.sin(phase)) * -3;
       this.visual.x = Math.sin(phase * 0.5) * 1.4;
@@ -55,7 +63,9 @@ export class PlayerAnimator {
   attack(time: number) {
     this.state = 'attack';
     this.stateUntil = time + 90;
-    this.setPose('leek-actions', 'attack', 0.38);
+    // Keep the complete directional body. The action reference is a sheet, not a compatible
+    // runtime frame, so swapping to it made the character pop, shrink and lose its silhouette.
+    this.setPose(this.directionalTexture, undefined, 0.2);
     this.scene.tweens.killTweensOf(this.visual);
     const originX = this.visual.x;
     this.scene.tweens.add({
