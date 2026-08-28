@@ -24,7 +24,7 @@ export class DebugOverlay {
     const projectiles = this.scene.projectiles.group.countActive(true);
     const enemyProjectiles = this.scene.enemyProjectiles.group.countActive(true);
     const orbs = this.scene.orbs.countActive(true);
-    reportPerf({ runSeconds: seconds, fps: Math.round(this.game.loop.actualFps), worstFrameMs: Math.round(Math.max(this.reportedWorstFrameMs, this.worstFrameMs)), displayObjects, tweens, enemies, projectiles, orbs });
+    reportPerf({ runSeconds: seconds, fps: Math.round(this.game.loop.actualFps), worstFrameMs: Math.round(Math.max(this.reportedWorstFrameMs, this.worstFrameMs)), displayObjects, tweens, enemies, projectiles, orbs, rig: this.scene.player.usesLayeredRig ? 'layered' : 'fallback', animation: this.scene.player.animationState });
     this.text.setText([
       `FPS ${Math.round(this.game.loop.actualFps)}  worst ${Math.round(this.reportedWorstFrameMs)}ms`,
       `Display objs ${displayObjects}  tweens ${tweens}`,

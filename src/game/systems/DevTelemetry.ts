@@ -15,6 +15,8 @@ export interface PerfSample {
   enemies: number;
   projectiles: number;
   orbs: number;
+  rig: 'layered' | 'fallback';
+  animation: string;
 }
 
 export const devTelemetryEnabled = import.meta.env.DEV && import.meta.env.VITE_DEBUG_GAME === 'true';
