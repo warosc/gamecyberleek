@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 import type { GameScene } from '../scenes/GameScene';
 import { reportPerf } from '../systems/DevTelemetry';
+import { detectQualityProfile } from '../config/QualityProfile';
 
 export class DebugOverlay {
   private worstFrameMs = 0;
   private reportedWorstFrameMs = 0;
   private frameWindowMs = 0;
+  private readonly quality = detectQualityProfile();
 
   constructor(private readonly game: Phaser.Game, private readonly scene: GameScene, private readonly text: Phaser.GameObjects.Text) {}
 
@@ -37,6 +39,7 @@ export class DebugOverlay {
       `Run ${Math.floor(this.scene.survivalMs / 1000)}s`,
       `Weapon ${this.scene.player.stats.weaponName}`,
       `Rig ${this.scene.player.usesLayeredRig ? 'LAYERED' : 'FALLBACK'}  Anim ${this.scene.player.animationState}`,
+      `Quality ${this.quality.tier.toUpperCase()}`,
       `Effects ${this.scene.player.isShieldActive() ? 'SHIELD ' : ''}${this.scene.player.isOverdriveActive() ? 'OVERDRIVE' : ''}`,
     ]);
   }

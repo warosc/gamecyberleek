@@ -386,6 +386,7 @@ export class GameScene extends Phaser.Scene {
       ease: 'Quad.Out',
       onComplete: () => core.destroy(),
     });
+    this.cameras.main.flash(120, 33, 210, 255, false);
     const targets = this.enemies.getChildren().filter((object) => {
       const enemy = object as Enemy;
       return Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y) <= radius;

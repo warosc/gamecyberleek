@@ -73,6 +73,7 @@ export class CombatEffects {
   }
 
   deathBurst(x: number, y: number, color: number = COLORS.cyan, boss = false) {
+    if (this.reducedMotion) return;
     const count = boss ? 12 : 6;
     for (let index = 0; index < count; index++) {
       const shard = this.track(this.scene.add.rectangle(x, y, boss ? 7 : 4, boss ? 12 : 8, color, 0.9));
