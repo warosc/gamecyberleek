@@ -22,7 +22,7 @@ comes first, and the refactors follow it.
 This gate is met; A1 is unblocked. Keep it green: a change that makes `npm run test:e2e` fail
 on either browser is a change that ships a frozen game.
 
-- [x] Browser smoke test (`npm run test:e2e`) that boots the real game in Chromium **and
+- [x] Browser smoke test (`npm run test:e2e`) with six scenarios that boot the real game in Chromium **and
       WebKit** and plays it: level-up and chest modals, taking damage, dying, and redeploying.
       Liveness comes from the telemetry the game already posts, so a silent freeze with no
       exception also fails the run. Both assertions were verified against the real defects by

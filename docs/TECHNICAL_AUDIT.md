@@ -20,7 +20,7 @@ Beyond that, the risks are oversized scene classes, presentation and domain logi
 | `npm run build` | PASS | TypeScript and Vite production build succeed |
 | `npm run lint` | PASS | No ESLint findings |
 | `npm run test` | PASS | 5 files, 14 tests — pure functions; no scene is booted |
-| `npm run test:e2e` | PASS | 4 Playwright tests; boots and plays the real game on Chromium and WebKit |
+| `npm run test:e2e` | PASS | 6 Playwright tests; boots, restarts, and plays the real game on Chromium and WebKit |
 | `docker compose build` | PASS | Node 22 Alpine development image builds |
 
 Every check except the last two passed unchanged while four separate defects were killing the
@@ -68,7 +68,7 @@ Status meanings: **IMPLEMENTED** works in source and is connected to the runtime
 ### Structure
 
 - `GameScene.ts` remains oversized at roughly 430 lines. Combat/death resolution, explosive world props, transient combat presentation, arena decoration, loot, chests, boss spawning, and run-end handoff have moved into focused services.
-- `UIScene.ts` is oversized at roughly 620 lines. Debug telemetry and modal container lifecycle are now focused helpers; HUD, modal card layout, pause menu, mobile controls, and loot notifications should eventually be separate components.
+- `UIScene.ts` is oversized at roughly 620 lines. Debug telemetry, modal container lifecycle, and mobile controls now have focused helpers; HUD, modal card layout, pause menu, and loot notifications should eventually be separate components.
 - A `PlayerController` was extracted during this audit. `Player` remains responsible for entity state/effects and `PlayerAnimator` remains replaceable.
 - No runtime circular dependency was identified. `UIScene` imports `GameScene` as a type only.
 - No explicit `any` usage was found. Phaser callback boundaries require several casts; most are localized but are not runtime-validated.
@@ -163,7 +163,7 @@ The effective pipeline is now:
 
 ## Mobile review
 
-- Mobile controls appear only when touch/coarse-pointer detection succeeds.
+- Mobile controls appear only when touch/coarse-pointer detection succeeds and are owned by `MobileControls` with explicit teardown.
 - Four active pointers allow movement, aiming, dash, and ability interaction together.
 - Pointer IDs separate movement and aim.
 - `touch-action: none`, fixed body layout, disabled overscroll, and captured Phaser touch input prevent browser gestures.

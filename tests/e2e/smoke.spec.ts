@@ -123,3 +123,18 @@ test('starts a fresh run after the player dies', async ({ page }) => {
   expect(telemetry.failures, telemetry.failures.join('\n')).toEqual([]);
   expect(restarted(), 'never observed a second run: redeploy is broken').toBe(true);
 });
+
+test('boots five consecutive runs without accumulating runtime failures', async ({ page }) => {
+  const telemetry = watch(page);
+  for (let cycle = 0; cycle < 5; cycle++) {
+    await page.goto('/');
+    const at = await canvasMapper(page);
+    const deploy = at(DEPLOY_BUTTON.x, DEPLOY_BUTTON.y);
+    await page.mouse.click(deploy.x, deploy.y);
+    await expect
+      .poll(() => telemetry.runSeconds.length, { timeout: 20_000 })
+      .toBeGreaterThan(cycle);
+    await page.waitForTimeout(1_000);
+  }
+  expect(telemetry.failures, telemetry.failures.join('\n')).toEqual([]);
+});
