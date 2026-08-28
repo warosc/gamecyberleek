@@ -21,6 +21,7 @@ export class Player extends Phaser.GameObjects.Container {
   private lastTrail = 0;
   private shieldUntil = 0;
   private shieldVisual: Phaser.GameObjects.Arc;
+  private overdriveVisual: Phaser.GameObjects.Arc;
   private gameplayTime = 0;
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y);
@@ -32,12 +33,16 @@ export class Player extends Phaser.GameObjects.Container {
       .circle(0, 0, 48, 0x21e6ff, 0.12)
       .setStrokeStyle(3, 0x73ef62, 0.9)
       .setVisible(false);
+    this.overdriveVisual = scene.add
+      .circle(0, 0, 56, 0xd566ff, 0.08)
+      .setStrokeStyle(3, 0xd566ff, 0.9)
+      .setVisible(false);
     const reference = scene.add.image(0, 0, 'leek-placeholder-front').setScale(0.2);
     reference.name = 'placeholder-full-body-reference-not-a-rig';
     const rig = LayeredPlayerRig.create(scene);
     this.layeredRig = rig;
     if (rig) reference.setVisible(false);
-    this.add([shadow, this.shieldVisual, reference]);
+    this.add([shadow, this.overdriveVisual, this.shieldVisual, reference]);
     if (rig) this.add(rig);
     this.animator = new PlayerAnimator(scene, reference, rig?.setAnimationState.bind(rig));
     this.setSize(46, 75);
@@ -96,6 +101,8 @@ export class Player extends Phaser.GameObjects.Container {
     const overdrive = time < this.overdriveUntil;
     this.setScale(overdrive ? 1.08 : 1);
     this.shieldVisual.setVisible(time < this.shieldUntil);
+    this.overdriveVisual.setVisible(overdrive);
+    if (overdrive) this.overdriveVisual.setRotation(time * 0.004);
     if (
       (virtual?.active ? virtual.firing || virtual.autoFire : pointer.isDown) &&
       time - this.lastShot >= this.stats.attackCooldown * (overdrive ? 0.5 : 1)
@@ -109,6 +116,8 @@ export class Player extends Phaser.GameObjects.Container {
   }
   activateOverdrive(durationMs: number) {
     this.overdriveUntil = Math.max(this.overdriveUntil, this.gameplayTime) + durationMs;
+    this.overdriveVisual.setVisible(true);
+    this.scene.tweens.add({ targets: this.overdriveVisual, scale: 1.16, alpha: 0.45, duration: 180, yoyo: true });
   }
   activateShield(durationMs: number) {
     this.shieldUntil = Math.max(this.shieldUntil, this.gameplayTime) + durationMs;
