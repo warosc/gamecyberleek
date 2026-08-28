@@ -10,6 +10,7 @@ export const GAMEPLAY = {
   maxPlayerProjectiles: 90,
   maxEnemyProjectiles: 100,
   maxXpOrbs: 160,
+  maxTransientEffects: 180,
   spawnBaseIntervalMs: 900,
   spawnMinimumIntervalMs: 260,
   eliteStartMs: 45000,

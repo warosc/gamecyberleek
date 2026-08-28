@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
-import { COLORS } from '../config/Constants';
+import { COLORS, GAMEPLAY } from '../config/Constants';
 
 /** Scene-owned, presentation-only transient combat effects. */
 export class CombatEffects {
   private readonly transient = new Set<Phaser.GameObjects.GameObject>();
-  private readonly maxTransient = 180;
+  private readonly maxTransient = GAMEPLAY.maxTransientEffects;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
