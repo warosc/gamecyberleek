@@ -58,6 +58,12 @@ export class GameScene extends Phaser.Scene {
   private encounters!: EncounterSystem;
   private runEnd!: RunEndSystem;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
+  private readonly handlePlayerDied = () => this.gameOver(false);
+  private readonly handleWeaponFired = (x: number, y: number, angle: number) => {
+    this.audio.tone(240, 0.025, 0.015);
+    this.effects.muzzle(x, y, angle);
+  };
+  private readonly handleEscape = () => this.togglePause();
   private specialLastUsed: Record<SpecialAbilityId, number> = {
     nova: -99999,
     shield: -99999,
@@ -151,12 +157,9 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.lootDrops, (_, loot) =>
       this.collectEquipment(loot as Phaser.GameObjects.GameObject),
     );
-    this.events.on(Events.PLAYER_DIED, () => this.gameOver(false));
-    this.events.on('weapon-fired', (x: number, y: number, angle: number) => {
-      this.audio.tone(240, 0.025, 0.015);
-      this.effects.muzzle(x, y, angle);
-    });
-    this.input.keyboard!.on('keydown-ESC', () => this.togglePause());
+    this.events.on(Events.PLAYER_DIED, this.handlePlayerDied);
+    this.events.on('weapon-fired', this.handleWeaponFired);
+    this.input.keyboard!.on('keydown-ESC', this.handleEscape);
     if (import.meta.env.VITE_DEBUG_GAME === 'true') {
       keyboard.on('keydown-B', () => this.encounters.spawnBoss());
       keyboard.on('keydown-C', () => this.loot.spawnChest());
@@ -166,8 +169,9 @@ export class GameScene extends Phaser.Scene {
     // (ArcadePhysics.start among them) and the next run boots with a null physics world.
     // The keyboard plugin clears its own keys and listeners in its shutdown.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.events.off(Events.PLAYER_DIED);
-      this.events.off('weapon-fired');
+      this.events.off(Events.PLAYER_DIED, this.handlePlayerDied);
+      this.events.off('weapon-fired', this.handleWeaponFired);
+      this.input.keyboard?.off('keydown-ESC', this.handleEscape);
     });
     this.scene.launch('UI', { game: this });
     this.events.emit(Events.STATE_CHANGED, this.state);
