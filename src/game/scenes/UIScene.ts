@@ -6,7 +6,7 @@ import type { GameScene } from './GameScene';
 import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
 import type { Equipment } from '../loot/Equipment';
 import { loadProfile, updateProfile } from '../systems/ProfileStore';
-import { reportPerf } from '../systems/DevTelemetry';
+import { DebugOverlay } from '../ui/DebugOverlay';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -33,9 +33,7 @@ export class UIScene extends Phaser.Scene {
   private timer!: Phaser.GameObjects.Text;
   private xpFill!: Phaser.GameObjects.Rectangle;
   private debug?: Phaser.GameObjects.Text;
-  private worstFrameMs = 0;
-  private reportedWorstFrameMs = 0;
-  private frameWindowMs = 0;
+  private debugOverlay?: DebugOverlay;
   private overlay?: Phaser.GameObjects.Container;
   private specialFills = new Map<SpecialAbilityId, Phaser.GameObjects.Rectangle>();
   private specialTexts = new Map<SpecialAbilityId, Phaser.GameObjects.Text>();
@@ -239,6 +237,7 @@ export class UIScene extends Phaser.Scene {
           padding: { x: 8, y: 6 },
         })
         .setOrigin(1, 0);
+    if (this.debug) this.debugOverlay = new DebugOverlay(this.game, this.gameScene, this.debug);
     this.gameScene.events.on(Events.PLAYER_DAMAGED, this.onHealth, this);
     this.gameScene.events.on(Events.XP_COLLECTED, this.onXp, this);
     this.gameScene.events.on(Events.PLAYER_LEVEL_UP, this.showAbilities, this);
@@ -278,44 +277,7 @@ export class UIScene extends Phaser.Scene {
         .get(ability.id)!
         .setText(charge >= 1 ? 'READY' : `${Math.ceil((ability.cooldown * (1 - charge)) / 1000)}s`);
     }
-    if (!this.debug) return;
-    this.worstFrameMs = Math.max(this.worstFrameMs, delta);
-    this.frameWindowMs += delta;
-    if (this.frameWindowMs >= 1000) {
-      this.reportedWorstFrameMs = this.worstFrameMs;
-      this.worstFrameMs = 0;
-      this.frameWindowMs = 0;
-    }
-    const displayObjects = this.gameScene.children.length;
-    const tweens = this.gameScene.tweens.getTweens().length;
-    const enemies = this.gameScene.enemies.countActive(true);
-    const projectiles = this.gameScene.projectiles.group.countActive(true);
-    const enemyProjectiles = this.gameScene.enemyProjectiles.group.countActive(true);
-    const orbs = this.gameScene.orbs.countActive(true);
-    reportPerf({
-      runSeconds: seconds,
-      fps: Math.round(this.game.loop.actualFps),
-      // Include the in-flight window so a stall is reported the moment it happens.
-      worstFrameMs: Math.round(Math.max(this.reportedWorstFrameMs, this.worstFrameMs)),
-      displayObjects,
-      tweens,
-      enemies,
-      projectiles,
-      orbs,
-    });
-    this.debug.setText([
-      `FPS ${Math.round(this.game.loop.actualFps)}  worst ${Math.round(this.reportedWorstFrameMs)}ms`,
-      `Display objs ${displayObjects}  tweens ${tweens}`,
-      `Enemies ${enemies}`,
-      `Projectiles ${projectiles}  enemy ${enemyProjectiles}`,
-      `XP orbs ${orbs}`,
-      `HP ${Math.ceil(this.gameScene.player.health.current)}/${this.gameScene.player.health.max}`,
-      `Player ${Math.round(this.gameScene.player.x)}, ${Math.round(this.gameScene.player.y)}`,
-      `State ${this.gameScene.state}`,
-      `Run ${Math.floor(this.gameScene.survivalMs / 1000)}s`,
-      `Weapon ${this.gameScene.player.stats.weaponName}`,
-      `Effects ${this.gameScene.player.isShieldActive() ? 'SHIELD ' : ''}${this.gameScene.player.isOverdriveActive() ? 'OVERDRIVE' : ''}`,
-    ]);
+    this.debugOverlay?.update(delta);
   }
   private onHealth(current: number, max: number) {
     if (current < max && loadProfile().vibration) pulseHaptics(35);

@@ -10,7 +10,7 @@ LEEK OPS is a Phaser 4 vertical slice. Dependency installation, TypeScript produ
 
 The root cause was that verification could not observe the running game: the tests covered pure functions and nothing booted a scene, and the iOS defect could not be seen on desktop Chrome at any coverage level. That gap is now closed by a Playwright smoke suite that plays the real game on Chromium and WebKit, with both of its assertions verified by reintroducing the actual defects.
 
-Beyond that, the risks are oversized scene classes, presentation and domain logic mixed in `GameScene`, non-declarative equipment modifiers, and unpooled transient visual effects. Runtime capacity is intentionally capped at 80 enemies, 90 player projectiles, 100 enemy projectiles, and 160 XP orbs.
+Beyond that, the risks are oversized scene classes, presentation and domain logic mixed in `GameScene`, partially declarative equipment modifiers, and unpooled transient visual effects. Runtime capacity is intentionally capped at 80 enemies, 90 player projectiles, 100 enemy projectiles, and 160 XP orbs.
 
 ## Build status
 
@@ -67,8 +67,8 @@ Status meanings: **IMPLEMENTED** works in source and is connected to the runtime
 
 ### Structure
 
-- `GameScene.ts` remains oversized at roughly 440 lines. Combat/death resolution, explosive world props, transient combat presentation, arena decoration, loot, chests, and boss spawning have moved into focused services; victory/game-over transitions remain.
-- `UIScene.ts` is oversized at roughly 635 lines. HUD, modal cards, pause menu, mobile controls, debug UI, and loot notifications should eventually be separate components.
+- `GameScene.ts` remains oversized at roughly 430 lines. Combat/death resolution, explosive world props, transient combat presentation, arena decoration, loot, chests, boss spawning, and run-end handoff have moved into focused services.
+- `UIScene.ts` is oversized at roughly 630 lines. Debug telemetry is now a focused overlay; HUD, modal cards, pause menu, mobile controls, and loot notifications should eventually be separate components.
 - A `PlayerController` was extracted during this audit. `Player` remains responsible for entity state/effects and `PlayerAnimator` remains replaceable.
 - No runtime circular dependency was identified. `UIScene` imports `GameScene` as a type only.
 - No explicit `any` usage was found. Phaser callback boundaries require several casts; most are localized but are not runtime-validated.

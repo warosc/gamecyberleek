@@ -4,6 +4,7 @@ export type EquipmentKind = 'weapon' | 'armor';
 export type EquipmentRarity = 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
 
 export interface Equipment {
+  id: string;
   name: string;
   kind: EquipmentKind;
   rarity: EquipmentRarity;
@@ -11,6 +12,14 @@ export interface Equipment {
   color: number;
   apply: (stats: PlayerStats) => void;
 }
+
+/** Centralized drop weights; tuning does not require editing item behavior. */
+export const RARITY_WEIGHTS: Record<EquipmentRarity, number> = {
+  COMMON: 0.48,
+  RARE: 0.34,
+  EPIC: 0.16,
+  LEGENDARY: 0.02,
+};
 
 const rarityData: Record<EquipmentRarity, { multiplier: number; color: number }> = {
   COMMON: { multiplier: 1, color: 0xd7e5ea },
@@ -20,10 +29,11 @@ const rarityData: Record<EquipmentRarity, { multiplier: number; color: number }>
 };
 
 function rollRarity(level: number, random: () => number): EquipmentRarity {
-  const roll = random() + Math.min(0.18, level * 0.008);
-  if (roll > 1.08) return 'LEGENDARY';
-  if (roll > 0.82) return 'EPIC';
-  if (roll > 0.48) return 'RARE';
+  const bonus = Math.min(0.18, level * 0.008);
+  const roll = random() * (1 + bonus);
+  if (roll >= RARITY_WEIGHTS.COMMON + RARITY_WEIGHTS.RARE + RARITY_WEIGHTS.EPIC) return 'LEGENDARY';
+  if (roll >= RARITY_WEIGHTS.COMMON + RARITY_WEIGHTS.RARE) return 'EPIC';
+  if (roll >= RARITY_WEIGHTS.COMMON) return 'RARE';
   return 'COMMON';
 }
 
@@ -90,7 +100,7 @@ export function rollEquipment(level: number, random = Math.random): Equipment {
       },
     ];
     const choice = choices[Math.floor(random() * choices.length)];
-    return { ...choice, name: `${choice.name} MK-${tier}`, kind: 'weapon', rarity, color };
+    return { ...choice, id: `weapon.${choice.name.toLowerCase().replaceAll(' ', '-')}`, name: `${choice.name} MK-${tier}`, kind: 'weapon', rarity, color };
   }
   const armorChoices = [
     {
@@ -119,5 +129,5 @@ export function rollEquipment(level: number, random = Math.random): Equipment {
     },
   ];
   const choice = armorChoices[Math.floor(random() * armorChoices.length)];
-  return { ...choice, name: `${choice.name} MK-${tier}`, kind: 'armor', rarity, color };
+  return { ...choice, id: `armor.${choice.name.toLowerCase().replaceAll(' ', '-')}`, name: `${choice.name} MK-${tier}`, kind: 'armor', rarity, color };
 }

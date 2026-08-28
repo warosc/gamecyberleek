@@ -49,9 +49,11 @@ on either browser is a change that ships a frozen game.
 - [x] Extract deterministic arena presentation into `ArenaPresenter`.
 - [x] Extract loot drops and supply chests into `LootSystem` with owned physics groups.
 - [x] Extract encounter milestones and boss spawning into `EncounterSystem`.
-- [ ] Finish splitting `GameScene`: extract victory/game-over transitions.
+- [x] Extract victory/game-over handoff into `RunEndSystem`.
 - [ ] Split `UIScene` into focused HUD, modal, pause, mobile-control and debug components.
-- [ ] Convert equipment to stable IDs, structured modifiers, and configurable rarity weights.
+- [x] Add stable equipment IDs and centralized configurable rarity weights.
+- [ ] Convert equipment effects to fully structured modifiers.
+- [x] Extract the debug telemetry overlay from `UIScene`.
 - [ ] Extend typed damage packets and centralized death resolution when statuses are introduced.
 
 ### A2 — Measurement

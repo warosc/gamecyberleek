@@ -13,13 +13,14 @@ import { AudioManager } from '../managers/AudioManager';
 import { ARENA_THEMES } from '../config/ArenaDefinitions';
 import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
 import { EnemyProjectileManager } from '../entities/projectiles/EnemyProjectileManager';
-import { loadProfile, saveRun } from '../systems/ProfileStore';
+import { loadProfile } from '../systems/ProfileStore';
 import { EnemyDeathResolver } from '../systems/EnemyDeathResolver';
 import { CombatEffects } from '../effects/CombatEffects';
 import { ExplosiveBarrelSystem } from '../systems/ExplosiveBarrelSystem';
 import { ArenaPresenter } from '../world/ArenaPresenter';
 import { LootSystem } from '../systems/LootSystem';
 import { EncounterSystem } from '../systems/EncounterSystem';
+import { RunEndSystem } from '../systems/RunEndSystem';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -55,6 +56,7 @@ export class GameScene extends Phaser.Scene {
   private worldProps!: ExplosiveBarrelSystem;
   private loot!: LootSystem;
   private encounters!: EncounterSystem;
+  private runEnd!: RunEndSystem;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private specialLastUsed: Record<SpecialAbilityId, number> = {
     nova: -99999,
@@ -112,6 +114,7 @@ export class GameScene extends Phaser.Scene {
     this.chests = this.loot.chests;
     this.lootDrops = this.loot.drops;
     this.encounters = new EncounterSystem(this, this.enemies, this.player);
+    this.runEnd = new RunEndSystem(this, () => this.scene.stop('UI'));
     this.worldProps = new ExplosiveBarrelSystem(this, (x, y, damage, radius) =>
       this.plasmaExplosion(x, y, damage, radius),
     );
@@ -410,9 +413,7 @@ export class GameScene extends Phaser.Scene {
     if (this.state === GameState.GAME_OVER) return;
     this.state = GameState.GAME_OVER;
     this.physics.pause();
-    this.scene.stop('UI');
-    saveRun(this.xp.level, victory);
-    this.scene.start('GameOver', {
+    this.runEnd.finish({
       time: this.survivalMs,
       level: this.xp.level,
       victory,
