@@ -96,7 +96,7 @@ export class PlayerAnimator {
   }
 
   attack(time: number) {
-    if (!this.transition('attack', time + 90)) return;
+    if (!this.transition('attack', time + 240)) return;
     // Keep the complete directional body. The action reference is a sheet, not a compatible
     // runtime frame, so swapping to it made the character pop, shrink and lose its silhouette.
     this.setPose(this.directionalTexture, undefined, 0.2);
@@ -116,7 +116,7 @@ export class PlayerAnimator {
   }
 
   hurt(time: number) {
-    if (!this.transition('hurt', time + 130)) return;
+    if (!this.transition('hurt', time + 220)) return;
     this.scene.tweens.add({
       targets: this.visual,
       x: { from: -3, to: 3 },

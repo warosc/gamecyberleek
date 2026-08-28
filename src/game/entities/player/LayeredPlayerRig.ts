@@ -41,8 +41,8 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
     const duration = animation.durationMs ?? 1;
     const local = animation.loop ? time % duration : Math.min(time, duration);
     const phase = time * (state === 'walk' ? 0.014 : 0.0045);
-    this.y = state === 'walk' ? Math.abs(Math.sin(phase)) * -3 : Math.sin(phase) * 1.5;
-    this.rotation = state === 'walk' ? Math.sin(phase) * 0.018 : Math.sin(phase * 0.65) * 0.012;
+    this.y = state === 'walk' ? Math.abs(Math.sin(phase)) * -6 : Math.sin(phase) * 3;
+    this.rotation = state === 'walk' ? Math.sin(phase) * 0.04 : Math.sin(phase * 0.65) * 0.02;
     const frameIndex = animation.keyframes.reduce(
       (index, candidate, current) => (candidate.timeMs <= local ? current : index),
       0,
