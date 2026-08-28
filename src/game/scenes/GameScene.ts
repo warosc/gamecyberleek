@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
-import { ARENA, COLORS, Events, GAMEPLAY, GameState, RUN_DURATION_MS } from '../config/Constants';
+import { ARENA, COLORS, Events, GAMEPLAY, GameState } from '../config/Constants';
 import { Player } from '../entities/player/Player';
 import { ProjectileManager } from '../entities/projectiles/ProjectileManager';
 import { EnemyFactory } from '../entities/enemies/EnemyFactory';
 import { Enemy } from '../entities/enemies/Enemy';
+import { EnemyType } from '../entities/enemies/EnemyTypes';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { ExperienceSystem } from '../systems/ExperienceSystem';
 import { chooseAbilities, getAbilityById } from '../abilities/AbilityRegistry';
@@ -12,13 +13,13 @@ import { AudioManager } from '../managers/AudioManager';
 import { ARENA_THEMES } from '../config/ArenaDefinitions';
 import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
 import { EnemyProjectileManager } from '../entities/projectiles/EnemyProjectileManager';
-import { EnemyType } from '../entities/enemies/EnemyTypes';
 import { loadProfile, saveRun } from '../systems/ProfileStore';
 import { EnemyDeathResolver } from '../systems/EnemyDeathResolver';
 import { CombatEffects } from '../effects/CombatEffects';
 import { ExplosiveBarrelSystem } from '../systems/ExplosiveBarrelSystem';
 import { ArenaPresenter } from '../world/ArenaPresenter';
 import { LootSystem } from '../systems/LootSystem';
+import { EncounterSystem } from '../systems/EncounterSystem';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -45,7 +46,6 @@ export class GameScene extends Phaser.Scene {
   private spawn!: SpawnSystem;
   private pausedByEsc = false;
   private audio!: AudioManager;
-  private bossSpawned = false;
   private nextChestAt = GAMEPLAY.chestFirstMs;
   private pendingEquipmentDrop = false;
   private deaths = new EnemyDeathResolver();
@@ -54,6 +54,7 @@ export class GameScene extends Phaser.Scene {
   private effects!: CombatEffects;
   private worldProps!: ExplosiveBarrelSystem;
   private loot!: LootSystem;
+  private encounters!: EncounterSystem;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private specialLastUsed: Record<SpecialAbilityId, number> = {
     nova: -99999,
@@ -72,7 +73,6 @@ export class GameScene extends Phaser.Scene {
     this.survivalMs = 0;
     this.pausedByEsc = false;
     this.specialLastUsed = { nova: -99999, shield: -99999, overdrive: -99999 };
-    this.bossSpawned = false;
     this.nextChestAt = GAMEPLAY.chestFirstMs;
     this.pendingEquipmentDrop = false;
     this.deaths = new EnemyDeathResolver();
@@ -111,6 +111,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.chests = this.loot.chests;
     this.lootDrops = this.loot.drops;
+    this.encounters = new EncounterSystem(this, this.enemies, this.player);
     this.worldProps = new ExplosiveBarrelSystem(this, (x, y, damage, radius) =>
       this.plasmaExplosion(x, y, damage, radius),
     );
@@ -154,7 +155,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.input.keyboard!.on('keydown-ESC', () => this.togglePause());
     if (import.meta.env.VITE_DEBUG_GAME === 'true') {
-      keyboard.on('keydown-B', () => this.spawnBoss());
+      keyboard.on('keydown-B', () => this.encounters.spawnBoss());
       keyboard.on('keydown-C', () => this.loot.spawnChest());
     }
     // Remove only the events this scene registers. `this.events` is the scene's system
@@ -171,8 +172,8 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     if (this.state !== GameState.PLAYING) return;
     this.survivalMs += delta;
-    if (this.survivalMs >= RUN_DURATION_MS && !this.bossSpawned) this.spawnBoss();
-    if (this.survivalMs >= this.nextChestAt && !this.bossSpawned) {
+    this.encounters.update(this.survivalMs);
+    if (this.survivalMs >= this.nextChestAt && !this.encounters.hasBossSpawned) {
       this.nextChestAt += GAMEPLAY.chestIntervalMs;
       this.loot.spawnChest();
     }
@@ -187,7 +188,7 @@ export class GameScene extends Phaser.Scene {
     this.mobileInput.dash = false;
     this.projectiles.update(this.survivalMs);
     this.enemyProjectiles.update(this.survivalMs);
-    if (!this.bossSpawned) this.spawn.update(delta, this.player);
+    if (!this.encounters.hasBossSpawned) this.spawn.update(delta, this.player);
     this.enemies
       .getChildren()
       .forEach((object) =>
@@ -397,16 +398,6 @@ export class GameScene extends Phaser.Scene {
     this.physics.resume();
     this.scene.stop('UI');
     this.scene.start('Menu');
-  }
-  private spawnBoss() {
-    if (this.bossSpawned) return;
-    this.bossSpawned = true;
-    const x = Phaser.Math.Clamp(this.player.x + 520, 100, ARENA.width - 100);
-    const y = Phaser.Math.Clamp(this.player.y - 300, 100, ARENA.height - 100);
-    const boss = new Enemy(this, x, y, EnemyType.BOSS);
-    this.enemies.add(boss);
-    this.events.emit(Events.BOSS_SPAWNED, 'BROCCOLI COMMANDER', boss.health.max);
-    this.cameras.main.shake(700, 0.012);
   }
   private openChest(object: Phaser.GameObjects.GameObject) {
     if (!this.loot.openChest(object)) return;
