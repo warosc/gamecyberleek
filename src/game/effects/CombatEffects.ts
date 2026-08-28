@@ -3,24 +3,43 @@ import { COLORS } from '../config/Constants';
 
 /** Scene-owned, presentation-only transient combat effects. */
 export class CombatEffects {
+  private readonly transient = new Set<Phaser.GameObjects.GameObject>();
+  private readonly maxTransient = 180;
+
   constructor(private readonly scene: Phaser.Scene) {}
 
+  private track<T extends Phaser.GameObjects.GameObject>(object: T): T | undefined {
+    if (this.transient.size >= this.maxTransient) {
+      object.destroy();
+      return undefined;
+    }
+    this.transient.add(object);
+    return object;
+  }
+
+  private release(object: Phaser.GameObjects.GameObject) {
+    this.transient.delete(object);
+    if (object.active) object.destroy();
+  }
+
   muzzle(x: number, y: number, angle: number) {
-    const flash = this.scene.add
+    const flash = this.track(this.scene.add
       .circle(x + Math.cos(angle) * 50, y + Math.sin(angle) * 50, 8, COLORS.cyan, 0.8)
-      .setDepth(20);
+      .setDepth(20));
+    if (!flash) return;
     this.scene.tweens.add({
       targets: flash,
       scale: 2,
       alpha: 0,
       duration: 90,
-      onComplete: () => flash.destroy(),
+      onComplete: () => this.release(flash),
     });
   }
 
   impact(x: number, y: number) {
     for (let index = 0; index < 5; index++) {
-      const dot = this.scene.add.circle(x, y, 2, COLORS.cyan).setDepth(20);
+      const dot = this.track(this.scene.add.circle(x, y, 2, COLORS.cyan).setDepth(20));
+      if (!dot) break;
       const angle = Math.random() * Math.PI * 2;
       this.scene.tweens.add({
         targets: dot,
@@ -28,36 +47,38 @@ export class CombatEffects {
         y: y + Math.sin(angle) * 25,
         alpha: 0,
         duration: 180,
-        onComplete: () => dot.destroy(),
+        onComplete: () => this.release(dot),
       });
     }
   }
 
   explosion(x: number, y: number, radius: number) {
-    const blast = this.scene.add
+    const blast = this.track(this.scene.add
       .circle(x, y, 18, 0xff7b35, 0.55)
       .setStrokeStyle(5, 0xffd166)
-      .setDepth(20);
+      .setDepth(20));
+    if (!blast) return;
     this.scene.tweens.add({
       targets: blast,
       scale: radius / 18,
       alpha: 0,
       duration: 330,
-      onComplete: () => blast.destroy(),
+      onComplete: () => this.release(blast),
     });
   }
 
   floatingText(x: number, y: number, text: string, color: string) {
-    const label = this.scene.add
+    const label = this.track(this.scene.add
       .text(x, y, text, { fontFamily: 'Arial Black', fontSize: '18px', color })
       .setOrigin(0.5)
-      .setDepth(30);
+      .setDepth(30));
+    if (!label) return;
     this.scene.tweens.add({
       targets: label,
       y: y - 35,
       alpha: 0,
       duration: 550,
-      onComplete: () => label.destroy(),
+      onComplete: () => this.release(label),
     });
   }
 }
