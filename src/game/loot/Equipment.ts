@@ -1,10 +1,17 @@
-import type { PlayerStats } from '../entities/player/PlayerStats';
+import { createPlayerStats, type PlayerStats } from '../entities/player/PlayerStats';
 
 export type EquipmentKind = 'weapon' | 'armor';
 export type EquipmentRarity = 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
 
+export interface EquipmentModifier {
+  key: keyof PlayerStats;
+  operation: 'add' | 'multiply' | 'set';
+  value: number | string;
+}
+
 export interface Equipment {
   id: string;
+  modifiers: readonly EquipmentModifier[];
   name: string;
   kind: EquipmentKind;
   rarity: EquipmentRarity;
@@ -20,6 +27,30 @@ export const RARITY_WEIGHTS: Record<EquipmentRarity, number> = {
   EPIC: 0.16,
   LEGENDARY: 0.02,
 };
+
+const NUMERIC_KEYS: readonly (keyof PlayerStats)[] = [
+  'maxHp', 'moveSpeed', 'dashSpeed', 'dashDuration', 'dashCooldown', 'attackDamage',
+  'attackCooldown', 'projectileSpeed', 'criticalChance', 'xpMultiplier', 'projectileCount',
+  'magnetRadius', 'damageReduction', 'projectileScale', 'projectilePiercing', 'splashRadius',
+];
+
+function structuredModifiers(apply: (stats: PlayerStats) => void): EquipmentModifier[] {
+  const before = createPlayerStats();
+  const after = createPlayerStats();
+  apply(after);
+  const modifiers: EquipmentModifier[] = [];
+  for (const key of NUMERIC_KEYS) {
+    const previous = before[key] as number;
+    const next = after[key] as number;
+    if (next === previous) continue;
+    const operation = key === 'attackCooldown' || key === 'dashCooldown' ? 'multiply' : 'add';
+    modifiers.push({ key, operation, value: operation === 'multiply' ? next / previous : next - previous });
+  }
+  for (const key of ['weaponName', 'projectileColor', 'weaponMode'] as const) {
+    if (after[key] !== before[key]) modifiers.push({ key, operation: 'set', value: after[key] });
+  }
+  return modifiers;
+}
 
 const rarityData: Record<EquipmentRarity, { multiplier: number; color: number }> = {
   COMMON: { multiplier: 1, color: 0xd7e5ea },
@@ -100,7 +131,7 @@ export function rollEquipment(level: number, random = Math.random): Equipment {
       },
     ];
     const choice = choices[Math.floor(random() * choices.length)];
-    return { ...choice, id: `weapon.${choice.name.toLowerCase().replaceAll(' ', '-')}`, name: `${choice.name} MK-${tier}`, kind: 'weapon', rarity, color };
+    return { ...choice, id: `weapon.${choice.name.toLowerCase().replaceAll(' ', '-')}`, modifiers: structuredModifiers(choice.apply), name: `${choice.name} MK-${tier}`, kind: 'weapon', rarity, color };
   }
   const armorChoices = [
     {
@@ -129,5 +160,5 @@ export function rollEquipment(level: number, random = Math.random): Equipment {
     },
   ];
   const choice = armorChoices[Math.floor(random() * armorChoices.length)];
-  return { ...choice, id: `armor.${choice.name.toLowerCase().replaceAll(' ', '-')}`, name: `${choice.name} MK-${tier}`, kind: 'armor', rarity, color };
+  return { ...choice, id: `armor.${choice.name.toLowerCase().replaceAll(' ', '-')}`, modifiers: structuredModifiers(choice.apply), name: `${choice.name} MK-${tier}`, kind: 'armor', rarity, color };
 }

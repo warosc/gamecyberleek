@@ -15,6 +15,8 @@ describe('equipment progression', () => {
     expect(item.kind).toBe('weapon');
     expect(stats.attackDamage).toBeGreaterThan(20);
     expect(stats.weaponName).not.toBe('PULSEGUN-01');
+    expect(item.id).toMatch(/^weapon\./);
+    expect(item.modifiers.length).toBeGreaterThan(0);
   });
 
   it('applies armor without exceeding the mitigation cap', () => {
@@ -24,5 +26,7 @@ describe('equipment progression', () => {
     expect(item.kind).toBe('armor');
     expect(stats.maxHp).toBeGreaterThan(100);
     expect(stats.damageReduction).toBeLessThanOrEqual(0.55);
+    expect(item.id).toMatch(/^armor\./);
+    expect(item.modifiers.some((modifier) => modifier.key === 'maxHp')).toBe(true);
   });
 });

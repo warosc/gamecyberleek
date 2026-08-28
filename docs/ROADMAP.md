@@ -52,7 +52,7 @@ on either browser is a change that ships a frozen game.
 - [x] Extract victory/game-over handoff into `RunEndSystem`.
 - [ ] Split `UIScene` into focused HUD, modal, pause, mobile-control and debug components.
 - [x] Add stable equipment IDs and centralized configurable rarity weights.
-- [ ] Convert equipment effects to fully structured modifiers.
+- [x] Expose structured equipment modifiers while retaining `apply()` as a compatibility bridge.
 - [x] Extract the debug telemetry overlay from `UIScene`.
 - [ ] Extend typed damage packets and centralized death resolution when statuses are introduced.
 
