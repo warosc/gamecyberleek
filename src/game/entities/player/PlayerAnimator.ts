@@ -10,6 +10,7 @@ export interface PlayerVisualAdapter {
   setScale(scale: number): void;
   setAlpha(alpha: number): void;
   setAngle(angle: number): void;
+  setAnimationState?(state: PlayerAnimationState, time: number): void;
 }
 
 /** Adapter for the current complete reference image. A layered rig can implement the same API. */
@@ -45,6 +46,7 @@ export class PlayerAnimator {
   constructor(
     private scene: Phaser.Scene,
     private visual: Phaser.GameObjects.Image,
+    private readonly stateSink?: (state: PlayerAnimationState, time: number) => void,
   ) {}
 
   update(time: number, movement: Phaser.Math.Vector2, dashing: boolean, facing: number) {
@@ -54,6 +56,7 @@ export class PlayerAnimator {
     const direction = vertical ? (movement.y < 0 ? 'up' : 'down') : 'side';
 
     if (time >= this.stateUntil) this.state = dashing ? 'dash' : moving ? 'walk' : 'idle';
+    this.stateSink?.(this.state, time);
 
     const phase = time * (this.state === 'walk' ? 0.014 : 0.0045);
     if (this.state === 'idle') {

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { PLAYER_RIG_LAYERS, PLAYER_RIG_STATES } from '../entities/player/PlayerRigManifest';
 export class PreloadScene extends Phaser.Scene {
   constructor() {
     super('Preload');
@@ -13,6 +14,10 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image('leek-actions', 'assets/character/leek/actions-reference.png');
     this.load.image('leek-profile', 'assets/character/leek/turnaround-profile.png');
     this.load.image('leek-back', 'assets/character/leek/turnaround-back.png');
+    for (const layer of PLAYER_RIG_LAYERS)
+      this.load.image(`rig-${layer}`, `assets/character/leek/rig/layers/${layer}.png`);
+    for (const state of PLAYER_RIG_STATES)
+      this.load.json(`rig-anim-${state}`, `assets/character/leek/rig/animations/${state}.json`);
     this.load.image('lab-floor', 'assets/maps/cyber-vegetable-lab-floor.png');
     this.load.image('menu-backdrop', 'assets/ui/menu-backdrop.png');
   }

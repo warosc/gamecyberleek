@@ -5,6 +5,7 @@ import { createPlayerStats } from './PlayerStats';
 import { PlayerAnimator } from './PlayerAnimator';
 import { PlayerController, type VirtualPlayerInput } from './PlayerController';
 import { resolveDamage } from '../../systems/CombatSystem';
+import { LayeredPlayerRig } from './LayeredPlayerRig';
 
 export class Player extends Phaser.GameObjects.Container {
   readonly stats = createPlayerStats();
@@ -16,6 +17,7 @@ export class Player extends Phaser.GameObjects.Container {
   aim = 0;
   private overdriveUntil = 0;
   private animator: PlayerAnimator;
+  private layeredRig?: LayeredPlayerRig;
   private lastTrail = 0;
   private shieldUntil = 0;
   private shieldVisual: Phaser.GameObjects.Arc;
@@ -32,8 +34,12 @@ export class Player extends Phaser.GameObjects.Container {
       .setVisible(false);
     const reference = scene.add.image(0, 0, 'leek-placeholder-front').setScale(0.2);
     reference.name = 'placeholder-full-body-reference-not-a-rig';
+    const rig = LayeredPlayerRig.create(scene);
+    this.layeredRig = rig;
+    if (rig) reference.setVisible(false);
     this.add([shadow, this.shieldVisual, reference]);
-    this.animator = new PlayerAnimator(scene, reference);
+    if (rig) this.add(rig);
+    this.animator = new PlayerAnimator(scene, reference, rig?.setAnimationState.bind(rig));
     this.setSize(46, 75);
     (this.body as Phaser.Physics.Arcade.Body)
       .setSize(46, 75)
@@ -69,6 +75,8 @@ export class Player extends Phaser.GameObjects.Container {
     }
     const facing = Math.cos(this.aim) < 0 ? -1 : 1;
     this.animator.update(time, v, time < this.dashingUntil, facing);
+    // Keep the layered rig mirrored with the same facing used by the fallback pose.
+    this.layeredRig?.setFlipX(facing < 0);
     if (time < this.dashingUntil && time - this.lastTrail > 45) {
       this.lastTrail = time;
       const ghost = this.scene.add

@@ -1,0 +1,46 @@
+{
+  "name": "idle",
+  "loop": true,
+  "durationMs": 1200,
+  "keyframes": [
+    {
+      "timeMs": 0,
+      "layers": {
+        "torso": {
+          "y": 0
+        },
+        "hair-leaves": {
+          "rotation": -0.01
+        }
+      }
+    },
+    {
+      "timeMs": 600,
+      "layers": {
+        "torso": {
+          "y": 2
+        },
+        "head": {
+          "y": 1
+        },
+        "hair-leaves": {
+          "rotation": 0.015
+        }
+      }
+    },
+    {
+      "timeMs": 1200,
+      "layers": {
+        "torso": {
+          "y": 0
+        },
+        "head": {
+          "y": 0
+        },
+        "hair-leaves": {
+          "rotation": -0.01
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "name": "death",
+  "loop": false,
+  "durationMs": 700,
+  "keyframes": [
+    {
+      "timeMs": 0,
+      "layers": {
+        "torso": {
+          "rotation": 0
+        }
+      }
+    },
+    {
+      "timeMs": 250,
+      "layers": {
+        "torso": {
+          "rotation": 0.35,
+          "y": 10
+        },
+        "head": {
+          "rotation": 0.15,
+          "y": 8
+        },
+        "hair-leaves": {
+          "rotation": 0.2
+        }
+      }
+    },
+    {
+      "timeMs": 700,
+      "layers": {
+        "torso": {
+          "rotation": 1.35,
+          "y": 45
+        },
+        "head": {
+          "rotation": 0.8,
+          "y": 35
+        },
+        "hair-leaves": {
+          "rotation": 0.9
+        },
+        "glasses": {
+          "rotation": 0.35,
+          "x": 12,
+          "y": 18
+        }
+      }
+    }
+  ]
+}

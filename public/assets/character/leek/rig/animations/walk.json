@@ -1,0 +1,58 @@
+{
+  "name": "walk",
+  "loop": true,
+  "durationMs": 600,
+  "keyframes": [
+    {
+      "timeMs": 0,
+      "layers": {
+        "thigh-left": {
+          "rotation": -0.08
+        },
+        "thigh-right": {
+          "rotation": 0.08
+        },
+        "arm-left-upper": {
+          "rotation": 0.05
+        },
+        "arm-right-upper": {
+          "rotation": -0.05
+        }
+      }
+    },
+    {
+      "timeMs": 300,
+      "layers": {
+        "thigh-left": {
+          "rotation": 0.08
+        },
+        "thigh-right": {
+          "rotation": -0.08
+        },
+        "arm-left-upper": {
+          "rotation": -0.05
+        },
+        "arm-right-upper": {
+          "rotation": 0.05
+        }
+      }
+    },
+    {
+      "timeMs": 600,
+      "layers": {
+        "thigh-left": {
+          "rotation": -0.08
+        },
+        "thigh-right": {
+          "rotation": 0.08
+        },
+        "arm-left-upper": {
+          "rotation": 0.05
+        },
+        "arm-right-upper": {
+          "rotation": -0.05
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "name": "attack",
+  "loop": false,
+  "durationMs": 240,
+  "keyframes": [
+    {
+      "timeMs": 0,
+      "layers": {
+        "arm-right-upper": {
+          "rotation": 0
+        },
+        "arm-right-fore": {
+          "rotation": 0
+        }
+      }
+    },
+    {
+      "timeMs": 90,
+      "layers": {
+        "arm-right-upper": {
+          "rotation": -0.16
+        },
+        "arm-right-fore": {
+          "rotation": -0.12
+        },
+        "torso": {
+          "rotation": -0.02
+        }
+      }
+    },
+    {
+      "timeMs": 240,
+      "layers": {
+        "arm-right-upper": {
+          "rotation": 0
+        },
+        "arm-right-fore": {
+          "rotation": 0
+        },
+        "torso": {
+          "rotation": 0
+        }
+      }
+    }
+  ]
+}

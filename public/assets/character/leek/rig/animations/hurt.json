@@ -1,0 +1,51 @@
+{
+  "name": "hurt",
+  "loop": false,
+  "durationMs": 220,
+  "keyframes": [
+    {
+      "timeMs": 0,
+      "layers": {
+        "torso": {
+          "x": 0
+        }
+      }
+    },
+    {
+      "timeMs": 70,
+      "layers": {
+        "torso": {
+          "x": -5,
+          "rotation": -0.04
+        },
+        "head": {
+          "x": -4
+        }
+      }
+    },
+    {
+      "timeMs": 140,
+      "layers": {
+        "torso": {
+          "x": 3,
+          "rotation": 0.02
+        },
+        "head": {
+          "x": 2
+        }
+      }
+    },
+    {
+      "timeMs": 220,
+      "layers": {
+        "torso": {
+          "x": 0,
+          "rotation": 0
+        },
+        "head": {
+          "x": 0
+        }
+      }
+    }
+  ]
+}

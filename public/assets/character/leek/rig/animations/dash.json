@@ -1,0 +1,43 @@
+{
+  "name": "dash",
+  "loop": false,
+  "durationMs": 180,
+  "keyframes": [
+    {
+      "timeMs": 0,
+      "layers": {
+        "torso": {
+          "rotation": 0
+        }
+      }
+    },
+    {
+      "timeMs": 70,
+      "layers": {
+        "torso": {
+          "rotation": 0.09
+        },
+        "head": {
+          "x": 3
+        },
+        "hair-leaves": {
+          "rotation": -0.12
+        }
+      }
+    },
+    {
+      "timeMs": 180,
+      "layers": {
+        "torso": {
+          "rotation": 0
+        },
+        "head": {
+          "x": 0
+        },
+        "hair-leaves": {
+          "rotation": -0.01
+        }
+      }
+    }
+  ]
+}

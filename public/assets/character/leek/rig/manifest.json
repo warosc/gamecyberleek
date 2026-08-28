@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "layers": {
+    "head": "layers/head.png",
+    "hair-leaves": "layers/hair-leaves.png",
+    "glasses": "layers/glasses.png",
+    "torso": "layers/torso.png",
+    "arm-left-upper": "layers/arm-left-upper.png",
+    "arm-left-fore": "layers/arm-left-fore.png",
+    "arm-right-upper": "layers/arm-right-upper.png",
+    "arm-right-fore": "layers/arm-right-fore.png",
+    "hand-left": "layers/hand-left.png",
+    "hand-right": "layers/hand-right.png",
+    "thigh-left": "layers/thigh-left.png",
+    "thigh-right": "layers/thigh-right.png",
+    "leg-left": "layers/leg-left.png",
+    "leg-right": "layers/leg-right.png",
+    "boot-left": "layers/boot-left.png",
+    "boot-right": "layers/boot-right.png"
+  },
+  "animations": {
+    "idle": "animations/idle.json",
+    "walk": "animations/walk.json",
+    "attack": "animations/attack.json",
+    "dash": "animations/dash.json",
+    "hurt": "animations/hurt.json",
+    "death": "animations/death.json"
+  }
+}
