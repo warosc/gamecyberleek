@@ -60,7 +60,7 @@ Status meanings: **IMPLEMENTED** works in source and is connected to the runtime
 | Mobile ability buttons | IMPLEMENTED | Q/E/R buttons call the same ability API |
 | PWA manifest | IMPLEMENTED | Standalone landscape manifest and character icon |
 | Service worker | IMPLEMENTED | Production-only registration, network-first cache, immediate update activation |
-| Character directional rendering | PARTIAL | Front/profile/back supplied poses are selected correctly, but they are reference poses rather than a separated production rig |
+| Character directional rendering | PARTIAL | Front/profile/back supplied poses and prioritized animation states work; supplied sheets remain references, while `PlayerVisualAdapter` and `PlayerRigManifest` define the safe replacement boundary for a separated production rig |
 | Projectile pooling | IMPLEMENTED | Player and enemy projectile Arcade groups have configured maximum sizes |
 
 ## Architecture findings
@@ -123,6 +123,13 @@ Current separation:
 - Ability definitions/effects: split between data registries and scene activation.
 
 Replacing the character rig should remain confined primarily to `PlayerAnimator` and Player visual construction. Remaining debt: temporary shield/overdrive effects still live in `Player`; a future `StatusEffectController` is appropriate, but is not required yet.
+
+### Phase B progress
+
+- Animation states now have explicit priority so dash, hurt, and death cannot be overwritten by firing or locomotion.
+- Death uses a gameplay-clock transition and does not synthesize missing frames.
+- `PlayerVisualAdapter` provides the renderer boundary and `PlayerRigManifest` defines the required aligned transparent layer exports.
+- The reference package contains composite sheets only. Runtime rig activation is intentionally blocked until individual layer PNGs exist with matching canvas and pivots.
 
 ## Combat architecture
 

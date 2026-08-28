@@ -91,6 +91,9 @@ Each of these must be answerable with a command or a recorded number, not a judg
 
 ## PHASE B — Professional character animation
 
+- [x] Define a replaceable visual adapter and separated-layer asset manifest.
+- [x] Add prioritized idle, locomotion, attack, dash, hurt, and death state transitions.
+- [ ] Receive and validate individually aligned transparent layer exports before runtime binding.
 - Import a properly separated production rig or authored directional sprite sheets.
 - Preserve `Player`, `PlayerController`, and physics APIs.
 - Add idle, locomotion, attack, dash, hurt, and death state transitions.
