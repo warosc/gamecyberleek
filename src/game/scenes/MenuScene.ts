@@ -154,6 +154,7 @@ export class MenuScene extends Phaser.Scene {
     // Keep the showcase inside the right-hand panel on wide desktop and landscape mobile.
     // Explicit dimensions prevent the high-resolution source texture from dictating layout.
     const hero = this.add.image(0, 0, 'leek-hero-clean').setDisplaySize(270, 494);
+    const heroScale = hero.scaleX;
     const container = this.add.container(960, 438, [hero]).setDepth(4);
     this.tweens.add({
       targets: container,
@@ -166,8 +167,8 @@ export class MenuScene extends Phaser.Scene {
     });
     this.tweens.add({
       targets: hero,
-      scaleX: { from: 0.985, to: 1.015 },
-      scaleY: { from: 1.015, to: 0.985 },
+      scaleX: { from: heroScale * 0.985, to: heroScale * 1.015 },
+      scaleY: { from: heroScale * 1.015, to: heroScale * 0.985 },
       duration: 920,
       yoyo: true,
       repeat: -1,
