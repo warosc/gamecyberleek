@@ -47,7 +47,8 @@ on either browser is a change that ships a frozen game.
 - [x] Extract explosive world props from `GameScene` with owned physics/lifecycle.
 - [x] Extract transient combat presentation into `CombatEffects`.
 - [x] Extract deterministic arena presentation into `ArenaPresenter`.
-- [ ] Finish splitting `GameScene`: extract loot/chests and encounter flow.
+- [x] Extract loot drops and supply chests into `LootSystem` with owned physics groups.
+- [ ] Finish splitting `GameScene`: extract encounter and boss flow.
 - [ ] Split `UIScene` into focused HUD, modal, pause, mobile-control and debug components.
 - [ ] Convert equipment to stable IDs, structured modifiers, and configurable rarity weights.
 - [ ] Extend typed damage packets and centralized death resolution when statuses are introduced.

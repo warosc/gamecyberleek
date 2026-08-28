@@ -13,13 +13,12 @@ import { ARENA_THEMES } from '../config/ArenaDefinitions';
 import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
 import { EnemyProjectileManager } from '../entities/projectiles/EnemyProjectileManager';
 import { EnemyType } from '../entities/enemies/EnemyTypes';
-import { rollEquipment, type Equipment } from '../loot/Equipment';
-import { EquipmentDrop } from '../loot/EquipmentDrop';
 import { loadProfile, saveRun } from '../systems/ProfileStore';
 import { EnemyDeathResolver } from '../systems/EnemyDeathResolver';
 import { CombatEffects } from '../effects/CombatEffects';
 import { ExplosiveBarrelSystem } from '../systems/ExplosiveBarrelSystem';
 import { ArenaPresenter } from '../world/ArenaPresenter';
+import { LootSystem } from '../systems/LootSystem';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -54,6 +53,7 @@ export class GameScene extends Phaser.Scene {
   equippedArmor = 'SIN ARMADURA';
   private effects!: CombatEffects;
   private worldProps!: ExplosiveBarrelSystem;
+  private loot!: LootSystem;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private specialLastUsed: Record<SpecialAbilityId, number> = {
     nova: -99999,
@@ -91,8 +91,6 @@ export class GameScene extends Phaser.Scene {
     this.projectiles = new ProjectileManager(this);
     this.enemyProjectiles = new EnemyProjectileManager(this);
     this.enemies = this.physics.add.group({ runChildUpdate: false });
-    this.chests = this.physics.add.group({ runChildUpdate: false });
-    this.lootDrops = this.physics.add.group({ runChildUpdate: false });
     this.orbs = this.physics.add.group({
       classType: ExperienceOrb,
       maxSize: GAMEPLAY.maxXpOrbs,
@@ -101,6 +99,18 @@ export class GameScene extends Phaser.Scene {
     this.spawn = new SpawnSystem(new EnemyFactory(this), this.enemies);
     this.audio = new AudioManager(this);
     this.effects = new CombatEffects(this);
+    this.loot = new LootSystem(this, {
+      player: this.player,
+      effects: this.effects,
+      audio: this.audio,
+      level: () => this.xp.level,
+      onEquipmentChanged: (weapon, armor) => {
+        this.equippedWeapon = weapon;
+        this.equippedArmor = armor;
+      },
+    });
+    this.chests = this.loot.chests;
+    this.lootDrops = this.loot.drops;
     this.worldProps = new ExplosiveBarrelSystem(this, (x, y, damage, radius) =>
       this.plasmaExplosion(x, y, damage, radius),
     );
@@ -145,7 +155,7 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-ESC', () => this.togglePause());
     if (import.meta.env.VITE_DEBUG_GAME === 'true') {
       keyboard.on('keydown-B', () => this.spawnBoss());
-      keyboard.on('keydown-C', () => this.spawnChest());
+      keyboard.on('keydown-C', () => this.loot.spawnChest());
     }
     // Remove only the events this scene registers. `this.events` is the scene's system
     // emitter, so a blanket removeAllListeners() also unsubscribes Phaser's own plugins
@@ -164,7 +174,7 @@ export class GameScene extends Phaser.Scene {
     if (this.survivalMs >= RUN_DURATION_MS && !this.bossSpawned) this.spawnBoss();
     if (this.survivalMs >= this.nextChestAt && !this.bossSpawned) {
       this.nextChestAt += GAMEPLAY.chestIntervalMs;
-      this.spawnChest();
+      this.loot.spawnChest();
     }
     this.updateSpecialAbilities(this.survivalMs);
     this.player.update(
@@ -301,48 +311,12 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(Events.STATE_CHANGED, this.state);
     if (this.pendingEquipmentDrop) {
       this.pendingEquipmentDrop = false;
-      this.spawnEquipmentDrop();
+      this.loot.spawnEquipmentDrop();
     }
-  }
-
-  private spawnEquipmentDrop() {
-    const equipment = rollEquipment(this.xp.level);
-    const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    const distance = 145;
-    const x = Phaser.Math.Clamp(this.player.x + Math.cos(angle) * distance, 70, ARENA.width - 70);
-    const y = Phaser.Math.Clamp(this.player.y + Math.sin(angle) * distance, 70, ARENA.height - 70);
-    const drop = new EquipmentDrop(this, x, y, equipment);
-    this.lootDrops.add(drop);
-    this.effects.floatingText(x, y - 82, 'EQUIPO DETECTADO', `#${equipment.color.toString(16).padStart(6, '0')}`);
-    this.audio.tone(880, 0.18, 0.035);
   }
 
   private collectEquipment(object: Phaser.GameObjects.GameObject) {
-    const drop = object as EquipmentDrop;
-    if (!drop.active) return;
-    const equipment: Equipment = drop.equipment;
-    const oldMaxHp = this.player.stats.maxHp;
-    equipment.apply(this.player.stats);
-    if (equipment.kind === 'weapon') this.equippedWeapon = equipment.name;
-    else this.equippedArmor = equipment.name;
-    if (this.player.stats.maxHp > oldMaxHp) {
-      const gainedHp = this.player.stats.maxHp - oldMaxHp;
-      this.player.health.max = this.player.stats.maxHp;
-      this.player.health.heal(gainedHp);
-      this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
-    }
-    const burst = this.add.circle(drop.x, drop.y, 18, equipment.color, 0.45).setDepth(20);
-    this.tweens.add({
-      targets: burst,
-      scale: 5,
-      alpha: 0,
-      duration: 420,
-      onComplete: () => burst.destroy(),
-    });
-    drop.destroy();
-    this.audio.tone(equipment.rarity === 'LEGENDARY' ? 1040 : 720, 0.28, 0.045);
-    this.events.emit(Events.LOOT_COLLECTED, equipment);
-    this.events.emit(Events.EQUIPMENT_CHANGED, this.equippedWeapon, this.equippedArmor);
+    this.loot.collectEquipment(object, this.equippedWeapon, this.equippedArmor);
   }
   selectChestReward(id: 'repair' | 'charge' | 'weapon') {
     if (id === 'repair') {
@@ -434,32 +408,8 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(Events.BOSS_SPAWNED, 'BROCCOLI COMMANDER', boss.health.max);
     this.cameras.main.shake(700, 0.012);
   }
-  private spawnChest() {
-    const x = Phaser.Math.Clamp(
-      this.player.x + Phaser.Math.Between(-420, 420),
-      80,
-      ARENA.width - 80,
-    );
-    const y = Phaser.Math.Clamp(
-      this.player.y + Phaser.Math.Between(-300, 300),
-      80,
-      ARENA.height - 80,
-    );
-    const chest = this.add
-      .rectangle(x, y, 54, 42, 0x173650)
-      .setStrokeStyle(4, COLORS.green, 0.95)
-      .setDepth(7);
-    chest.setData('opened', false);
-    this.physics.add.existing(chest);
-    (chest.body as Phaser.Physics.Arcade.Body).setImmovable(true);
-    this.chests.add(chest);
-    this.tweens.add({ targets: chest, scale: 1.08, duration: 500, yoyo: true, repeat: -1 });
-  }
   private openChest(object: Phaser.GameObjects.GameObject) {
-    const chest = object as Phaser.GameObjects.Rectangle;
-    if (chest.getData('opened') as boolean) return;
-    chest.setData('opened', true);
-    chest.destroy();
+    if (!this.loot.openChest(object)) return;
     this.state = GameState.LEVEL_UP;
     this.physics.pause();
     this.events.emit(Events.CHEST_OPENED);

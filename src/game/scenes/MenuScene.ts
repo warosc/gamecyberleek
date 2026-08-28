@@ -151,7 +151,7 @@ export class MenuScene extends Phaser.Scene {
     const shadow = this.add.ellipse(910, 628, 290, 58, 0x000000, 0.58).setDepth(2);
     const glow = this.add.ellipse(910, 438, 280, 390, 0x73ef62, 0.045).setDepth(2);
     glow.setBlendMode(Phaser.BlendModes.ADD);
-    const hero = this.add.image(0, 0, 'leek-placeholder-front').setScale(0.78);
+    const hero = this.add.image(0, 0, 'leek-hero-clean').setDisplaySize(339, 620);
     const container = this.add.container(910, 418, [hero]).setDepth(4);
     this.tweens.add({
       targets: container,
@@ -164,8 +164,8 @@ export class MenuScene extends Phaser.Scene {
     });
     this.tweens.add({
       targets: hero,
-      scaleX: { from: 0.765, to: 0.79 },
-      scaleY: { from: 0.79, to: 0.765 },
+      scaleX: { from: 0.985, to: 1.015 },
+      scaleY: { from: 1.015, to: 0.985 },
       duration: 920,
       yoyo: true,
       repeat: -1,

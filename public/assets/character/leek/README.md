@@ -2,7 +2,7 @@
 
 Selected assets were copied from `reference/personaje_animacion_separado.zip`; the source ZIP remains unchanged.
 
-`placeholder-front-reference.png` is used as a uniformly scaled full-body placeholder. It is not treated as an animation rig. `rig-parts-reference.png` and `actions-reference.png` are visual references only; they are not fake animation frames. `avatar.png` is used in the menu.
+`placeholder-front-reference.png` is used as a uniformly scaled in-game full-body placeholder. It is not treated as an animation rig. `rig-parts-reference.png` and `actions-reference.png` are visual references only; they are not fake animation frames. `avatar.png` is used in the HUD. `hero-clean-v2.png` is a cleaned, transparent, versioned menu illustration; it does not replace the directional gameplay poses.
 
 `turnaround-profile.png` was refreshed from the improved profile source and is suitable for the current directional placeholder rendering. The revised primary and three-quarter images remain reference-only because they still contain visible off-silhouette color/shadow artifacts; they should not replace runtime art until they receive a clean transparent export.
 

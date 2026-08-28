@@ -9,6 +9,7 @@ export class PreloadScene extends Phaser.Scene {
       'assets/character/leek/placeholder-front-reference.png',
     );
     this.load.image('leek-avatar', 'assets/character/leek/avatar.png');
+    this.load.image('leek-hero-clean', 'assets/character/leek/hero-clean-v2.png');
     this.load.image('leek-actions', 'assets/character/leek/actions-reference.png');
     this.load.image('leek-profile', 'assets/character/leek/turnaround-profile.png');
     this.load.image('leek-back', 'assets/character/leek/turnaround-back.png');
