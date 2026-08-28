@@ -130,6 +130,9 @@ Replacing the character rig should remain confined primarily to `PlayerAnimator`
 - Death uses a gameplay-clock transition and does not synthesize missing frames.
 - `PlayerVisualAdapter` provides the renderer boundary and `PlayerRigManifest` defines the required aligned transparent layer exports.
 - The supplied Phase B v2 package contains aligned individual layers; the older composite reference sheets remain untouched as visual references.
+- Automated asset checks now enforce uniform 499×499 RGBA layers, less than 400 KB encoded layer
+  payload, and less than 20 KB of animation manifests. The current package is approximately 178 KB
+  for layers and 4.7 KB for animation JSON; decoded GPU memory is roughly 16 MB at runtime.
 
 ## Combat architecture
 
