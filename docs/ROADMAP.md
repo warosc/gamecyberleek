@@ -96,9 +96,9 @@ Each of these must be answerable with a command or a recorded number, not a judg
 - [x] Receive and validate individually aligned transparent layer exports before runtime binding.
 - [x] Import the separated production rig while preserving the fallback renderer.
 - [x] Add automated layer dimensions, RGBA, and download-budget checks.
-- Preserve `Player`, `PlayerController`, and physics APIs.
-- Add idle, locomotion, attack, dash, hurt, and death state transitions.
-- Validate animation memory and atlas loading on mobile.
+- [x] Preserve `Player`, `PlayerController`, and physics APIs.
+- [x] Add idle, locomotion, attack, dash, hurt, and death state transitions.
+- [ ] Validate animation memory and atlas loading on physical low-end mobile hardware.
 
 Do not begin until Phase A exit criteria pass.
 
