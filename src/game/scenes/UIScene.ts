@@ -8,6 +8,7 @@ import type { Equipment } from '../loot/Equipment';
 import { loadProfile, updateProfile } from '../systems/ProfileStore';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import { ModalOverlay } from '../ui/ModalOverlay';
+import { MobileControls } from '../ui/MobileControls';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -36,6 +37,7 @@ export class UIScene extends Phaser.Scene {
   private debug?: Phaser.GameObjects.Text;
   private debugOverlay?: DebugOverlay;
   private modal!: ModalOverlay;
+  private mobileControls?: MobileControls;
   private specialFills = new Map<SpecialAbilityId, Phaser.GameObjects.Rectangle>();
   private specialTexts = new Map<SpecialAbilityId, Phaser.GameObjects.Text>();
   private bossPanel!: Phaser.GameObjects.Container;
@@ -227,7 +229,10 @@ export class UIScene extends Phaser.Scene {
       this.specialFills.set(ability.id, fill);
       this.specialTexts.set(ability.id, cooldownText);
     });
-    if (this.gameScene.mobileInput.active) this.createMobileControls();
+    if (this.gameScene.mobileInput.active) {
+      this.mobileControls = new MobileControls(this, this.gameScene);
+      this.mobileControls.create();
+    }
     if (import.meta.env.VITE_DEBUG_GAME === 'true')
       // Below the weapon/armor slots: at y=90 the overlay covered them.
       this.debug = this.add
@@ -251,6 +256,7 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
     this.events.once('shutdown', () => {
       this.modal.clear();
+      this.mobileControls?.destroy();
       this.gameScene.events.off(Events.PLAYER_DAMAGED, this.onHealth, this);
       this.gameScene.events.off(Events.XP_COLLECTED, this.onXp, this);
       this.gameScene.events.off(Events.PLAYER_LEVEL_UP, this.showAbilities, this);
@@ -484,7 +490,8 @@ export class UIScene extends Phaser.Scene {
     button.on('pointerout', () => button.setFillStyle(0x0b1b2b, 1));
     return [button, text];
   }
-  private createMobileControls() {
+  /** @deprecated Kept temporarily as a reference while MobileControls owns the runtime path. */
+  createMobileControlsLegacy() {
     const moveCenter = new Phaser.Math.Vector2(135, GAME_HEIGHT - 165);
     const aimCenter = new Phaser.Math.Vector2(GAME_WIDTH - 135, GAME_HEIGHT - 170);
     const moveBase = this.add
