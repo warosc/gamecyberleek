@@ -31,6 +31,7 @@ export class UIScene extends Phaser.Scene {
   private energyFill!: Phaser.GameObjects.Rectangle;
   private energyText!: Phaser.GameObjects.Text;
   private playerFrame!: Phaser.GameObjects.Rectangle;
+  private damageFlash!: Phaser.GameObjects.Rectangle;
   private level!: Phaser.GameObjects.Text;
   private timer!: Phaser.GameObjects.Text;
   private xpFill!: Phaser.GameObjects.Rectangle;
@@ -51,6 +52,9 @@ export class UIScene extends Phaser.Scene {
   create(data: { game: GameScene }) {
     this.gameScene = data.game;
     this.modal = new ModalOverlay(this);
+    this.damageFlash = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0xff214f, 0)
+      .setDepth(90);
     this.playerFrame = this.add
       .rectangle(16, 14, 370, 112, 0x06101d, 0.94)
       .setOrigin(0, 0)
@@ -296,6 +300,8 @@ export class UIScene extends Phaser.Scene {
     this.hpFill.width = 240 * (current / max);
     this.hpFill.setFillStyle(current / max < 0.3 ? 0xff214f : 0xd83952);
     this.playerFrame.setStrokeStyle(4, 0xff476f, 1);
+    this.damageFlash.setAlpha(0.18);
+    this.tweens.add({ targets: this.damageFlash, alpha: 0, duration: 180, ease: 'Quad.Out' });
     this.tweens.add({
       targets: this.playerFrame,
       alpha: { from: 0.55, to: 1 },
