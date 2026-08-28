@@ -133,10 +133,13 @@ export class Player extends Phaser.GameObjects.Container {
     });
     if (this.health.damage(Math.max(1, hit.amount))) {
       this.scene.events.emit(Events.PLAYER_DAMAGED, this.health.current, this.health.max);
-      this.animator.hurt(this.scene.time.now);
+      this.animator.hurt(this.gameplayTime);
       this.setAlpha(0.45);
       this.scene.time.delayedCall(90, () => this.setAlpha(1));
-      if (this.health.dead) this.scene.events.emit(Events.PLAYER_DIED);
+      if (this.health.dead) {
+        this.animator.death(this.gameplayTime);
+        this.scene.events.emit(Events.PLAYER_DIED);
+      }
     }
   }
   isShieldActive() {

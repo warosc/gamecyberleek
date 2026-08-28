@@ -96,6 +96,20 @@ export class PlayerAnimator {
     });
   }
 
+  death(time: number) {
+    this.state = 'death';
+    this.stateUntil = time + 700;
+    this.scene.tweens.killTweensOf(this.visual);
+    this.scene.tweens.add({
+      targets: this.visual,
+      alpha: 0,
+      angle: 18 * this.facing,
+      scale: 0.16,
+      duration: 700,
+      ease: 'Quad.In',
+    });
+  }
+
   private setPose(texture: string, frame: string | undefined, scale: number) {
     const pose = `${texture}:${frame ?? 'base'}`;
     if (pose === this.lastPose) return;
