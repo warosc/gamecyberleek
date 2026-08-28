@@ -6,6 +6,11 @@ Selected assets were copied from `reference/personaje_animacion_separado.zip`; t
 
 `turnaround-profile.png` was refreshed from the improved profile source and is suitable for the current directional placeholder rendering. The revised primary and three-quarter images remain reference-only because they still contain visible off-silhouette color/shadow artifacts; they should not replace runtime art until they receive a clean transparent export.
 
-Replace the placeholder with professionally separated rig assets without changing the Player controls or gameplay API. Expected layer names: head, hair/leaves, glasses, torso, left/right upper arm, forearm, hand, thigh, leg, and boot.
+Replace the placeholder with professionally separated rig assets without changing the Player controls or gameplay API. The exact layer/state contract is defined in `src/game/entities/player/PlayerRigManifest.ts`.
+
+The supplied `rig-parts-reference.png` is a transparent reference sheet, but it combines multiple
+variants in one atlas and is not safe to bind as runtime layers. The supplied `actions-reference.png`
+is likewise a composite action sheet. Both remain visual references until each layer is exported as
+an individually aligned transparent PNG (same canvas size, pivot, and naming as the manifest).
 
 Never overwrite the original reference ZIP. Copy only production-ready assets from it into this directory.
