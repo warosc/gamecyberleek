@@ -43,7 +43,10 @@ On touch devices, LEEK OPS displays a left movement joystick, a right aim/fire j
 
 Scenes own lifecycle and presentation. `Player`, `Enemy`, and projectile classes own entity behavior; systems handle spawning, combat math, and XP; abilities are data-driven. Gameplay/UI communicate via scene events. Fast-spawned projectiles use an Arcade Physics pool.
 
-The current character uses supplied front, profile, back, and action reference poses for directional feedback without synthesizing or distorting missing frames. The runtime Player API remains independent from rendering so a fully separated production rig can replace these references later. See `public/assets/character/leek/README.md`.
+The character uses a validated 16-layer production rig with data-driven idle, walk, attack, dash,
+hurt, and death keyframes. A complete-reference fallback remains available if a rig texture is
+missing; no frames are synthesized or distorted. The runtime Player API remains independent from
+rendering so the rig can evolve without changing gameplay. See `public/assets/character/leek/README.md`.
 
 Copy `.env.example` to `.env` and set `VITE_DEBUG_GAME=true` to show FPS, entity counts, player coordinates, and the current game state.
 
