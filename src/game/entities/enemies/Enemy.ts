@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { HealthComponent } from '../../components/HealthComponent';
 import { ENEMY_DEFS, EnemyType } from './EnemyTypes';
+
+/** Preserves the original feel: 0.075 rad per frame at 60fps. */
+const PULSE_RADIANS_PER_MS = 0.075 * 0.06;
 export class Enemy extends Phaser.GameObjects.Arc {
   readonly def;
   readonly health;
@@ -9,7 +12,9 @@ export class Enemy extends Phaser.GameObjects.Arc {
   private visual: Phaser.GameObjects.Container;
   private healthBack: Phaser.GameObjects.Rectangle;
   private healthFill: Phaser.GameObjects.Rectangle;
-  private visualPhase = Math.random() * Math.PI * 2;
+  /** Per-enemy offset so the idle pulse of a crowd is desynchronised. */
+  private readonly visualOffset = Math.random() * Math.PI * 2;
+  private visualPhase = 0;
   elite = false;
   private eliteMultiplier = 1;
   constructor(
@@ -46,7 +51,9 @@ export class Enemy extends Phaser.GameObjects.Arc {
     time: number,
     fire: (x: number, y: number, angle: number, speed: number, damage: number) => void,
   ) {
-    this.visualPhase += 0.075;
+    // Derived from gameplay time, not incremented per frame: a fixed step made the pulse
+    // run at the display refresh rate, so a 165Hz screen animated ~2.75x faster than 60Hz.
+    this.visualPhase = this.visualOffset + time * PULSE_RADIANS_PER_MS;
     const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y);
     if (this.enemyType === EnemyType.SHOOTER) {
       if (distance > 390) this.scene.physics.moveToObject(this, target, this.def.speed * this.eliteMultiplier);

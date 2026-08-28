@@ -146,9 +146,13 @@ export class GameScene extends Phaser.Scene {
       keyboard.on('keydown-B', () => this.spawnBoss());
       keyboard.on('keydown-C', () => this.spawnChest());
     }
+    // Remove only the events this scene registers. `this.events` is the scene's system
+    // emitter, so a blanket removeAllListeners() also unsubscribes Phaser's own plugins
+    // (ArcadePhysics.start among them) and the next run boots with a null physics world.
+    // The keyboard plugin clears its own keys and listeners in its shutdown.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.events.removeAllListeners();
-      this.input.keyboard?.removeAllListeners();
+      this.events.off(Events.PLAYER_DIED);
+      this.events.off('weapon-fired');
     });
     this.scene.launch('UI', { game: this });
     this.events.emit(Events.STATE_CHANGED, this.state);
@@ -332,10 +336,23 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.shake(90, 0.004);
   }
   private spawnOrb(x: number, y: number, value: number) {
-    const orb = this.orbs.get(x, y) as ExperienceOrb | null;
+    // The pool is capped and orbs never expire on their own, so once the arena holds
+    // maxXpOrbs uncollected orbs `get()` returns null and the run stops granting XP
+    // entirely. Recycling the stalest orb keeps every kill rewarding.
+    const orb = (this.orbs.get(x, y) as ExperienceOrb | null) ?? this.stalestOrb();
     if (!orb) return;
-    orb.spawn(x, y, value);
+    // A recycled orb can still carry the pulse tween from its previous life.
+    this.tweens.killTweensOf(orb);
+    orb.spawn(x, y, value, this.survivalMs);
     this.tweens.add({ targets: orb, scale: 1.35, duration: 350, yoyo: true, repeat: 2 });
+  }
+  private stalestOrb() {
+    let stalest: ExperienceOrb | null = null;
+    for (const object of this.orbs.getChildren()) {
+      const orb = object as ExperienceOrb;
+      if (orb.active && (!stalest || orb.spawnedAt < stalest.spawnedAt)) stalest = orb;
+    }
+    return stalest;
   }
   private collectOrb(object: Phaser.GameObjects.GameObject) {
     const orb = object as ExperienceOrb;

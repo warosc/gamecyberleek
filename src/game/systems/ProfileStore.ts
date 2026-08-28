@@ -25,18 +25,32 @@ export function loadProfile(): PlayerProfile {
   }
 }
 
+/**
+ * Safari in private browsing throws on setItem, as does any browser over quota. Persistence is
+ * a convenience here: losing it must never interrupt a run. `saveRun` is called from the death
+ * transition and `updateProfile` from a mobile HUD tap, so an escaping error would kill the
+ * game loop on exactly the paths a player cannot avoid.
+ */
+function persist(profile: PlayerProfile) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(profile));
+  } catch {
+    // Ignored on purpose: the run continues with an in-memory profile.
+  }
+}
+
 export function saveRun(level: number, victory: boolean) {
   const profile = loadProfile();
   profile.runs++;
   profile.bestLevel = Math.max(profile.bestLevel, level);
   profile.victories += Number(victory);
   profile.bioCredits += level * 5 + (victory ? 100 : 0);
-  localStorage.setItem(KEY, JSON.stringify(profile));
+  persist(profile);
   return profile;
 }
 
 export function updateProfile(patch: Partial<PlayerProfile>) {
   const profile = { ...loadProfile(), ...patch };
-  localStorage.setItem(KEY, JSON.stringify(profile));
+  persist(profile);
   return profile;
 }

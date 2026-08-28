@@ -1,13 +1,19 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 
+const BUTTON_WIDTH = 270;
+const BUTTON_GAP = 20;
+
 export class GameOverScene extends Phaser.Scene {
+  private navigating = false;
+
   constructor() {
     super('GameOver');
   }
 
   create(data: { time: number; level: number; victory: boolean; arenaIndex: number }) {
     this.input.enabled = true;
+    this.navigating = false;
     this.add
       .image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'menu-backdrop')
       .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
@@ -46,20 +52,39 @@ export class GameOverScene extends Phaser.Scene {
     this.statCard(640, 285, 'LEVEL REACHED', String(data.level));
     this.statCard(920, 285, 'SECTOR', String(data.arenaIndex + 1));
 
-    this.button(360, 440, 270, 'DEPLOY AGAIN', 0x73ef62, () => {
-      this.physics.resume();
-      this.scene.stop('UI');
-      this.scene.start('Game', { arenaIndex: data.arenaIndex + 1 });
-    });
-    this.button(650, 440, 270, 'MAIN MENU', 0x21e6ff, () => {
-      this.physics.resume();
-      this.scene.stop('UI');
-      this.scene.start('Menu');
-    });
+    // A clear run earns the next sector; dying retries the one that beat you.
+    const nextArenaIndex = data.victory ? data.arenaIndex + 1 : data.arenaIndex;
+    // Guarded so a double click or a click racing the keyboard cannot start two scenes.
+    const go = (key: string, sceneData?: object) => () => {
+      if (this.navigating) return;
+      this.navigating = true;
+      this.scene.start(key, sceneData);
+    };
+    const redeploy = go('Game', { arenaIndex: nextArenaIndex });
+    const mainMenu = go('Menu');
+
+    const offset = (BUTTON_WIDTH + BUTTON_GAP) / 2;
+    this.button(
+      GAME_WIDTH / 2 - offset,
+      440,
+      data.victory ? 'NEXT SECTOR' : 'RETRY SECTOR',
+      0x73ef62,
+      redeploy,
+    );
+    this.button(GAME_WIDTH / 2 + offset, 440, 'MAIN MENU', 0x21e6ff, mainMenu);
+
+    // No manual teardown: KeyboardPlugin.shutdown() already drops its keys and listeners.
+    const keyboard = this.input.keyboard;
+    keyboard?.on('keydown-ENTER', redeploy);
+    keyboard?.on('keydown-SPACE', redeploy);
+    keyboard?.on('keydown-ESC', mainMenu);
+
     this.add
-      .text(GAME_WIDTH / 2, 555, 'Every operation makes the next operative stronger.', {
-        fontSize: '15px',
-        color: '#8da8b8',
+      .text(GAME_WIDTH / 2, 545, 'ENTER  REDEPLOY        ESC  MAIN MENU', {
+        fontFamily: 'monospace',
+        fontSize: '13px',
+        color: '#7594a8',
+        letterSpacing: 1,
       })
       .setOrigin(0.5);
   }
@@ -83,18 +108,13 @@ export class GameOverScene extends Phaser.Scene {
       .setOrigin(0.5);
   }
 
-  private button(
-    x: number,
-    y: number,
-    width: number,
-    label: string,
-    color: number,
-    action: () => void,
-  ) {
+  private button(x: number, y: number, label: string, color: number, action: () => void) {
     const button = this.add
-      .rectangle(x, y, width, 62, 0x07111f, 0.96)
+      .rectangle(x, y, BUTTON_WIDTH, 62, 0x07111f, 0.96)
       .setStrokeStyle(3, color, 0.9)
       .setInteractive({ useHandCursor: true });
+    // The label stays non-interactive on purpose: input is topOnly, so an interactive label
+    // would swallow the rectangle's pointerover/pointerout and break the hover highlight.
     const text = this.add
       .text(x, y, label, {
         fontFamily: 'Arial Black',
@@ -102,10 +122,14 @@ export class GameOverScene extends Phaser.Scene {
         color: '#eaffff',
       })
       .setOrigin(0.5);
-    button.on('pointerover', () => button.setFillStyle(color, 0.28));
-    button.on('pointerout', () => button.setFillStyle(0x07111f, 0.96));
+    button.on('pointerover', () => {
+      button.setFillStyle(color, 0.28);
+      text.setColor('#ffffff');
+    });
+    button.on('pointerout', () => {
+      button.setFillStyle(0x07111f, 0.96);
+      text.setColor('#eaffff');
+    });
     button.on('pointerup', action);
-    text.setInteractive({ useHandCursor: true }).on('pointerup', action);
-    text.setDepth(button.depth + 1);
   }
 }

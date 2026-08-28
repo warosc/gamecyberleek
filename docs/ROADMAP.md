@@ -6,7 +6,38 @@ This roadmap intentionally defers new content until the current vertical slice i
 
 Goal: make existing behavior safe to extend.
 
-Progress:
+### Why this phase is ordered the way it is
+
+Three defects were found that each killed the game loop outright: a missing `Phaser` import
+reached on every level-up, a `removeAllListeners()` that left the physics world null on every
+restart, and an XP orb pool that silently stopped granting experience. `npm run build`,
+`npm run lint` and `npm run test` were green through all three.
+
+None of them would have been caught by splitting a scene. All of them would have been caught by
+booting the real game and playing through level-up, death and restart. Verification therefore
+comes first, and the refactors follow it.
+
+### A0 — Verification (blocking) — COMPLETE
+
+This gate is met; A1 is unblocked. Keep it green: a change that makes `npm run test:e2e` fail
+on either browser is a change that ships a frozen game.
+
+- [x] Browser smoke test (`npm run test:e2e`) that boots the real game in Chromium **and
+      WebKit** and plays it: level-up and chest modals, taking damage, dying, and redeploying.
+      Liveness comes from the telemetry the game already posts, so a silent freeze with no
+      exception also fails the run. Both assertions were verified against the real defects by
+      reintroducing them: the `navigator.vibrate` crash fails on WebKit, and the
+      `removeAllListeners` crash fails the redeploy test.
+- [x] Browser-to-terminal telemetry: uncaught errors, unhandled rejections, WebGL context loss
+      and frame stalls are posted to the dev server and written to `.devlog.log`, tagged per
+      device. This found every crash listed in the audit.
+- [x] Fix the `AudioContext` leak. One shared context at game scope replaces one per run, and
+      Phaser's own unused sound manager is disabled with `audio: { noAudio: true }`.
+- [x] Guard the `Phaser`-as-global trap with an ESLint `no-restricted-globals` rule. ESLint does
+      not read `.d.ts`, so an unimported `Phaser` is an unresolved global and is now an error,
+      while an imported one is a local binding and passes.
+
+### A1 — Structure
 
 - [x] Extract keyboard/virtual input into `PlayerController`.
 - [x] Move runtime abilities and projectiles to a pause-safe gameplay clock.
@@ -16,21 +47,33 @@ Progress:
 - [x] Extract explosive world props from `GameScene` with owned physics/lifecycle.
 - [x] Extract transient combat presentation into `CombatEffects`.
 - [ ] Finish splitting `GameScene`: extract arena presentation, loot/chests, and encounter flow.
-- [ ] Split `UIScene` into focused components.
-- [ ] Add Phaser scene restart/lifecycle integration tests.
-- [ ] Convert equipment callbacks into structured modifiers.
-- [ ] Profile target mobile hardware.
+- [ ] Split `UIScene` into focused HUD, modal, pause, mobile-control and debug components.
+- [ ] Convert equipment to stable IDs, structured modifiers, and configurable rarity weights.
+- [ ] Extend typed damage packets and centralized death resolution when statuses are introduced.
 
-- Split `GameScene` orchestration from combat resolution, world props, effects, and encounter flow.
-- Split `UIScene` into focused HUD/modal/mobile/debug components.
-- Add scene lifecycle integration tests: repeated runs, pause/resume, level-up, death, victory, and menu transitions.
-- Extend typed damage packets and centralized death resolution when statuses are introduced.
-- Convert equipment to stable IDs, structured modifiers, and configurable rarity weights.
-- Profile load time, frame time, memory, and garbage collection on desktop and low-end Android.
-- Define supported entity budgets and degradation behavior.
-- Add PWA icon validation and update/offline tests.
+### A2 — Measurement
 
-Exit criteria: all current checks pass, restart tests detect no duplicated listeners/timers, pause timing is deterministic, and target mobile hardware maintains the agreed frame budget.
+Ranked below structure on evidence: a live run held 163-165 FPS with a worst frame of 8 ms at
+70 seconds. A headless simulation of the real `SpawnSystem` does show the arena pinning at the
+80-enemy cap from roughly the two-minute mark on a base damage build, so this is a real budget
+question — but a profiling task, not an emergency.
+
+- [ ] Profile load time, frame time, memory, and garbage collection on desktop and low-end Android.
+- [ ] Define supported entity budgets and degradation behavior, as numbers.
+- [ ] Add PWA icon validation and update/offline tests.
+
+### Exit criteria
+
+Each of these must be answerable with a command or a recorded number, not a judgement:
+
+1. `build`, `lint` and `test` pass.
+2. The A0 smoke test completes ten consecutive runs with zero uncaught errors, including at
+   least five restarts through the Game Over screen.
+3. Restart leaves no duplicated listeners, timers or physics bodies, asserted by a test rather
+   than inspection.
+4. Pause timing is deterministic: gameplay clock, cooldowns and effect durations do not advance
+   while paused or in a level-up.
+5. A written frame budget exists, with a named target device, and that device meets it.
 
 ## PHASE B — Professional character animation
 

@@ -78,9 +78,16 @@ export const ABILITIES: Ability[] = [
     apply: () => {},
   },
 ];
+/** Fisher-Yates over a copy. Kept engine-free so this data module stays runtime-independent. */
+function shuffled<T>(items: readonly T[]): T[] {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index--) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swap]] = [result[swap], result[index]];
+  }
+  return result;
+}
 export function chooseAbilities(levels: Map<string, number>, count = 3) {
-  return Phaser.Utils.Array.Shuffle(
-    ABILITIES.filter((a) => (levels.get(a.id) ?? 0) < a.maxLevel),
-  ).slice(0, count);
+  return shuffled(ABILITIES.filter((a) => (levels.get(a.id) ?? 0) < a.maxLevel)).slice(0, count);
 }
 export const getAbilityById = (id: string) => ABILITIES.find((ability) => ability.id === id);

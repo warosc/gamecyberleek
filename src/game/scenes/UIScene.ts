@@ -6,6 +6,22 @@ import type { GameScene } from './GameScene';
 import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
 import type { Equipment } from '../loot/Equipment';
 import { loadProfile, updateProfile } from '../systems/ProfileStore';
+import { reportPerf } from '../systems/DevTelemetry';
+
+/**
+ * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
+ * undefined, so a property check is not enough: the value has to be callable. That gap threw
+ * on the first hit the player took and killed the game loop on every iPhone run.
+ * Haptics are a nicety, so a refusal by the browser must never reach gameplay either.
+ */
+function pulseHaptics(durationMs: number) {
+  if (typeof navigator.vibrate !== 'function') return;
+  try {
+    navigator.vibrate(durationMs);
+  } catch {
+    // Ignored on purpose.
+  }
+}
 export class UIScene extends Phaser.Scene {
   private gameScene!: GameScene;
   private hp!: Phaser.GameObjects.Text;
@@ -17,6 +33,9 @@ export class UIScene extends Phaser.Scene {
   private timer!: Phaser.GameObjects.Text;
   private xpFill!: Phaser.GameObjects.Rectangle;
   private debug?: Phaser.GameObjects.Text;
+  private worstFrameMs = 0;
+  private reportedWorstFrameMs = 0;
+  private frameWindowMs = 0;
   private overlay?: Phaser.GameObjects.Container;
   private specialFills = new Map<SpecialAbilityId, Phaser.GameObjects.Rectangle>();
   private specialTexts = new Map<SpecialAbilityId, Phaser.GameObjects.Text>();
@@ -232,7 +251,7 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
     });
   }
-  update() {
+  update(_time: number, delta: number) {
     const seconds = Math.floor(this.gameScene.survivalMs / 1000);
     this.timer.setText(
       `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`,
@@ -250,11 +269,37 @@ export class UIScene extends Phaser.Scene {
         .get(ability.id)!
         .setText(charge >= 1 ? 'READY' : `${Math.ceil((ability.cooldown * (1 - charge)) / 1000)}s`);
     }
-    this.debug?.setText([
-      `FPS ${Math.round(this.game.loop.actualFps)}`,
-      `Enemies ${this.gameScene.enemies.countActive(true)}`,
-      `Projectiles ${this.gameScene.projectiles.group.countActive(true)}`,
-      `XP orbs ${this.gameScene.orbs.countActive(true)}`,
+    if (!this.debug) return;
+    this.worstFrameMs = Math.max(this.worstFrameMs, delta);
+    this.frameWindowMs += delta;
+    if (this.frameWindowMs >= 1000) {
+      this.reportedWorstFrameMs = this.worstFrameMs;
+      this.worstFrameMs = 0;
+      this.frameWindowMs = 0;
+    }
+    const displayObjects = this.gameScene.children.length;
+    const tweens = this.gameScene.tweens.getTweens().length;
+    const enemies = this.gameScene.enemies.countActive(true);
+    const projectiles = this.gameScene.projectiles.group.countActive(true);
+    const enemyProjectiles = this.gameScene.enemyProjectiles.group.countActive(true);
+    const orbs = this.gameScene.orbs.countActive(true);
+    reportPerf({
+      runSeconds: seconds,
+      fps: Math.round(this.game.loop.actualFps),
+      // Include the in-flight window so a stall is reported the moment it happens.
+      worstFrameMs: Math.round(Math.max(this.reportedWorstFrameMs, this.worstFrameMs)),
+      displayObjects,
+      tweens,
+      enemies,
+      projectiles,
+      orbs,
+    });
+    this.debug.setText([
+      `FPS ${Math.round(this.game.loop.actualFps)}  worst ${Math.round(this.reportedWorstFrameMs)}ms`,
+      `Display objs ${displayObjects}  tweens ${tweens}`,
+      `Enemies ${enemies}`,
+      `Projectiles ${projectiles}  enemy ${enemyProjectiles}`,
+      `XP orbs ${orbs}`,
       `HP ${Math.ceil(this.gameScene.player.health.current)}/${this.gameScene.player.health.max}`,
       `Player ${Math.round(this.gameScene.player.x)}, ${Math.round(this.gameScene.player.y)}`,
       `State ${this.gameScene.state}`,
@@ -264,7 +309,7 @@ export class UIScene extends Phaser.Scene {
     ]);
   }
   private onHealth(current: number, max: number) {
-    if (current < max && loadProfile().vibration && 'vibrate' in navigator) navigator.vibrate(35);
+    if (current < max && loadProfile().vibration) pulseHaptics(35);
     this.hp
       .setText(`HP ${Math.ceil(current)} / ${max}`)
       .setColor(current / max < 0.3 ? '#ff476f' : '#eaffff');

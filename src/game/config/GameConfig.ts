@@ -13,6 +13,10 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   height: GAME_HEIGHT,
   backgroundColor: '#07111f',
   physics: { default: 'arcade', arcade: { debug: false } },
+  // Nothing in the game uses `this.sound`; all audio goes through AudioManager's own Web Audio
+  // context. Without this Phaser still builds a WebAudioSoundManager and tries to unlock it,
+  // burning one of the few concurrent AudioContexts iOS Safari allows per document.
+  audio: { noAudio: true },
   input: { activePointers: 4, touch: { capture: true } },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   scene: [BootScene, PreloadScene, MenuScene, GameScene, UIScene, GameOverScene],

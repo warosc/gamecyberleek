@@ -4,9 +4,13 @@ Audit date: 2026-08-27
 
 ## Executive summary
 
-LEEK OPS is a functional Phaser 4 vertical slice. Dependency installation, TypeScript production build, ESLint, Vitest, and Docker Compose build all pass. The documented gameplay loop exists and no README feature is missing or broken after the safe fixes made during this audit.
+LEEK OPS is a Phaser 4 vertical slice. Dependency installation, TypeScript production build, ESLint, Vitest, and Docker Compose build all pass.
 
-The repository is suitable for a stabilization/animation milestone, but not yet for uncontrolled content expansion. The main risks are oversized scene classes, presentation and domain logic mixed in `GameScene`, only six unit tests, non-declarative equipment modifiers, and unpooled transient visual effects. Runtime capacity is intentionally capped at 80 enemies, 90 player projectiles, 100 enemy projectiles, and 160 XP orbs.
+**A green board did not mean a working game.** With every check passing, the run died at the first level-up, the Game Over screen's redeploy button had never worked, long runs silently stopped granting experience, and on iOS the game froze on the first hit the player took. See *Crashes found by browser telemetry*.
+
+The root cause was that verification could not observe the running game: the tests covered pure functions and nothing booted a scene, and the iOS defect could not be seen on desktop Chrome at any coverage level. That gap is now closed by a Playwright smoke suite that plays the real game on Chromium and WebKit, with both of its assertions verified by reintroducing the actual defects.
+
+Beyond that, the risks are oversized scene classes, presentation and domain logic mixed in `GameScene`, non-declarative equipment modifiers, and unpooled transient visual effects. Runtime capacity is intentionally capped at 80 enemies, 90 player projectiles, 100 enemy projectiles, and 160 XP orbs.
 
 ## Build status
 
@@ -15,8 +19,13 @@ The repository is suitable for a stabilization/animation milestone, but not yet 
 | `npm install` | PASS | 161 packages audited; 0 reported vulnerabilities |
 | `npm run build` | PASS | TypeScript and Vite production build succeed |
 | `npm run lint` | PASS | No ESLint findings |
-| `npm run test` | PASS | 2 files, 6 tests |
+| `npm run test` | PASS | 4 files, 12 tests — pure functions; no scene is booted |
+| `npm run test:e2e` | PASS | 4 Playwright tests; boots and plays the real game on Chromium and WebKit |
 | `docker compose build` | PASS | Node 22 Alpine development image builds |
+
+Every check except the last two passed unchanged while four separate defects were killing the
+game loop. The unit suite proves the code compiles and its pure functions are correct; only
+`test:e2e` can tell you the game actually runs.
 
 Vite reports a non-fatal large-chunk warning: the main Phaser bundle is approximately 1.44 MB minified / 389 KB gzip.
 
@@ -73,12 +82,13 @@ Status meanings: **IMPLEMENTED** works in source and is connected to the runtime
 
 ### Lifecycle
 
-- `GameScene` clears scene-event and keyboard listeners on shutdown.
+- `GameScene` removes its own scene events (`PLAYER_DIED`, `weapon-fired`) by name on shutdown. It must not call `events.removeAllListeners()`: a Scene's `events` is its system emitter, shared with Phaser's plugins, and clearing it unsubscribes `ArcadePhysics.start` so the next run boots with a null physics world. An ESLint rule now blocks that call.
+- Keyboard listeners need no manual teardown; `KeyboardPlugin.shutdown()` already drops its keys and listeners.
 - `UIScene` unsubscribes from all `GameScene` events; the previously omitted `STATE_CHANGED` listener was fixed during this audit.
 - Phaser owns and destroys scene timers, colliders, input plugins, tweens, and display-list objects at scene shutdown.
 - Equipment drops and enemies destroy their auxiliary visuals explicitly.
 - Infinite decorative/drop tweens are scene-owned and stop at scene shutdown. No cross-scene timer was found.
-- `AudioManager` creates a scene-scoped one-time unlock listener. The Web Audio context is not explicitly closed, but only one context is normally created per run after interaction; centralizing audio at game scope is recommended.
+- `AudioManager` now owns a single module-scoped Web Audio context for the lifetime of the game, unlocked by the first pointer gesture that reaches any scene. Phaser's own sound manager is disabled through `audio: { noAudio: true }` because nothing in the game uses `this.sound`.
 
 ## Performance findings
 
@@ -190,10 +200,15 @@ Debug mode remains completely gated by `VITE_DEBUG_GAME === 'true'`. The overlay
 
 ### High priority
 
-1. Split `GameScene` into combat/death resolution, encounter/boss flow, world props, and effects services.
-2. Add integration tests for scene restart, player death versus boss death, pause timing, and equipment collection.
-3. Add typed status payloads to `DamagePacket` before implementing status effects.
-4. Profile on representative low-end Android hardware before increasing caps.
+Ordered by what actually broke the game, not by architectural weight. The first two are the
+ones that would have caught every loop-killing defect found so far.
+
+1. Add a browser smoke test covering level-up, chest, equipment, death, victory, and repeated
+   restarts. Unit tests over pure functions cannot see any of these paths.
+2. Move `AudioContext` ownership to game scope and close it. One leaks per run today.
+3. Split `GameScene` into combat/death resolution, encounter/boss flow, world props, and effects services.
+4. Add typed status payloads to `DamagePacket` before implementing status effects.
+5. Profile on representative low-end Android hardware before increasing caps.
 
 ### Medium priority
 
@@ -201,7 +216,7 @@ Debug mode remains completely gated by `VITE_DEBUG_GAME === 'true'`. The overlay
 2. Convert equipment `apply` functions into stable IDs plus structured modifiers and configurable rarity weights.
 3. Pool damage numbers, impact dots, and dash ghosts if profiling shows GC spikes.
 4. Add explicit BOSS and VICTORY states.
-5. Centralize audio lifecycle and add real licensed/original assets.
+5. Add real licensed/original audio assets.
 
 ### Low priority
 
@@ -209,6 +224,47 @@ Debug mode remains completely gated by `VITE_DEBUG_GAME === 'true'`. The overlay
 2. Add dedicated PWA icon sizes and automated Lighthouse checks.
 3. Add localization for mixed display languages.
 4. Replace remaining magic visual timings during subsystem extraction.
+
+## Crashes found by browser telemetry
+
+Four defects that killed the game loop outright. All were invisible to `build`, `lint`
+and `test`, and were found only by forwarding browser errors to the dev server.
+
+An uncaught exception inside a Phaser scene callback escapes `Game.step`, so
+`requestAnimationFrame` is never rescheduled. The canvas holds its last frame and input stops:
+the failure looks like a performance freeze, not a crash.
+
+1. `chooseAbilities` referenced a global `Phaser` that does not exist under ESM. The first
+   level-up threw `ReferenceError` from inside an Arcade overlap callback. Phaser's types
+   declare `Phaser` as a global namespace, so `tsc` accepted it. Fixed by dropping the engine
+   dependency: the registry is pure data and now uses a local shuffle.
+2. `GameScene` shutdown called `this.events.removeAllListeners()`, unsubscribing Phaser's own
+   plugins. Every restart after the first died in `create()` with a null `physics.world`, so
+   the Game Over screen's redeploy button was permanently broken.
+3. XP orbs never expire and the pool is capped, so a run holding `maxXpOrbs` uncollected orbs
+   stopped granting experience entirely. The stalest orb is now recycled.
+
+4. `UIScene.onHealth` guarded haptics with `'vibrate' in navigator`. iOS Safari answers that
+   check with `true` while `navigator.vibrate` is `undefined`, so the first hit the player took
+   threw and froze the game on every iPhone run. Desktop Chrome has a real function, so the
+   defect was invisible there by construction. Now requires a callable value.
+
+Also hardened: `ProfileStore` guarded its read but not its two writes. `localStorage.setItem`
+throws in Safari private browsing and over quota, on the death transition and the mobile
+AUTO FIRE tap — the same freeze waiting on paths a mobile player cannot avoid.
+
+### Resolved: AudioContext exhaustion
+
+`GameScene.create()` built a new `AudioManager` per run, each constructing its own
+`AudioContext`, and nothing called `close()`. Every run leaked one. Browsers cap concurrent
+contexts per document, and iOS Safari reported `InvalidStateError: Failed to start the audio
+device` on a real device once the cap was reached.
+
+Compounding it, the project never uses `this.sound` anywhere, yet Phaser still built a
+`WebAudioSoundManager` and tried to unlock it, spending another context.
+
+Fixed on both sides: one shared context at game scope for the lifetime of the game, and
+`audio: { noAudio: true }` so Phaser stops creating one it never uses.
 
 ## Major bugs fixed during audit
 
@@ -221,4 +277,15 @@ Debug mode remains completely gated by `VITE_DEBUG_GAME === 'true'`. The overlay
 
 ## Recommended next milestone
 
-Proceed with **Phase A: Stabilization** only. Add lifecycle/integration tests, split oversized scenes, formalize combat packets and equipment data, and profile mobile hardware. Begin professional character animation only after Phase A acceptance criteria in `ROADMAP.md` pass.
+Proceed with **Phase A: Stabilization** only, and take its A0 verification gate first: a browser
+smoke test over level-up, chest, equipment, death, victory and repeated restarts, plus the
+`AudioContext` fix. Splitting scenes before that gate is refactoring on a base that cannot yet
+report its own failures — every defect found so far was invisible to the existing checks.
+
+Then proceed to A1 structure and A2 measurement. Begin professional character animation only
+after the Phase A exit criteria in `ROADMAP.md` pass.
+
+Ranking note: the transient-effect allocations flagged under *Performance findings* were
+originally read as the cause of a reported mid-run freeze. A live instrumented run disproved
+that — 163-165 FPS, worst frame 8 ms at 70 seconds — and the freeze turned out to be an uncaught
+exception. Entity-budget work remains valid but belongs in A2, behind verification.

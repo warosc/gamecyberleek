@@ -4,7 +4,10 @@ dist/
 .env.*
 !.env.example
 *.log
+.devlog.log
 *.tgz
 .DS_Store
 Thumbs.db
 .vscode/
+test-results/
+playwright-report/
