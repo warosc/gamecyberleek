@@ -9,11 +9,18 @@ import Phaser from 'phaser';
  * "Failed to start the audio device" and lost audio for the rest of the session.
  */
 let context: AudioContext | undefined;
+let masterGain: GainNode | undefined;
+const categoryVolumes: Record<AudioCategory, number> = { sfx: 1, ui: 1, ambience: 1 };
+
+export type AudioCategory = 'sfx' | 'ui' | 'ambience';
 
 function unlock() {
   if (context) return;
   try {
     context = new AudioContext();
+    masterGain = context.createGain();
+    masterGain.gain.value = 0.8;
+    masterGain.connect(context.destination);
   } catch {
     // Audio is optional; a browser refusing a context must never interrupt a run.
     return;
@@ -29,15 +36,23 @@ export class AudioManager {
     if (!context) scene.input.once('pointerdown', unlock);
   }
 
-  tone(frequency: number, duration = 0.04, volume = 0.025) {
+  setMasterVolume(volume: number) {
+    if (masterGain) masterGain.gain.value = Phaser.Math.Clamp(volume, 0, 1);
+  }
+
+  setCategoryVolume(category: AudioCategory, volume: number) {
+    categoryVolumes[category] = Phaser.Math.Clamp(volume, 0, 1);
+  }
+
+  tone(frequency: number, duration = 0.04, volume = 0.025, category: AudioCategory = 'sfx') {
     if (!context || context.state !== 'running') return;
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     oscillator.frequency.value = frequency;
     oscillator.type = 'square';
-    gain.gain.setValueAtTime(volume, context.currentTime);
+    gain.gain.setValueAtTime(volume * categoryVolumes[category], context.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + duration);
-    oscillator.connect(gain).connect(context.destination);
+    oscillator.connect(gain).connect(masterGain ?? context.destination);
     oscillator.start();
     oscillator.stop(context.currentTime + duration);
   }
