@@ -43,6 +43,10 @@ export class PlayerAnimator {
     death: 5,
   };
 
+  get currentState() {
+    return this.state;
+  }
+
   constructor(
     private scene: Phaser.Scene,
     private visual: Phaser.GameObjects.Image,

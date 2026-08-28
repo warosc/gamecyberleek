@@ -36,6 +36,7 @@ export class DebugOverlay {
       `State ${this.scene.state}`,
       `Run ${Math.floor(this.scene.survivalMs / 1000)}s`,
       `Weapon ${this.scene.player.stats.weaponName}`,
+      `Rig ${this.scene.player.usesLayeredRig ? 'LAYERED' : 'FALLBACK'}  Anim ${this.scene.player.animationState}`,
       `Effects ${this.scene.player.isShieldActive() ? 'SHIELD ' : ''}${this.scene.player.isOverdriveActive() ? 'OVERDRIVE' : ''}`,
     ]);
   }

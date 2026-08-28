@@ -125,6 +125,12 @@ export class Player extends Phaser.GameObjects.Container {
   get damageMultiplier() {
     return this.gameplayTime < this.overdriveUntil ? 1.5 : 1;
   }
+  get animationState() {
+    return this.animator.currentState;
+  }
+  get usesLayeredRig() {
+    return this.layeredRig !== undefined;
+  }
   getDashCharge(time = this.gameplayTime) {
     return Phaser.Math.Clamp((time - this.lastDash) / this.stats.dashCooldown, 0, 1);
   }
