@@ -320,46 +320,79 @@ export class UIScene extends Phaser.Scene {
   private showAbilities(abilities: Ability[]) {
     const parts: Phaser.GameObjects.GameObject[] = [];
     parts.push(
-      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x030811, 0.88),
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1040, 570, 0x061323, 0.98)
+        .setStrokeStyle(2, 0x21e6ff, 0.5),
     );
     parts.push(
       this.add
-        .text(GAME_WIDTH / 2, 145, 'LEVEL UP', {
+        .text(GAME_WIDTH / 2, 118, 'LEVEL UP', {
           fontFamily: 'Arial Black',
-          fontSize: '46px',
+          fontSize: '42px',
           color: '#73ef62',
         })
         .setOrigin(0.5),
     );
+    parts.push(
+      this.add.text(GAME_WIDTH / 2, 164, 'CHOOSE YOUR NEXT PROTOCOL', {
+        fontFamily: 'Arial Black', fontSize: '12px', color: '#8ba5b8', letterSpacing: 3,
+      }).setOrigin(0.5),
+    );
     abilities.forEach((a, i) => {
       const x = GAME_WIDTH / 2 + (i - 1) * 300;
+      const accent = [0x21e6ff, 0x73ef62, 0xd566ff][i] ?? 0x21e6ff;
+      const currentLevel = this.gameScene.abilityLevels.get(a.id) ?? 0;
+      const glow = this.add.rectangle(x, 370, 278, 286, accent, 0.12)
+        .setStrokeStyle(1, accent, 0.28);
       const card = this.add
-        .rectangle(x, 360, 260, 240, 0x10233a)
-        .setStrokeStyle(3, 0x21e6ff)
+        .rectangle(x, 370, 264, 272, 0x0b1d30, 0.98)
+        .setStrokeStyle(3, accent, 0.9)
         .setInteractive({ useHandCursor: true });
+      const icon = this.add.circle(x, 284, 34, 0x06101d, 1)
+        .setStrokeStyle(3, accent, 0.95);
+      const iconLabel = this.add.text(x, 284, a.name.slice(0, 2), {
+        fontFamily: 'Arial Black', fontSize: '18px', color: `#${accent.toString(16).padStart(6, '0')}`,
+      }).setOrigin(0.5);
       const title = this.add
-        .text(x, 315, a.name, {
+        .text(x, 332, a.name, {
           fontFamily: 'Arial Black',
-          fontSize: '20px',
-          color: '#21e6ff',
+          fontSize: '18px',
+          color: '#eaffff',
+          align: 'center',
+          wordWrap: { width: 228 },
+        })
+        .setOrigin(0.5);
+      const desc = this.add
+        .text(x, 397, a.description, {
+          fontSize: '15px',
+          color: '#b9cad5',
           align: 'center',
           wordWrap: { width: 220 },
         })
         .setOrigin(0.5);
-      const desc = this.add
-        .text(x, 375, a.description, {
-          fontSize: '17px',
-          color: '#eaffff',
-          align: 'center',
-          wordWrap: { width: 210 },
-        })
-        .setOrigin(0.5);
+      const level = this.add.text(x, 474, `LEVEL ${currentLevel}  →  ${currentLevel + 1}`, {
+        fontFamily: 'Arial Black', fontSize: '12px', color: `#${accent.toString(16).padStart(6, '0')}`,
+      }).setOrigin(0.5);
+      const cap = this.add.text(x, 503, `MAX ${a.maxLevel}`, {
+        fontFamily: 'monospace', fontSize: '11px', color: '#7594a8', letterSpacing: 1,
+      }).setOrigin(0.5);
       card.on('pointerdown', () => {
         this.modal.clear();
         this.gameScene.selectAbility(a.id);
       });
-      parts.push(card, title, desc);
+      card.on('pointerover', () => {
+        card.setFillStyle(0x12304a, 1);
+        this.tweens.add({ targets: [card, glow], scale: 1.03, duration: 100 });
+      });
+      card.on('pointerout', () => {
+        card.setFillStyle(0x0b1d30, 0.98);
+        this.tweens.add({ targets: [card, glow], scale: 1, duration: 100 });
+      });
+      parts.push(glow, card, icon, iconLabel, title, desc, level, cap);
     });
+    parts.push(this.add.text(GAME_WIDTH / 2, 585, 'TAP OR CLICK A PROTOCOL TO CONTINUE', {
+      fontFamily: 'monospace', fontSize: '12px', color: '#7594a8', letterSpacing: 2,
+    }).setOrigin(0.5));
     this.modal.replace(parts, 100);
   }
   private onBossSpawned() {
