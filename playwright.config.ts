@@ -20,6 +20,7 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     // WebKit is not optional: the navigator.vibrate freeze was invisible on Chromium.
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    { name: 'mobile-webkit', use: { ...devices['iPhone 13 landscape'] } },
   ],
   webServer: {
     command: `npx vite --port ${PORT} --strictPort`,
