@@ -10,7 +10,7 @@ LEEK OPS is a Phaser 4 vertical slice. Dependency installation, TypeScript produ
 
 The root cause was that verification could not observe the running game: the tests covered pure functions and nothing booted a scene, and the iOS defect could not be seen on desktop Chrome at any coverage level. That gap is now closed by a Playwright smoke suite that plays the real game on Chromium and WebKit, with both of its assertions verified by reintroducing the actual defects.
 
-Beyond that, the risks are oversized scene classes, presentation and domain logic mixed in `GameScene`, a compatibility `apply()` bridge that should eventually consume structured modifiers directly, and unpooled transient visual effects. Runtime capacity is intentionally capped at 80 enemies, 90 player projectiles, 100 enemy projectiles, and 160 XP orbs.
+Beyond that, the risks are oversized scene classes, presentation and domain logic mixed in `GameScene`, a deprecated external `apply()` bridge, and unpooled transient visual effects. The runtime pipeline now consumes structured equipment modifiers directly. Runtime capacity is intentionally capped at 80 enemies, 90 player projectiles, 100 enemy projectiles, and 160 XP orbs.
 
 ## Build status
 

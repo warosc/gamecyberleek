@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createPlayerStats } from '../src/game/entities/player/PlayerStats';
-import { rollEquipment } from '../src/game/loot/Equipment';
+import { applyEquipmentModifiers, rollEquipment } from '../src/game/loot/Equipment';
 
 function sequence(values: number[]) {
   let index = 0;
@@ -28,5 +28,13 @@ describe('equipment progression', () => {
     expect(stats.damageReduction).toBeLessThanOrEqual(0.55);
     expect(item.id).toMatch(/^armor\./);
     expect(item.modifiers.some((modifier) => modifier.key === 'maxHp')).toBe(true);
+  });
+
+  it('applies the declarative modifier list directly', () => {
+    const stats = createPlayerStats();
+    const item = rollEquipment(3, sequence([0.1, 0.1, 0.1]));
+    applyEquipmentModifiers(stats, item.modifiers);
+    expect(stats.attackDamage).toBeGreaterThan(20);
+    expect(stats.weaponName).toBe(item.name.replace(/ MK-\d+$/, ''));
   });
 });

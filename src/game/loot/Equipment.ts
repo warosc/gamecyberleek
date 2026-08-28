@@ -17,6 +17,7 @@ export interface Equipment {
   rarity: EquipmentRarity;
   description: string;
   color: number;
+  /** @deprecated Compatibility bridge for callers outside the loot pipeline. */
   apply: (stats: PlayerStats) => void;
 }
 
@@ -27,6 +28,23 @@ export const RARITY_WEIGHTS: Record<EquipmentRarity, number> = {
   EPIC: 0.16,
   LEGENDARY: 0.02,
 };
+
+export function applyEquipmentModifiers(
+  stats: PlayerStats,
+  modifiers: readonly EquipmentModifier[],
+) {
+  for (const modifier of modifiers) {
+    const current = stats[modifier.key];
+    if (modifier.operation === 'set') {
+      (stats[modifier.key] as unknown) = modifier.value;
+    } else if (typeof current === 'number' && typeof modifier.value === 'number') {
+      (stats[modifier.key] as unknown) =
+        modifier.operation === 'add'
+          ? current + modifier.value
+          : current * modifier.value;
+    }
+  }
+}
 
 const NUMERIC_KEYS: readonly (keyof PlayerStats)[] = [
   'maxHp', 'moveSpeed', 'dashSpeed', 'dashDuration', 'dashCooldown', 'attackDamage',

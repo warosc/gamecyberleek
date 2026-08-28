@@ -3,7 +3,7 @@ import { ARENA, COLORS, Events } from '../config/Constants';
 import type { CombatEffects } from '../effects/CombatEffects';
 import type { Player } from '../entities/player/Player';
 import { EquipmentDrop } from '../loot/EquipmentDrop';
-import { rollEquipment } from '../loot/Equipment';
+import { applyEquipmentModifiers, rollEquipment } from '../loot/Equipment';
 import type { AudioManager } from '../managers/AudioManager';
 
 interface LootSystemOptions {
@@ -59,7 +59,7 @@ export class LootSystem {
     if (!drop.active) return;
     const equipment = drop.equipment;
     const oldMaxHp = this.options.player.stats.maxHp;
-    equipment.apply(this.options.player.stats);
+    applyEquipmentModifiers(this.options.player.stats, equipment.modifiers);
     if (equipment.kind === 'weapon') weapon = equipment.name;
     else armor = equipment.name;
     if (this.options.player.stats.maxHp > oldMaxHp) {
