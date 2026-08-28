@@ -67,6 +67,27 @@ export class CombatEffects {
     });
   }
 
+  deathBurst(x: number, y: number, color: number = COLORS.cyan, boss = false) {
+    const count = boss ? 12 : 6;
+    for (let index = 0; index < count; index++) {
+      const shard = this.track(this.scene.add.rectangle(x, y, boss ? 7 : 4, boss ? 12 : 8, color, 0.9));
+      if (!shard) break;
+      const angle = (Math.PI * 2 * index) / count + Math.random() * 0.2;
+      const distance = boss ? 90 : 38;
+      shard.setRotation(angle);
+      this.scene.tweens.add({
+        targets: shard,
+        x: x + Math.cos(angle) * distance,
+        y: y + Math.sin(angle) * distance,
+        alpha: 0,
+        scale: 0.25,
+        duration: boss ? 420 : 240,
+        ease: 'Quad.Out',
+        onComplete: () => this.release(shard),
+      });
+    }
+  }
+
   floatingText(x: number, y: number, text: string, color: string) {
     const label = this.track(this.scene.add
       .text(x, y, text, { fontFamily: 'Arial Black', fontSize: '18px', color })

@@ -439,6 +439,7 @@ export class GameScene extends Phaser.Scene {
     const defeat = this.deaths.resolve(enemy);
     if (!defeat) return;
     this.events.emit(Events.ENEMY_DIED);
+    this.effects.deathBurst(defeat.x, defeat.y, defeat.boss ? 0xd566ff : 0x21e6ff, defeat.boss);
     this.spawnOrb(defeat.x, defeat.y, defeat.xp);
     this.audio.tone(75, 0.09);
     if (defeat.boss) {
