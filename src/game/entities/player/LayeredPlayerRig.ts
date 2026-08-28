@@ -41,13 +41,23 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
     if (!animation?.keyframes?.length) return;
     const duration = animation.durationMs ?? 1;
     const local = animation.loop ? time % duration : Math.min(time, duration);
-    const frame = [...animation.keyframes].reverse().find((candidate) => candidate.timeMs <= local) ?? animation.keyframes[0];
+    const frameIndex = animation.keyframes.reduce(
+      (index, candidate, current) => (candidate.timeMs <= local ? current : index),
+      0,
+    );
+    const frame = animation.keyframes[frameIndex];
+    const next = animation.keyframes[Math.min(frameIndex + 1, animation.keyframes.length - 1)];
+    const span = Math.max(1, next.timeMs - frame.timeMs);
+    const blend = next === frame ? 0 : Phaser.Math.Clamp((local - frame.timeMs) / span, 0, 1);
     for (const layer of PLAYER_RIG_LAYERS) {
       const image = this.layers.get(layer)!;
       const transform = frame.layers?.[layer];
-      image.setPosition(transform?.x ?? 0, transform?.y ?? 0);
-      image.setRotation(transform?.rotation ?? 0);
-      image.setAlpha(transform?.alpha ?? 1);
+      const following = next.layers?.[layer];
+      const value = (key: 'x' | 'y' | 'rotation' | 'alpha', fallback: number) =>
+        Phaser.Math.Linear(transform?.[key] ?? fallback, following?.[key] ?? transform?.[key] ?? fallback, blend);
+      image.setPosition(value('x', 0), value('y', 0));
+      image.setRotation(value('rotation', 0));
+      image.setAlpha(value('alpha', 1));
     }
   }
 }
