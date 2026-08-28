@@ -20,8 +20,9 @@ export class GameOverScene extends Phaser.Scene {
       .setTint(data.victory ? 0xb8ffd0 : 0x8d6070);
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020710, 0.64);
     this.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 780, 540, 0x07111f, 0.92)
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 820, 560, 0x07111f, 0.94)
       .setStrokeStyle(3, data.victory ? 0x73ef62 : 0xff476f, 0.8);
+    this.add.rectangle(GAME_WIDTH / 2, 224, 670, 2, data.victory ? 0x73ef62 : 0xff476f, 0.45);
     this.add
       .text(GAME_WIDTH / 2, 126, data.victory ? 'OPERATION COMPLETE' : 'OPERATIVE DOWN', {
         fontFamily: 'Arial Black',
@@ -48,9 +49,9 @@ export class GameOverScene extends Phaser.Scene {
     const seconds = Math.floor(data.time / 1000);
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    this.statCard(360, 285, 'SURVIVAL', `${minutes}:${String(remainingSeconds).padStart(2, '0')}`);
-    this.statCard(640, 285, 'LEVEL REACHED', String(data.level));
-    this.statCard(920, 285, 'SECTOR', String(data.arenaIndex + 1));
+    this.statCard(360, 300, 'SURVIVAL', `${minutes}:${String(remainingSeconds).padStart(2, '0')}`);
+    this.statCard(640, 300, 'LEVEL REACHED', String(data.level));
+    this.statCard(920, 300, 'SECTOR', String(data.arenaIndex + 1));
 
     // A clear run earns the next sector; dying retries the one that beat you.
     const nextArenaIndex = data.victory ? data.arenaIndex + 1 : data.arenaIndex;
@@ -66,12 +67,12 @@ export class GameOverScene extends Phaser.Scene {
     const offset = (BUTTON_WIDTH + BUTTON_GAP) / 2;
     this.button(
       GAME_WIDTH / 2 - offset,
-      440,
+      465,
       data.victory ? 'NEXT SECTOR' : 'RETRY SECTOR',
       0x73ef62,
       redeploy,
     );
-    this.button(GAME_WIDTH / 2 + offset, 440, 'MAIN MENU', 0x21e6ff, mainMenu);
+    this.button(GAME_WIDTH / 2 + offset, 465, 'MAIN MENU', 0x21e6ff, mainMenu);
 
     // No manual teardown: KeyboardPlugin.shutdown() already drops its keys and listeners.
     const keyboard = this.input.keyboard;
@@ -80,7 +81,7 @@ export class GameOverScene extends Phaser.Scene {
     keyboard?.on('keydown-ESC', mainMenu);
 
     this.add
-      .text(GAME_WIDTH / 2, 545, 'ENTER  REDEPLOY        ESC  MAIN MENU', {
+      .text(GAME_WIDTH / 2, 560, 'ENTER  REDEPLOY        ESC  MAIN MENU', {
         fontFamily: 'monospace',
         fontSize: '13px',
         color: '#7594a8',

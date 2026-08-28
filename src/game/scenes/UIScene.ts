@@ -424,36 +424,52 @@ export class UIScene extends Phaser.Scene {
       },
     ];
     const parts: Phaser.GameObjects.GameObject[] = [
-      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x030811, 0.88),
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1040, 520, 0x061323, 0.98)
+        .setStrokeStyle(2, 0x73ef62, 0.5),
       this.add
-        .text(GAME_WIDTH / 2, 145, 'SUPPLY CHEST', {
+        .text(GAME_WIDTH / 2, 150, 'SUPPLY CHEST', {
           fontFamily: 'Arial Black',
           fontSize: '42px',
           color: '#73ef62',
         })
         .setOrigin(0.5),
+      this.add.text(GAME_WIDTH / 2, 190, 'SELECT ONE FIELD REWARD', {
+        fontFamily: 'Arial Black', fontSize: '12px', color: '#8ba5b8', letterSpacing: 3,
+      }).setOrigin(0.5),
     ];
     rewards.forEach((reward, index) => {
       const x = GAME_WIDTH / 2 + (index - 1) * 300;
+      const glow = this.add.rectangle(x, 370, 278, 270, reward.color, 0.1)
+        .setStrokeStyle(1, reward.color, 0.3);
       const card = this.add
-        .rectangle(x, 360, 260, 210, 0x10233a)
-        .setStrokeStyle(3, reward.color)
+        .rectangle(x, 370, 264, 256, 0x0b1d30, 0.98)
+        .setStrokeStyle(3, reward.color, 0.9)
         .setInteractive({ useHandCursor: true });
+      const icon = this.add.circle(x, 292, 34, 0x06101d, 1).setStrokeStyle(3, reward.color, 0.95);
+      const iconLabel = this.add.text(x, 292, reward.id === 'repair' ? '+' : reward.id === 'charge' ? '⚡' : '✦', {
+        fontFamily: 'Arial Black', fontSize: '22px', color: `#${reward.color.toString(16).padStart(6, '0')}`,
+      }).setOrigin(0.5);
       const title = this.add
-        .text(x, 330, reward.name, {
+        .text(x, 342, reward.name, {
           fontFamily: 'Arial Black',
           fontSize: '19px',
           color: '#eaffff',
         })
         .setOrigin(0.5);
       const description = this.add
-        .text(x, 390, reward.description, { fontSize: '16px', color: '#b9cad5' })
+        .text(x, 400, reward.description, { fontSize: '16px', color: '#b9cad5', align: 'center', wordWrap: { width: 220 } })
         .setOrigin(0.5);
+      const action = this.add.text(x, 478, 'CLAIM REWARD', {
+        fontFamily: 'monospace', fontSize: '11px', color: `#${reward.color.toString(16).padStart(6, '0')}`, letterSpacing: 2,
+      }).setOrigin(0.5);
       card.on('pointerdown', () => {
         this.modal.clear();
         this.gameScene.selectChestReward(reward.id);
       });
-      parts.push(card, title, description);
+      card.on('pointerover', () => { card.setFillStyle(0x12304a, 1); action.setColor('#ffffff'); });
+      card.on('pointerout', () => { card.setFillStyle(0x0b1d30, 0.98); action.setColor(`#${reward.color.toString(16).padStart(6, '0')}`); });
+      parts.push(glow, card, icon, iconLabel, title, description, action);
     });
     this.modal.replace(parts, 110);
   }
