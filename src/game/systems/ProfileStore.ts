@@ -17,9 +17,26 @@ const defaults: PlayerProfile = {
   autoFire: false,
 };
 
+function validNonNegative(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function normalizeProfile(value: unknown): PlayerProfile {
+  if (!value || typeof value !== 'object') return { ...defaults };
+  const raw = value as Partial<PlayerProfile>;
+  return {
+    runs: Math.floor(validNonNegative(raw.runs, defaults.runs)),
+    bestLevel: Math.max(1, Math.floor(validNonNegative(raw.bestLevel, defaults.bestLevel))),
+    victories: Math.floor(validNonNegative(raw.victories, defaults.victories)),
+    bioCredits: Math.floor(validNonNegative(raw.bioCredits, defaults.bioCredits)),
+    vibration: typeof raw.vibration === 'boolean' ? raw.vibration : defaults.vibration,
+    autoFire: typeof raw.autoFire === 'boolean' ? raw.autoFire : defaults.autoFire,
+  };
+}
+
 export function loadProfile(): PlayerProfile {
   try {
-    return { ...defaults, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') };
+    return normalizeProfile(JSON.parse(localStorage.getItem(KEY) ?? '{}'));
   } catch {
     return { ...defaults };
   }
