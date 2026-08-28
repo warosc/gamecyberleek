@@ -2,6 +2,27 @@ import Phaser from 'phaser';
 
 export type PlayerAnimationState = 'idle' | 'walk' | 'dash' | 'attack' | 'hurt' | 'death';
 
+/** Rendering contract for a future separated-layer rig. Gameplay never depends on textures. */
+export interface PlayerVisualAdapter {
+  setPose(texture: string, frame?: string): void;
+  setFlipX(flip: boolean): void;
+  setPosition(x: number, y: number): void;
+  setScale(scale: number): void;
+  setAlpha(alpha: number): void;
+  setAngle(angle: number): void;
+}
+
+/** Adapter for the current complete reference image. A layered rig can implement the same API. */
+export class ImageVisualAdapter implements PlayerVisualAdapter {
+  constructor(private readonly image: Phaser.GameObjects.Image) {}
+  setPose(texture: string, frame?: string) { this.image.setTexture(texture, frame); }
+  setFlipX(flip: boolean) { this.image.setFlipX(flip); }
+  setPosition(x: number, y: number) { this.image.setPosition(x, y); }
+  setScale(scale: number) { this.image.setScale(scale); }
+  setAlpha(alpha: number) { this.image.setAlpha(alpha); }
+  setAngle(angle: number) { this.image.setAngle(angle); }
+}
+
 /**
  * Placeholder animation adapter. It only translates and rotates the complete reference image;
  * no missing frames are synthesized and the art is never stretched.
