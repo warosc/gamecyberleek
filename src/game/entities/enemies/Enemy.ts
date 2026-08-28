@@ -66,6 +66,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       else (this.body as Phaser.Physics.Arcade.Body).setVelocity(0);
       if (time - this.lastAttack > 1450 && distance < 560) {
         this.lastAttack = time;
+        this.showAttackTelegraph(0xff9a72, 34);
         fire(
           this.x,
           this.y,
@@ -80,6 +81,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
     this.chase(target);
     if (this.enemyType === EnemyType.BOSS && time - this.lastAttack > 1300) {
       this.lastAttack = time;
+      this.showAttackTelegraph(0xd566ff, 86);
       const base = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
       for (let index = -2; index <= 2; index++) fire(this.x, this.y, base + index * 0.22, 260, 14);
     }
@@ -212,5 +214,20 @@ export class Enemy extends Phaser.GameObjects.Arc {
       Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y) + Math.PI / 2;
     this.healthBack.setPosition(this.x, this.y - this.def.size - 10);
     this.healthFill.setPosition(this.x - this.def.size, this.y - this.def.size - 10);
+  }
+
+  private showAttackTelegraph(color: number, radius: number) {
+    const ring = this.scene.add
+      .circle(this.x, this.y, radius, color, 0.08)
+      .setStrokeStyle(3, color, 0.95)
+      .setDepth(14);
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 1.35,
+      alpha: 0,
+      duration: 220,
+      ease: 'Quad.Out',
+      onComplete: () => ring.destroy(),
+    });
   }
 }
