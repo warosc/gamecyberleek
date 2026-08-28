@@ -151,11 +151,13 @@ export class MenuScene extends Phaser.Scene {
     const shadow = this.add.ellipse(910, 628, 290, 58, 0x000000, 0.58).setDepth(2);
     const glow = this.add.ellipse(910, 438, 280, 390, 0x73ef62, 0.045).setDepth(2);
     glow.setBlendMode(Phaser.BlendModes.ADD);
-    const hero = this.add.image(0, 0, 'leek-hero-clean').setDisplaySize(339, 620);
-    const container = this.add.container(910, 418, [hero]).setDepth(4);
+    // Keep the showcase inside the right-hand panel on wide desktop and landscape mobile.
+    // Explicit dimensions prevent the high-resolution source texture from dictating layout.
+    const hero = this.add.image(0, 0, 'leek-hero-clean').setDisplaySize(270, 494);
+    const container = this.add.container(960, 438, [hero]).setDepth(4);
     this.tweens.add({
       targets: container,
-      y: 407,
+      y: 428,
       angle: { from: -0.8, to: 0.8 },
       duration: 1450,
       yoyo: true,
