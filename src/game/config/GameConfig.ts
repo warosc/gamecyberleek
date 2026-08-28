@@ -17,7 +17,9 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   // context. Without this Phaser still builds a WebAudioSoundManager and tries to unlock it,
   // burning one of the few concurrent AudioContexts iOS Safari allows per document.
   audio: { noAudio: true },
-  input: { activePointers: 4, touch: { capture: true } },
+  // One pointer is reserved by Phaser for the primary input; keep six additional
+  // pointers available so movement, aim, dash and ability taps can coexist on phones.
+  input: { activePointers: 7, touch: { capture: true } },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   scene: [BootScene, PreloadScene, MenuScene, GameScene, UIScene, GameOverScene],
   render: { antialias: true },

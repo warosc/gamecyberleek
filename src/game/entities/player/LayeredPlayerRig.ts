@@ -17,7 +17,6 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
 
   private constructor(scene: Phaser.Scene) {
     super(scene, 0, 0);
-    scene.add.existing(this);
     for (const layer of PLAYER_RIG_LAYERS) {
       const image = scene.add.image(0, 0, `rig-${layer}`).setScale(0.2);
       this.layers.set(layer, image);
@@ -41,6 +40,9 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
     if (!animation?.keyframes?.length) return;
     const duration = animation.durationMs ?? 1;
     const local = animation.loop ? time % duration : Math.min(time, duration);
+    const phase = time * (state === 'walk' ? 0.014 : 0.0045);
+    this.y = state === 'walk' ? Math.abs(Math.sin(phase)) * -3 : Math.sin(phase) * 1.5;
+    this.rotation = state === 'walk' ? Math.sin(phase) * 0.018 : Math.sin(phase * 0.65) * 0.012;
     const frameIndex = animation.keyframes.reduce(
       (index, candidate, current) => (candidate.timeMs <= local ? current : index),
       0,
