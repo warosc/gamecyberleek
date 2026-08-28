@@ -104,10 +104,14 @@ Do not begin until Phase A exit criteria pass.
 
 ## PHASE C — Game feel / visual polish
 
-- Original audio and dynamic mixing.
-- Pooled impact/death effects, camera feedback, readable telegraphs.
-- Accessibility options, quality presets, safe-area-aware mobile HUD.
-- Final UI art and localization foundation.
+- [ ] Original audio and dynamic mixing.
+- [x] Bounded impact/death effects, camera feedback, and readable enemy/Nova telegraphs.
+- [x] Reduced-motion handling, runtime quality profiles, and safe-area-aware mobile HUD.
+- [ ] Final UI art and localization foundation.
+
+Current C work is intentionally presentation-only: effects degrade on reduced-motion and
+low-capability devices, while gameplay budgets and combat rules remain unchanged. The next
+implementation target is the original audio mixer, followed by a focused HUD/UI extraction.
 
 ## PHASE D — More enemies and boss behavior
 

@@ -1,6 +1,6 @@
 # LEEK OPS Technical Audit
 
-Audit date: 2026-08-27
+Audit date: 2026-08-28
 
 ## Executive summary
 
@@ -19,7 +19,7 @@ Beyond that, the risks are oversized scene classes, presentation and domain logi
 | `npm install` | PASS | 161 packages audited; 0 reported vulnerabilities |
 | `npm run build` | PASS | TypeScript and Vite production build succeed |
 | `npm run lint` | PASS | No ESLint findings |
-| `npm run test` | PASS | 5 files, 14 tests — pure functions; no scene is booted |
+| `npm run test` | PASS | 9 files, 25 tests — pure functions and rig/effect validation |
 | `npm run test:e2e` | PASS | 6 Playwright tests; boots, restarts, and plays the real game on Chromium and WebKit |
 | `docker compose build` | PASS | Node 22 Alpine development image builds |
 
@@ -27,7 +27,7 @@ Every check except the last two passed unchanged while four separate defects wer
 game loop. The unit suite proves the code compiles and its pure functions are correct; only
 `test:e2e` can tell you the game actually runs.
 
-Vite reports a non-fatal large-chunk warning: the main Phaser bundle is approximately 1.44 MB minified / 389 KB gzip.
+Vite reports a non-fatal large-chunk warning: the main Phaser bundle is approximately 1.46 MB minified / 393 KB gzip.
 
 ## Feature verification
 
@@ -108,6 +108,9 @@ Status meanings: **IMPLEMENTED** works in source and is connected to the runtime
 - Every active enemy, projectile, and orb is iterated each gameplay frame. At current caps this is acceptable, but collision broad-phase and per-enemy multi-object visuals will dominate before raw update code.
 - `PlayerController` now reuses its movement vector, removing a per-frame vector allocation.
 - Impact effects create up to five circles plus tweens per hit, bounded by the shared transient budget.
+- Reduced-motion users skip death bursts and receive the same combat result without decorative particles.
+- Runtime quality profiles (high/balanced/low) scale transient effects from device capability and are
+  visible in the debug overlay; they do not alter damage, spawn, or progression rules.
 - Floating damage text is still unpooled, but cannot exceed the shared transient budget and is released on tween completion.
 - Projectile pools fail safely when exhausted by returning no projectile; this limits output instead of growing memory.
 - `getChildren().forEach()` callbacks allocate closures/iterator work each frame. This is measurable only after profiling and should not be rewritten blindly.
