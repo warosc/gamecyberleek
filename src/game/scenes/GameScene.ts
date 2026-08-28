@@ -411,6 +411,12 @@ export class GameScene extends Phaser.Scene {
     else this.physics.resume();
     this.events.emit(Events.STATE_CHANGED, this.state);
   }
+
+  adjustAudioVolume(delta: number) {
+    this.audio.setMasterVolume(this.audio.getMasterVolume() + delta);
+    return this.audio.getMasterVolume();
+  }
+  get audioVolume() { return this.audio.getMasterVolume(); }
   resumeGame() {
     if (this.state === GameState.PAUSED) this.togglePause();
   }

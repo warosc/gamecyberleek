@@ -494,7 +494,7 @@ export class UIScene extends Phaser.Scene {
     if (state === GameState.PAUSED && !this.modal.active) {
       const parts: Phaser.GameObjects.GameObject[] = [];
       parts.push(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020710, 0.82));
-      parts.push(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 650, 500, 0x071522, 0.98)
+      parts.push(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 650, 560, 0x071522, 0.98)
         .setStrokeStyle(3, 0x21e6ff, 0.8));
       parts.push(this.add.circle(GAME_WIDTH / 2, 166, 58, 0x0b2130, 1).setStrokeStyle(4, 0x73ef62, 0.8));
       parts.push(this.add.image(GAME_WIDTH / 2, 166, 'leek-avatar').setDisplaySize(104, 104));
@@ -508,7 +508,22 @@ export class UIScene extends Phaser.Scene {
       const resume = this.pauseMenuButton(GAME_WIDTH / 2, 360, 'CONTINUAR', 0x73ef62, () => this.gameScene.resumeGame());
       const menu = this.pauseMenuButton(GAME_WIDTH / 2, 440, 'MENÚ PRINCIPAL', 0x21e6ff, () => this.gameScene.returnToMenu());
       parts.push(...resume, ...menu);
-      parts.push(this.add.text(GAME_WIDTH / 2, 512, 'ESC  ·  VOLVER AL COMBATE', {
+      const volumeLabel = this.add.text(GAME_WIDTH / 2, 505, '', {
+        fontFamily: 'monospace', fontSize: '13px', color: '#eaffff', letterSpacing: 2,
+      }).setOrigin(0.5);
+      const refreshVolume = () => {
+        const percent = Math.round(this.gameScene.audioVolume * 100);
+        volumeLabel.setText(`VOLUME ${percent}%`);
+      };
+      const volumeDown = this.pauseMenuButton(GAME_WIDTH / 2 - 145, 505, '−', 0xd566ff, () => {
+        this.gameScene.adjustAudioVolume(-0.1); refreshVolume();
+      }, 70);
+      const volumeUp = this.pauseMenuButton(GAME_WIDTH / 2 + 145, 505, '+', 0xd566ff, () => {
+        this.gameScene.adjustAudioVolume(0.1); refreshVolume();
+      }, 70);
+      refreshVolume();
+      parts.push(volumeLabel, ...volumeDown, ...volumeUp);
+      parts.push(this.add.text(GAME_WIDTH / 2, 570, 'ESC  ·  VOLVER AL COMBATE', {
         fontFamily: 'monospace', fontSize: '12px', color: '#7594a8', letterSpacing: 2,
       }).setOrigin(0.5));
       this.modal.replace(parts, 100);
@@ -516,8 +531,8 @@ export class UIScene extends Phaser.Scene {
       this.modal.clear();
     }
   }
-  private pauseMenuButton(x: number, y: number, label: string, color: number, action: () => void) {
-    const button = this.add.rectangle(x, y, 330, 58, 0x0b1b2b, 1)
+  private pauseMenuButton(x: number, y: number, label: string, color: number, action: () => void, width = 330) {
+    const button = this.add.rectangle(x, y, width, 58, 0x0b1b2b, 1)
       .setStrokeStyle(3, color, 0.85).setInteractive({ useHandCursor: true });
     const text = this.add.text(x, y, label, {
       fontFamily: 'Arial Black', fontSize: '17px', color: '#eaffff', letterSpacing: 2,

@@ -10,6 +10,7 @@ import Phaser from 'phaser';
  */
 let context: AudioContext | undefined;
 let masterGain: GainNode | undefined;
+let masterVolume = 0.8;
 const categoryVolumes: Record<AudioCategory, number> = { sfx: 1, ui: 1, ambience: 1 };
 
 export type AudioCategory = 'sfx' | 'ui' | 'ambience';
@@ -19,7 +20,7 @@ function unlock() {
   try {
     context = new AudioContext();
     masterGain = context.createGain();
-    masterGain.gain.value = 0.8;
+    masterGain.gain.value = masterVolume;
     masterGain.connect(context.destination);
   } catch {
     // Audio is optional; a browser refusing a context must never interrupt a run.
@@ -37,8 +38,11 @@ export class AudioManager {
   }
 
   setMasterVolume(volume: number) {
-    if (masterGain) masterGain.gain.value = Phaser.Math.Clamp(volume, 0, 1);
+    masterVolume = Phaser.Math.Clamp(volume, 0, 1);
+    if (masterGain) masterGain.gain.value = masterVolume;
   }
+
+  getMasterVolume() { return masterVolume; }
 
   setCategoryVolume(category: AudioCategory, volume: number) {
     categoryVolumes[category] = Phaser.Math.Clamp(volume, 0, 1);
