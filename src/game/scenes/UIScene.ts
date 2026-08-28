@@ -585,13 +585,18 @@ export class UIScene extends Phaser.Scene {
         aimKnob.setPosition(aimCenter.x, aimCenter.y);
       }
     });
-    this.input.on('gameout', () => {
+    const resetSticks = () => {
       movePointer = -1;
       aimPointer = -1;
       this.gameScene.mobileInput.movement.set(0, 0);
       this.gameScene.mobileInput.firing = false;
       moveKnob.setPosition(moveCenter.x, moveCenter.y);
       aimKnob.setPosition(aimCenter.x, aimCenter.y);
-    });
+    };
+    // Browsers emit pointercancel when a gesture is interrupted by rotation, a system
+    // gesture, or loss of focus. Treat it like pointerup so mobile input cannot stick.
+    this.input.on('pointercancel', resetSticks);
+    this.input.on('gameout', resetSticks);
+    this.events.once('shutdown', resetSticks);
   }
 }
