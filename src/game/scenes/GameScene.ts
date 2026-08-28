@@ -367,12 +367,24 @@ export class GameScene extends Phaser.Scene {
       .circle(this.player.x, this.player.y, 24, COLORS.cyan, 0.28)
       .setStrokeStyle(5, COLORS.cyan, 0.9)
       .setDepth(20);
+    const core = this.add
+      .circle(this.player.x, this.player.y, 10, COLORS.white, 0.75)
+      .setStrokeStyle(2, COLORS.cyan, 1)
+      .setDepth(21);
     this.tweens.add({
       targets: blast,
       scale: radius / 24,
       alpha: 0,
       duration: 360,
       onComplete: () => blast.destroy(),
+    });
+    this.tweens.add({
+      targets: core,
+      scale: 2.8,
+      alpha: 0,
+      duration: 180,
+      ease: 'Quad.Out',
+      onComplete: () => core.destroy(),
     });
     const targets = this.enemies.getChildren().filter((object) => {
       const enemy = object as Enemy;
