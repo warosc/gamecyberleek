@@ -19,7 +19,7 @@ Beyond that, the risks are oversized scene classes, presentation and domain logi
 | `npm install` | PASS | 161 packages audited; 0 reported vulnerabilities |
 | `npm run build` | PASS | TypeScript and Vite production build succeed |
 | `npm run lint` | PASS | No ESLint findings |
-| `npm run test` | PASS | 4 files, 12 tests — pure functions; no scene is booted |
+| `npm run test` | PASS | 5 files, 14 tests — pure functions; no scene is booted |
 | `npm run test:e2e` | PASS | 4 Playwright tests; boots and plays the real game on Chromium and WebKit |
 | `docker compose build` | PASS | Node 22 Alpine development image builds |
 
@@ -104,11 +104,11 @@ Status meanings: **IMPLEMENTED** works in source and is connected to the runtime
 | XP orbs | Pooled, cap 160 |
 
 - Player and enemy projectiles and XP orbs are pooled.
-- Enemies, equipment drops, damage numbers, muzzle flashes, impact dots, dash ghosts, and explosion graphics are allocated dynamically. Transient combat visuals are now isolated behind `CombatEffects`, making later pooling possible without changing gameplay orchestration.
+- Enemies, equipment drops, damage numbers, muzzle flashes, impact dots, dash ghosts, and explosion graphics are allocated dynamically. `CombatEffects` now enforces a 180-object transient budget and explicitly releases every effect; full pooling remains a later optimization if profiling justifies it.
 - Every active enemy, projectile, and orb is iterated each gameplay frame. At current caps this is acceptable, but collision broad-phase and per-enemy multi-object visuals will dominate before raw update code.
 - `PlayerController` now reuses its movement vector, removing a per-frame vector allocation.
-- Impact effects create five circles plus tweens per hit. This is the clearest transient allocation hotspot.
-- Floating damage text is unpooled and can produce GC pressure under rapid/multishot builds.
+- Impact effects create up to five circles plus tweens per hit, bounded by the shared transient budget.
+- Floating damage text is still unpooled, but cannot exceed the shared transient budget and is released on tween completion.
 - Projectile pools fail safely when exhausted by returning no projectile; this limits output instead of growing memory.
 - `getChildren().forEach()` callbacks allocate closures/iterator work each frame. This is measurable only after profiling and should not be rewritten blindly.
 
@@ -136,8 +136,8 @@ The effective pipeline is now:
 
 - Rarity names, colors, multiplier selection, and drop generation are centralized.
 - Equipment definitions include name, kind, rarity, description, color, and an `apply` callback.
-- The system is only partially data-driven: definitions lack stable IDs, structured stat modifiers, and explicit weights. Each item embeds custom mutation logic.
-- Rarity thresholds are centralized but hard-coded inside `rollRarity`; they should become configurable weighted data before balance work.
+- Definitions now expose stable IDs and structured stat modifiers; the deprecated `apply` callback remains only as an external compatibility bridge.
+- Rarity thresholds and drop weights are centralized in configurable data used by `rollRarity`.
 - Current equipment modifies run-local stats and tracks one displayed weapon/armor slot; it is not a general inventory persistence model.
 
 ## Ability review
@@ -194,7 +194,7 @@ Debug mode remains completely gated by `VITE_DEBUG_GAME === 'true'`. The overlay
 1. Scene classes still own many anonymous physics callbacks; Phaser cleans them with the scene, but isolation testing is difficult.
 2. Delayed victory is safe today but should become an explicit transition if boss phases are added.
 3. Audio context ownership should move to a game-level service before multiple scenes play music.
-4. UI input callbacks depend on scene-plugin shutdown cleanup rather than individually stored callback references.
+4. UI input callbacks depend on scene-plugin shutdown cleanup; mobile pointer cancellation now explicitly resets movement and firing state.
 
 ## Technical debt and priorities
 
@@ -205,7 +205,7 @@ ones that would have caught every loop-killing defect found so far.
 
 1. Add a browser smoke test covering level-up, chest, equipment, death, victory, and repeated
    restarts. Unit tests over pure functions cannot see any of these paths.
-2. Move `AudioContext` ownership to game scope and close it. One leaks per run today.
+2. Keep `AudioContext` ownership at game scope and close it when the game is destroyed.
 3. Split `GameScene` into combat/death resolution, encounter/boss flow, world props, and effects services.
 4. Add typed status payloads to `DamagePacket` before implementing status effects.
 5. Profile on representative low-end Android hardware before increasing caps.
@@ -213,7 +213,7 @@ ones that would have caught every loop-killing defect found so far.
 ### Medium priority
 
 1. Split `UIScene` into HUD, modal selection, pause, mobile controls, and debug overlay.
-2. Convert equipment `apply` functions into stable IDs plus structured modifiers and configurable rarity weights.
+2. Retire the deprecated equipment `apply` compatibility bridge after external consumers migrate; runtime drops already use stable IDs and structured modifiers.
 3. Pool damage numbers, impact dots, and dash ghosts if profiling shows GC spikes.
 4. Add explicit BOSS and VICTORY states.
 5. Add real licensed/original audio assets.
