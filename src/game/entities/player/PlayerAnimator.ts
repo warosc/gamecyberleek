@@ -12,6 +12,14 @@ export class PlayerAnimator {
   private facing = 1;
   private lastPose = '';
   private directionalTexture = 'leek-placeholder-front';
+  private readonly priority: Record<PlayerAnimationState, number> = {
+    idle: 0,
+    walk: 1,
+    attack: 2,
+    dash: 3,
+    hurt: 4,
+    death: 5,
+  };
 
   constructor(
     private scene: Phaser.Scene,
@@ -56,13 +64,11 @@ export class PlayerAnimator {
   }
 
   dash(time: number, duration: number) {
-    this.state = 'dash';
-    this.stateUntil = time + duration;
+    this.transition('dash', time + duration);
   }
 
   attack(time: number) {
-    this.state = 'attack';
-    this.stateUntil = time + 90;
+    if (!this.transition('attack', time + 90)) return;
     // Keep the complete directional body. The action reference is a sheet, not a compatible
     // runtime frame, so swapping to it made the character pop, shrink and lose its silhouette.
     this.setPose(this.directionalTexture, undefined, 0.2);
@@ -82,8 +88,7 @@ export class PlayerAnimator {
   }
 
   hurt(time: number) {
-    this.state = 'hurt';
-    this.stateUntil = time + 130;
+    if (!this.transition('hurt', time + 130)) return;
     this.scene.tweens.add({
       targets: this.visual,
       x: { from: -3, to: 3 },
@@ -97,8 +102,7 @@ export class PlayerAnimator {
   }
 
   death(time: number) {
-    this.state = 'death';
-    this.stateUntil = time + 700;
+    if (!this.transition('death', time + 700)) return;
     this.scene.tweens.killTweensOf(this.visual);
     this.scene.tweens.add({
       targets: this.visual,
@@ -108,6 +112,13 @@ export class PlayerAnimator {
       duration: 700,
       ease: 'Quad.In',
     });
+  }
+
+  private transition(next: PlayerAnimationState, until: number) {
+    if (this.priority[next] < this.priority[this.state] && until <= this.stateUntil) return false;
+    this.state = next;
+    this.stateUntil = until;
+    return true;
   }
 
   private setPose(texture: string, frame: string | undefined, scale: number) {
