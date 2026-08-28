@@ -54,6 +54,7 @@ on either browser is a change that ships a frozen game.
 - [x] Add stable equipment IDs and centralized configurable rarity weights.
 - [x] Apply structured equipment modifiers directly in `LootSystem`; `apply()` remains deprecated only for external compatibility.
 - [x] Extract the debug telemetry overlay from `UIScene`.
+- [x] Centralize modal overlay replacement and shutdown cleanup in `ModalOverlay`.
 - [ ] Extend typed damage packets and centralized death resolution when statuses are introduced.
 
 ### A2 — Measurement

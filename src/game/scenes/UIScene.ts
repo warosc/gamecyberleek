@@ -7,6 +7,7 @@ import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAb
 import type { Equipment } from '../loot/Equipment';
 import { loadProfile, updateProfile } from '../systems/ProfileStore';
 import { DebugOverlay } from '../ui/DebugOverlay';
+import { ModalOverlay } from '../ui/ModalOverlay';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -34,7 +35,7 @@ export class UIScene extends Phaser.Scene {
   private xpFill!: Phaser.GameObjects.Rectangle;
   private debug?: Phaser.GameObjects.Text;
   private debugOverlay?: DebugOverlay;
-  private overlay?: Phaser.GameObjects.Container;
+  private modal!: ModalOverlay;
   private specialFills = new Map<SpecialAbilityId, Phaser.GameObjects.Rectangle>();
   private specialTexts = new Map<SpecialAbilityId, Phaser.GameObjects.Text>();
   private bossPanel!: Phaser.GameObjects.Container;
@@ -47,6 +48,7 @@ export class UIScene extends Phaser.Scene {
   }
   create(data: { game: GameScene }) {
     this.gameScene = data.game;
+    this.modal = new ModalOverlay(this);
     this.playerFrame = this.add
       .rectangle(16, 14, 370, 112, 0x06101d, 0.94)
       .setOrigin(0, 0)
@@ -248,6 +250,7 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.LOOT_COLLECTED, this.showLootBanner, this);
     this.gameScene.events.on(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
     this.events.once('shutdown', () => {
+      this.modal.clear();
       this.gameScene.events.off(Events.PLAYER_DAMAGED, this.onHealth, this);
       this.gameScene.events.off(Events.XP_COLLECTED, this.onXp, this);
       this.gameScene.events.off(Events.PLAYER_LEVEL_UP, this.showAbilities, this);
@@ -340,13 +343,12 @@ export class UIScene extends Phaser.Scene {
         })
         .setOrigin(0.5);
       card.on('pointerdown', () => {
-        this.overlay?.destroy();
-        this.overlay = undefined;
+        this.modal.clear();
         this.gameScene.selectAbility(a.id);
       });
       parts.push(card, title, desc);
     });
-    this.overlay = this.add.container(0, 0, parts).setDepth(100);
+    this.modal.replace(parts, 100);
   }
   private onBossSpawned() {
     this.bossPanel.setVisible(true);
@@ -403,13 +405,12 @@ export class UIScene extends Phaser.Scene {
         .text(x, 390, reward.description, { fontSize: '16px', color: '#b9cad5' })
         .setOrigin(0.5);
       card.on('pointerdown', () => {
-        this.overlay?.destroy();
-        this.overlay = undefined;
+        this.modal.clear();
         this.gameScene.selectChestReward(reward.id);
       });
       parts.push(card, title, description);
     });
-    this.overlay = this.add.container(0, 0, parts).setDepth(110);
+    this.modal.replace(parts, 110);
   }
   private showLootBanner(equipment: Equipment) {
     this.weaponText.setText(
@@ -445,7 +446,7 @@ export class UIScene extends Phaser.Scene {
     this.armorSlot.setText(`◆ ${armor}`);
   }
   private onState(state: GameState) {
-    if (state === GameState.PAUSED && !this.overlay) {
+    if (state === GameState.PAUSED && !this.modal.active) {
       const parts: Phaser.GameObjects.GameObject[] = [];
       parts.push(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020710, 0.82));
       parts.push(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 650, 500, 0x071522, 0.98)
@@ -465,10 +466,9 @@ export class UIScene extends Phaser.Scene {
       parts.push(this.add.text(GAME_WIDTH / 2, 512, 'ESC  ·  VOLVER AL COMBATE', {
         fontFamily: 'monospace', fontSize: '12px', color: '#7594a8', letterSpacing: 2,
       }).setOrigin(0.5));
-      this.overlay = this.add.container(0, 0, parts).setDepth(100);
-    } else if (state === GameState.PLAYING && this.overlay) {
-      this.overlay.destroy();
-      this.overlay = undefined;
+      this.modal.replace(parts, 100);
+    } else if (state === GameState.PLAYING && this.modal.active) {
+      this.modal.clear();
     }
   }
   private pauseMenuButton(x: number, y: number, label: string, color: number, action: () => void) {
