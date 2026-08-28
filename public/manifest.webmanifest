@@ -9,8 +9,14 @@
   "theme_color": "#07111f",
   "icons": [
     {
-      "src": "/assets/character/leek/avatar.png",
-      "sizes": "any",
+      "src": "/assets/character/leek/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/character/leek/icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }

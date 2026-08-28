@@ -65,7 +65,7 @@ question — but a profiling task, not an emergency.
 
 - [ ] Profile load time, frame time, memory, and garbage collection on desktop and low-end Android.
 - [ ] Define supported entity budgets and degradation behavior, as numbers.
-- [ ] Add PWA icon validation and update/offline tests.
+- [x] Add PWA icon validation and cache-version tests. Offline fallback remains a future improvement.
 - [ ] Deferred, deliberately: close the remaining 18% of screen the canvas does not cover on a
       wide phone. Measured on iPhone 16 Pro Max, landscape, after fixing `viewport-fit` and
       `100dvh`: window 956x330, canvas 587x330, 61% coverage. Two independent losses —

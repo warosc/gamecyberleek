@@ -177,7 +177,7 @@ The effective pipeline is now:
 - Service worker registration is production-only.
 - Fetch handling is network-first with cache fallback, reducing stale-development risk.
 - Cache version was incremented and `skipWaiting()`/`clients.claim()` added during this audit so production updates activate promptly.
-- Remaining limitation: no dedicated validated 192x192 and 512x512 icon set, no offline fallback page, and no automated PWA audit.
+- Dedicated 192x192 and 512x512 icons are now generated from the character avatar and validated by `tests/pwa.test.ts`. Remaining limitation: no offline fallback page or full Lighthouse audit.
 
 ## Configuration review
 
