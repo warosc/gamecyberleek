@@ -2,7 +2,12 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <!-- viewport-fit=cover is required on notched iPhones: without it Safari insets the page
+         to the safe area in landscape, which shows up as black bars down both sides. -->
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
     <meta name="theme-color" content="#07111f" />
     <meta name="mobile-web-app-capable" content="yes" />
     <!-- Retained for iOS versions that predate the standard name above. -->

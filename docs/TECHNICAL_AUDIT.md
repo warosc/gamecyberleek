@@ -67,8 +67,8 @@ Status meanings: **IMPLEMENTED** works in source and is connected to the runtime
 
 ### Structure
 
-- `GameScene.ts` remains oversized at roughly 586 lines. Combat/death resolution, explosive world props, and transient combat presentation have begun moving into focused services; arena decoration, loot, boss flow, chests, and transitions remain.
-- `UIScene.ts` is oversized at roughly 575 lines. HUD, modal cards, pause menu, mobile controls, debug UI, and loot notifications should eventually be separate components.
+- `GameScene.ts` remains oversized at roughly 500 lines. Combat/death resolution, explosive world props, transient combat presentation, and arena decoration have moved into focused services; loot, boss flow, chests, and transitions remain.
+- `UIScene.ts` is oversized at roughly 635 lines. HUD, modal cards, pause menu, mobile controls, debug UI, and loot notifications should eventually be separate components.
 - A `PlayerController` was extracted during this audit. `Player` remains responsible for entity state/effects and `PlayerAnimator` remains replaceable.
 - No runtime circular dependency was identified. `UIScene` imports `GameScene` as a type only.
 - No explicit `any` usage was found. Phaser callback boundaries require several casts; most are localized but are not runtime-validated.

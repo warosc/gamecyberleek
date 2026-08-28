@@ -48,6 +48,26 @@ export function reportPerf(sample: PerfSample) {
   send({ kind: spike ? 'spike' : 'perf', ...sample });
 }
 
+/** Reports how much of the screen the canvas actually occupies, for mobile layout work. */
+export function reportViewport(tag: string) {
+  if (!devTelemetryEnabled) return;
+  const canvas = document.querySelector('canvas');
+  const box = canvas?.getBoundingClientRect();
+  send({
+    kind: 'viewport',
+    tag,
+    window: `${window.innerWidth}x${window.innerHeight}`,
+    screen: `${window.screen.width}x${window.screen.height}`,
+    canvasCss: box ? `${Math.round(box.width)}x${Math.round(box.height)}` : 'none',
+    canvasAttr: canvas ? `${canvas.width}x${canvas.height}` : 'none',
+    // How much of the visible viewport the canvas covers. Low means bars or a bad fit.
+    coverage: box
+      ? `${Math.round((100 * (box.width * box.height)) / (window.innerWidth * window.innerHeight))}%`
+      : '0%',
+    dpr: window.devicePixelRatio,
+  });
+}
+
 export function installDevTelemetry() {
   if (!devTelemetryEnabled) return;
   window.addEventListener('error', (event) => {

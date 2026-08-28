@@ -46,7 +46,8 @@ on either browser is a change that ships a frozen game.
 - [x] Add deterministic combat-pipeline and death-resolution tests.
 - [x] Extract explosive world props from `GameScene` with owned physics/lifecycle.
 - [x] Extract transient combat presentation into `CombatEffects`.
-- [ ] Finish splitting `GameScene`: extract arena presentation, loot/chests, and encounter flow.
+- [x] Extract deterministic arena presentation into `ArenaPresenter`.
+- [ ] Finish splitting `GameScene`: extract loot/chests and encounter flow.
 - [ ] Split `UIScene` into focused HUD, modal, pause, mobile-control and debug components.
 - [ ] Convert equipment to stable IDs, structured modifiers, and configurable rarity weights.
 - [ ] Extend typed damage packets and centralized death resolution when statuses are introduced.
@@ -61,6 +62,14 @@ question — but a profiling task, not an emergency.
 - [ ] Profile load time, frame time, memory, and garbage collection on desktop and low-end Android.
 - [ ] Define supported entity budgets and degradation behavior, as numbers.
 - [ ] Add PWA icon validation and update/offline tests.
+- [ ] Deferred, deliberately: close the remaining 18% of screen the canvas does not cover on a
+      wide phone. Measured on iPhone 16 Pro Max, landscape, after fixing `viewport-fit` and
+      `100dvh`: window 956x330, canvas 587x330, 61% coverage. Two independent losses —
+      Safari's chrome takes 25% of the height (no Fullscreen API exists on iPhone, so only
+      Add to Home Screen recovers it, reaching 82%), and the device's 2.17:1 does not match the
+      game's 1.78:1. Closing the second means deriving the logical width from the device
+      aspect, which widens the camera and lets a phone player see more arena than a desktop
+      player. That is a balance decision, not a layout one.
 
 ### Exit criteria
 

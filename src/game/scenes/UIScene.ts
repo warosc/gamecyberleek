@@ -191,7 +191,8 @@ export class UIScene extends Phaser.Scene {
       const fill = this.add
         .rectangle(x - 43, y + 27, 86, 7, ability.color, 0.9)
         .setOrigin(0, 0.5);
-      this.add.circle(x - 31, y - 19, mobileHud ? 18 : 15, 0x06101d).setStrokeStyle(2, ability.color);
+      const keyRadius = mobileHud ? 18 : 15;
+      this.add.circle(x - 31, y - 19, keyRadius, 0x06101d).setStrokeStyle(2, ability.color);
       this.add
         .text(x - 31, y - 19, ability.key, {
           fontFamily: 'Arial Black',
@@ -199,15 +200,22 @@ export class UIScene extends Phaser.Scene {
           color: '#ffffff',
         })
         .setOrigin(0.5);
-      this.add
-        .text(x + 8, y - 19, ability.name, {
+      // Fit the name to the gap between the key badge and the button edge instead of a fixed
+      // wrap width: word wrap cannot split a single long word, so "OVERDRIVE" ran over the
+      // badge and past the button.
+      const labelLeft = x - 31 + keyRadius + 4;
+      const labelRight = x + (mobileHud ? 108 : 94) / 2 - 6;
+      const labelWidth = labelRight - labelLeft;
+      const label = this.add
+        .text(labelLeft + labelWidth / 2, y - 19, ability.name, {
           fontFamily: 'Arial Black',
           fontSize: '10px',
           color: '#eaffff',
           align: 'center',
-          wordWrap: { width: 58 },
+          wordWrap: { width: labelWidth },
         })
         .setOrigin(0.5);
+      if (label.width > labelWidth) label.setScale(labelWidth / label.width);
       const cooldownText = this.add
         .text(x, y + 8, 'READY', {
           fontFamily: 'Arial Black',
@@ -221,8 +229,9 @@ export class UIScene extends Phaser.Scene {
     });
     if (this.gameScene.mobileInput.active) this.createMobileControls();
     if (import.meta.env.VITE_DEBUG_GAME === 'true')
+      // Below the weapon/armor slots: at y=90 the overlay covered them.
       this.debug = this.add
-        .text(GAME_WIDTH - 16, 90, '', {
+        .text(GAME_WIDTH - 16, 166, '', {
           fontFamily: 'monospace',
           fontSize: '14px',
           color: '#8ff8ff',

@@ -23,6 +23,15 @@ body {
   position: fixed;
   inset: 0;
 }
+#game {
+  /* iOS resolves `height: 100%` against a layout viewport taller than the visible area, so
+     Phaser sized the canvas to fit a box partly hidden behind Safari's toolbars and the game
+     ended up smaller than the screen. The dynamic viewport unit tracks what is actually shown. */
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 canvas {
   display: block;
   margin: auto;
