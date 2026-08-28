@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import { COLORS, GAMEPLAY } from '../config/Constants';
+import { detectQualityProfile } from '../config/QualityProfile';
 
 /** Scene-owned, presentation-only transient combat effects. */
 export class CombatEffects {
   private readonly transient = new Set<Phaser.GameObjects.GameObject>();
-  private readonly maxTransient = GAMEPLAY.maxTransientEffects;
+  private readonly quality = detectQualityProfile();
+  private readonly maxTransient = Math.floor(GAMEPLAY.maxTransientEffects * this.quality.transientBudgetScale);
   private readonly reducedMotion =
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -40,7 +42,7 @@ export class CombatEffects {
 
   impact(x: number, y: number) {
     if (this.reducedMotion) return;
-    for (let index = 0; index < 5; index++) {
+    for (let index = 0; index < this.quality.impactParticles; index++) {
       const dot = this.track(this.scene.add.circle(x, y, 2, COLORS.cyan).setDepth(20));
       if (!dot) break;
       const angle = Math.random() * Math.PI * 2;
