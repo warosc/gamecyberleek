@@ -9,6 +9,7 @@ import { loadProfile, updateProfile } from '../systems/ProfileStore';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import { ModalOverlay } from '../ui/ModalOverlay';
 import { MobileControls } from '../ui/MobileControls';
+import { RewardChooser } from '../ui/RewardChooser';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -39,6 +40,7 @@ export class UIScene extends Phaser.Scene {
   private debugOverlay?: DebugOverlay;
   private modal!: ModalOverlay;
   private mobileControls?: MobileControls;
+  private chooser?: RewardChooser;
   private specialFills = new Map<SpecialAbilityId, Phaser.GameObjects.Rectangle>();
   private specialTexts = new Map<SpecialAbilityId, Phaser.GameObjects.Text>();
   private bossPanel!: Phaser.GameObjects.Container;
@@ -47,6 +49,10 @@ export class UIScene extends Phaser.Scene {
   private weaponText!: Phaser.GameObjects.Text;
   private weaponSlot!: Phaser.GameObjects.Text;
   private armorSlot!: Phaser.GameObjects.Text;
+  /** Interpolation targets. A bar that snaps gives the player nothing to feel. */
+  private xpTargetWidth = 0;
+  private xpRatio = 0;
+  private hpTargetWidth = 240;
   constructor() {
     super('UI');
   }
@@ -263,7 +269,7 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.LOOT_COLLECTED, this.showLootBanner, this);
     this.gameScene.events.on(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
     this.events.once('shutdown', () => {
-      this.modal.clear();
+      this.closeModal();
       this.mobileControls?.destroy();
       this.gameScene.events.off(Events.PLAYER_DAMAGED, this.onHealth, this);
       this.gameScene.events.off(Events.XP_COLLECTED, this.onXp, this);
@@ -280,6 +286,17 @@ export class UIScene extends Phaser.Scene {
     const seconds = Math.floor(this.gameScene.survivalMs / 1000);
     this.timer.setText(
       `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`,
+    );
+    // Ease both bars toward their target. The step is frame-rate independent so a 165Hz
+    // display and a 60Hz display fill at the same speed.
+    const ease = 1 - Math.exp(-delta / 90);
+    this.xpFill.width += (this.xpTargetWidth - this.xpFill.width) * ease;
+    this.hpFill.width += (this.hpTargetWidth - this.hpFill.width) * ease;
+    // Anticipation: the bar starts breathing once a level-up is within reach.
+    const imminent = this.xpRatio >= 0.85;
+    this.xpFill.setFillStyle(
+      imminent ? 0xd4ff7a : 0x73ef62,
+      imminent ? 0.75 + Math.sin(this.gameScene.survivalMs * 0.012) * 0.25 : 1,
     );
     const dashCharge = this.gameScene.player.getDashCharge();
     this.energyFill.width = 240 * dashCharge;
@@ -301,7 +318,7 @@ export class UIScene extends Phaser.Scene {
     this.hp
       .setText(`HP ${Math.ceil(current)} / ${max}`)
       .setColor(current / max < 0.3 ? '#ff476f' : '#eaffff');
-    this.hpFill.width = 240 * (current / max);
+    this.hpTargetWidth = 240 * Phaser.Math.Clamp(current / max, 0, 1);
     this.hpFill.setFillStyle(current / max < 0.3 ? 0xff214f : 0xd83952);
     this.playerFrame.setStrokeStyle(4, 0xff476f, 1);
     this.damageFlash.setAlpha(0.18);
@@ -315,20 +332,28 @@ export class UIScene extends Phaser.Scene {
     });
   }
   private onXp(xp: number, level: number) {
-    if (this.level.text !== String(level)) {
+    const levelled = this.level.text !== String(level);
+    if (levelled) {
       this.level.setText(String(level));
       this.tweens.add({ targets: this.level, scale: 1.7, duration: 120, yoyo: true });
+      // The bar has to visibly empty and refill, or a level-up looks like the bar glitching.
+      this.xpFill.width = 0;
+      this.tweens.add({
+        targets: this.xpFill,
+        alpha: { from: 1, to: 0.35 },
+        duration: 110,
+        yoyo: true,
+        repeat: 1,
+      });
     }
-    this.xpFill.width = (GAME_WIDTH - 70) * (xp / xpForLevel(level));
+    this.xpRatio = Phaser.Math.Clamp(xp / xpForLevel(level), 0, 1);
+    this.xpTargetWidth = (GAME_WIDTH - 70) * this.xpRatio;
   }
   private showAbilities(abilities: Ability[]) {
-    const parts: Phaser.GameObjects.GameObject[] = [];
-    parts.push(
+    const parts: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1040, 570, 0x061323, 0.98)
         .setStrokeStyle(2, 0x21e6ff, 0.5),
-    );
-    parts.push(
       this.add
         .text(GAME_WIDTH / 2, 118, 'LEVEL UP', {
           fontFamily: 'Arial Black',
@@ -336,69 +361,51 @@ export class UIScene extends Phaser.Scene {
           color: '#73ef62',
         })
         .setOrigin(0.5),
-    );
-    parts.push(
       this.add.text(GAME_WIDTH / 2, 164, 'CHOOSE YOUR NEXT PROTOCOL', {
         fontFamily: 'Arial Black', fontSize: '12px', color: '#8ba5b8', letterSpacing: 3,
       }).setOrigin(0.5),
-    );
-    abilities.forEach((a, i) => {
-      const x = GAME_WIDTH / 2 + (i - 1) * 300;
-      const accent = [0x21e6ff, 0x73ef62, 0xd566ff][i] ?? 0x21e6ff;
-      const currentLevel = this.gameScene.abilityLevels.get(a.id) ?? 0;
-      const glow = this.add.rectangle(x, 370, 278, 286, accent, 0.12)
-        .setStrokeStyle(1, accent, 0.28);
-      const card = this.add
-        .rectangle(x, 370, 264, 272, 0x0b1d30, 0.98)
-        .setStrokeStyle(3, accent, 0.9)
-        .setInteractive({ useHandCursor: true });
-      const icon = this.add.circle(x, 284, 34, 0x06101d, 1)
-        .setStrokeStyle(3, accent, 0.95);
-      const iconLabel = this.add.text(x, 284, a.name.slice(0, 2), {
-        fontFamily: 'Arial Black', fontSize: '18px', color: `#${accent.toString(16).padStart(6, '0')}`,
-      }).setOrigin(0.5);
-      const title = this.add
-        .text(x, 332, a.name, {
-          fontFamily: 'Arial Black',
-          fontSize: '18px',
-          color: '#eaffff',
-          align: 'center',
-          wordWrap: { width: 228 },
-        })
-        .setOrigin(0.5);
-      const desc = this.add
-        .text(x, 397, a.description, {
-          fontSize: '15px',
-          color: '#b9cad5',
-          align: 'center',
-          wordWrap: { width: 220 },
-        })
-        .setOrigin(0.5);
-      const level = this.add.text(x, 474, `LEVEL ${currentLevel}  →  ${currentLevel + 1}`, {
-        fontFamily: 'Arial Black', fontSize: '12px', color: `#${accent.toString(16).padStart(6, '0')}`,
-      }).setOrigin(0.5);
-      const cap = this.add.text(x, 503, `MAX ${a.maxLevel}`, {
-        fontFamily: 'monospace', fontSize: '11px', color: '#7594a8', letterSpacing: 1,
-      }).setOrigin(0.5);
-      card.on('pointerdown', () => {
-        this.modal.clear();
-        this.gameScene.selectAbility(a.id);
-      });
-      card.on('pointerover', () => {
-        card.setFillStyle(0x12304a, 1);
-        this.tweens.add({ targets: [card, glow], scale: 1.03, duration: 100 });
-      });
-      card.on('pointerout', () => {
-        card.setFillStyle(0x0b1d30, 0.98);
-        this.tweens.add({ targets: [card, glow], scale: 1, duration: 100 });
-      });
-      parts.push(glow, card, icon, iconLabel, title, desc, level, cap);
+    ];
+    const accents = [0x21e6ff, 0x73ef62, 0xd566ff];
+    this.chooser = new RewardChooser(this, (index) => {
+      const chosen = abilities[index];
+      this.closeModal();
+      this.gameScene.selectAbility(chosen.id);
     });
-    parts.push(this.add.text(GAME_WIDTH / 2, 585, 'TAP OR CLICK A PROTOCOL TO CONTINUE', {
+    parts.push(
+      ...this.chooser.build(
+        abilities.map((ability, index) => {
+          const current = this.gameScene.abilityLevels.get(ability.id) ?? 0;
+          return {
+            accent: accents[index] ?? 0x21e6ff,
+            icon: ability.icon,
+            name: ability.name,
+            effect: ability.description,
+            footer:
+              current + 1 >= ability.maxLevel
+                ? `LEVEL ${current + 1}  ·  MAX`
+                : `LEVEL ${current}  →  ${current + 1}`,
+            pips: { filled: current + 1, total: ability.maxLevel },
+          };
+        }),
+        GAME_WIDTH / 2,
+        378,
+      ),
+    );
+    parts.push(this.add.text(GAME_WIDTH / 2, 585, this.gameScene.mobileInput.active
+      ? 'TAP A PROTOCOL TO CONTINUE'
+      : 'PRESS 1-3, OR USE ← → AND ENTER', {
       fontFamily: 'monospace', fontSize: '12px', color: '#7594a8', letterSpacing: 2,
     }).setOrigin(0.5));
     this.modal.replace(parts, 100);
   }
+
+  /** Every modal close goes through here so a chooser can never outlive its cards. */
+  private closeModal() {
+    this.chooser?.destroy();
+    this.chooser = undefined;
+    this.modal.clear();
+  }
+
   private onBossSpawned() {
     this.bossPanel.setVisible(true);
     this.cameras.main.flash(280, 95, 15, 120);
@@ -412,75 +419,51 @@ export class UIScene extends Phaser.Scene {
   }
   private showChestRewards() {
     const rewards = [
-      {
-        id: 'repair' as const,
-        name: 'FIELD REPAIR',
-        description: 'Restore 40 HP',
-        color: 0x73ef62,
-      },
-      {
-        id: 'charge' as const,
-        name: 'FULL CHARGE',
-        description: 'Reset powers + shield',
-        color: 0x21e6ff,
-      },
-      {
-        id: 'weapon' as const,
-        name: 'WEAPON CACHE',
-        description: '+6 permanent damage',
-        color: 0xd566ff,
-      },
+      { id: 'repair' as const, name: 'FIELD REPAIR', effect: 'Restore 40 HP', icon: '✚', color: 0x73ef62 },
+      { id: 'charge' as const, name: 'FULL CHARGE', effect: 'Reset powers + shield', icon: '⚡', color: 0x21e6ff },
+      { id: 'weapon' as const, name: 'WEAPON CACHE', effect: '+6 permanent damage', icon: '✦', color: 0xd566ff },
     ];
     const parts: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
-      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1040, 520, 0x061323, 0.98)
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1040, 540, 0x061323, 0.98)
         .setStrokeStyle(2, 0x73ef62, 0.5),
       this.add
-        .text(GAME_WIDTH / 2, 150, 'SUPPLY CHEST', {
+        .text(GAME_WIDTH / 2, 140, 'SUPPLY CHEST', {
           fontFamily: 'Arial Black',
           fontSize: '42px',
           color: '#73ef62',
         })
         .setOrigin(0.5),
-      this.add.text(GAME_WIDTH / 2, 190, 'SELECT ONE FIELD REWARD', {
+      this.add.text(GAME_WIDTH / 2, 182, 'SELECT ONE FIELD REWARD', {
         fontFamily: 'Arial Black', fontSize: '12px', color: '#8ba5b8', letterSpacing: 3,
       }).setOrigin(0.5),
     ];
-    rewards.forEach((reward, index) => {
-      const x = GAME_WIDTH / 2 + (index - 1) * 300;
-      const glow = this.add.rectangle(x, 370, 278, 270, reward.color, 0.1)
-        .setStrokeStyle(1, reward.color, 0.3);
-      const card = this.add
-        .rectangle(x, 370, 264, 256, 0x0b1d30, 0.98)
-        .setStrokeStyle(3, reward.color, 0.9)
-        .setInteractive({ useHandCursor: true });
-      const icon = this.add.circle(x, 292, 34, 0x06101d, 1).setStrokeStyle(3, reward.color, 0.95);
-      const iconLabel = this.add.text(x, 292, reward.id === 'repair' ? '+' : reward.id === 'charge' ? '⚡' : '✦', {
-        fontFamily: 'Arial Black', fontSize: '22px', color: `#${reward.color.toString(16).padStart(6, '0')}`,
-      }).setOrigin(0.5);
-      const title = this.add
-        .text(x, 342, reward.name, {
-          fontFamily: 'Arial Black',
-          fontSize: '19px',
-          color: '#eaffff',
-        })
-        .setOrigin(0.5);
-      const description = this.add
-        .text(x, 400, reward.description, { fontSize: '16px', color: '#b9cad5', align: 'center', wordWrap: { width: 220 } })
-        .setOrigin(0.5);
-      const action = this.add.text(x, 478, 'CLAIM REWARD', {
-        fontFamily: 'monospace', fontSize: '11px', color: `#${reward.color.toString(16).padStart(6, '0')}`, letterSpacing: 2,
-      }).setOrigin(0.5);
-      card.on('pointerdown', () => {
-        this.modal.clear();
-        this.gameScene.selectChestReward(reward.id);
-      });
-      card.on('pointerover', () => { card.setFillStyle(0x12304a, 1); action.setColor('#ffffff'); });
-      card.on('pointerout', () => { card.setFillStyle(0x0b1d30, 0.98); action.setColor(`#${reward.color.toString(16).padStart(6, '0')}`); });
-      parts.push(glow, card, icon, iconLabel, title, description, action);
+    this.chooser = new RewardChooser(this, (index) => {
+      const reward = rewards[index];
+      this.closeModal();
+      this.gameScene.selectChestReward(reward.id);
     });
+    parts.push(
+      ...this.chooser.build(
+        rewards.map((reward) => ({
+          accent: reward.color,
+          icon: reward.icon,
+          name: reward.name,
+          effect: reward.effect,
+          footer: 'CLAIM REWARD',
+        })),
+        GAME_WIDTH / 2,
+        382,
+      ),
+    );
+    parts.push(this.add.text(GAME_WIDTH / 2, 578, this.gameScene.mobileInput.active
+      ? 'TAP A REWARD TO CONTINUE'
+      : 'PRESS 1-3, OR USE ← → AND ENTER', {
+      fontFamily: 'monospace', fontSize: '12px', color: '#7594a8', letterSpacing: 2,
+    }).setOrigin(0.5));
     this.modal.replace(parts, 110);
   }
+
   private showLootBanner(equipment: Equipment) {
     this.weaponText.setText(
       equipment.kind === 'weapon'
@@ -552,7 +535,7 @@ export class UIScene extends Phaser.Scene {
       }).setOrigin(0.5));
       this.modal.replace(parts, 100);
     } else if ((state === GameState.PLAYING || state === GameState.BOSS) && this.modal.active) {
-      this.modal.clear();
+      this.closeModal();
     }
   }
   private pauseMenuButton(x: number, y: number, label: string, color: number, action: () => void, width = 330) {

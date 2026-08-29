@@ -3,6 +3,8 @@ export interface Ability {
   id: string;
   name: string;
   description: string;
+  /** One glyph shown on the level-up card. Read faster than a truncated name. */
+  icon: string;
   maxLevel: number;
   apply: (stats: PlayerStats, level: number) => void;
 }
@@ -11,6 +13,7 @@ export const ABILITIES: Ability[] = [
     id: 'rapid',
     name: 'RAPID FIRE',
     description: 'Fire 12% faster',
+    icon: '»',
     maxLevel: 5,
     apply: (s) => {
       s.attackCooldown *= 0.88;
@@ -20,6 +23,7 @@ export const ABILITIES: Ability[] = [
     id: 'power',
     name: 'POWER SHOT',
     description: '+8 attack damage',
+    icon: '✦',
     maxLevel: 5,
     apply: (s) => {
       s.attackDamage += 8;
@@ -29,6 +33,7 @@ export const ABILITIES: Ability[] = [
     id: 'boots',
     name: 'TURBO BOOTS',
     description: '+25 movement speed',
+    icon: '▲',
     maxLevel: 4,
     apply: (s) => {
       s.moveSpeed += 25;
@@ -38,6 +43,7 @@ export const ABILITIES: Ability[] = [
     id: 'multi',
     name: 'MULTI SHOT',
     description: '+1 projectile',
+    icon: '☷',
     maxLevel: 3,
     apply: (s) => {
       s.projectileCount++;
@@ -47,6 +53,7 @@ export const ABILITIES: Ability[] = [
     id: 'core',
     name: 'ENERGY CORE',
     description: '+25 max HP and heal',
+    icon: '♥',
     maxLevel: 4,
     apply: (s) => {
       s.maxHp += 25;
@@ -56,6 +63,7 @@ export const ABILITIES: Ability[] = [
     id: 'magnet',
     name: 'MAGNET',
     description: '+55 pickup radius',
+    icon: '◉',
     maxLevel: 4,
     apply: (s) => {
       s.magnetRadius += 55;
@@ -65,6 +73,7 @@ export const ABILITIES: Ability[] = [
     id: 'crit',
     name: 'CRITICAL OPTICS',
     description: '+8% critical chance',
+    icon: '☀',
     maxLevel: 5,
     apply: (s) => {
       s.criticalChance += 0.08;
@@ -74,6 +83,7 @@ export const ABILITIES: Ability[] = [
     id: 'overdrive',
     name: 'LEEK OVERDRIVE',
     description: '10s: +50% damage and fire rate',
+    icon: '⚡',
     maxLevel: 3,
     apply: () => {},
   },

@@ -41,6 +41,7 @@ export enum GameState {
 export const Events = {
   PLAYER_DAMAGED: 'player-damaged',
   PLAYER_DIED: 'player-died',
+  PLAYER_DASHED: 'player-dashed',
   ENEMY_DIED: 'enemy-died',
   XP_COLLECTED: 'xp-collected',
   PLAYER_LEVEL_UP: 'player-level-up',

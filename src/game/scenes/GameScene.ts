@@ -21,6 +21,7 @@ import { ArenaPresenter } from '../world/ArenaPresenter';
 import { LootSystem } from '../systems/LootSystem';
 import { EncounterSystem } from '../systems/EncounterSystem';
 import { RunEndSystem } from '../systems/RunEndSystem';
+import { ImpactPresenter } from '../presentation/ImpactPresenter';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -53,6 +54,7 @@ export class GameScene extends Phaser.Scene {
   equippedWeapon = 'PULSEGUN-01';
   equippedArmor = 'SIN ARMADURA';
   private effects!: CombatEffects;
+  private impacts!: ImpactPresenter;
   private worldProps!: ExplosiveBarrelSystem;
   private loot!: LootSystem;
   private encounters!: EncounterSystem;
@@ -61,13 +63,15 @@ export class GameScene extends Phaser.Scene {
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
   private readonly handleBossSpawned = () => {
+    this.audio.play('boss_spawn');
     if (this.state === GameState.PLAYING) {
       this.state = GameState.BOSS;
       this.events.emit(Events.STATE_CHANGED, this.state);
     }
   };
+  private readonly handlePlayerDashed = () => this.audio.play('dash');
   private readonly handleWeaponFired = (x: number, y: number, angle: number) => {
-    this.audio.tone(240, 0.025, 0.015);
+    this.audio.play('weapon_fire');
     this.effects.muzzle(x, y, angle);
   };
   private readonly handleEscape = () => this.togglePause();
@@ -115,6 +119,7 @@ export class GameScene extends Phaser.Scene {
     this.spawn = new SpawnSystem(new EnemyFactory(this), this.enemies, this.arenaIndex);
     this.audio = new AudioManager(this);
     this.effects = new CombatEffects(this);
+    this.impacts = new ImpactPresenter(this, this.effects, this.audio);
     this.loot = new LootSystem(this, {
       player: this.player,
       effects: this.effects,
@@ -168,10 +173,13 @@ export class GameScene extends Phaser.Scene {
     this.events.on(Events.PLAYER_DIED, this.handlePlayerDied);
     this.events.on(Events.BOSS_SPAWNED, this.handleBossSpawned);
     this.events.on('weapon-fired', this.handleWeaponFired);
+    this.events.on(Events.PLAYER_DASHED, this.handlePlayerDashed);
     this.input.keyboard!.on('keydown-ESC', this.handleEscape);
     if (import.meta.env.VITE_DEBUG_GAME === 'true') {
       keyboard.on('keydown-B', () => this.encounters.spawnBoss());
       keyboard.on('keydown-C', () => this.loot.spawnChest());
+      // Reaching a level-up by playing takes a competent run; inspecting the modal should not.
+      keyboard.on('keydown-L', () => this.openLevelUp());
     }
     // Remove only the events this scene registers. `this.events` is the scene's system
     // emitter, so a blanket removeAllListeners() also unsubscribes Phaser's own plugins
@@ -181,6 +189,7 @@ export class GameScene extends Phaser.Scene {
       this.events.off(Events.PLAYER_DIED, this.handlePlayerDied);
       this.events.off(Events.BOSS_SPAWNED, this.handleBossSpawned);
       this.events.off('weapon-fired', this.handleWeaponFired);
+      this.events.off(Events.PLAYER_DASHED, this.handlePlayerDashed);
       this.input.keyboard?.off('keydown-ESC', this.handleEscape);
     });
     this.scene.launch('UI', { game: this });
@@ -214,7 +223,7 @@ export class GameScene extends Phaser.Scene {
           this.lastBossPhase = enemy.bossPhase;
           this.cameras.main.flash(180, 213, 102, 255, false);
           this.cameras.main.shake(220, 0.008);
-          this.audio.tone(enemy.bossPhase === 3 ? 120 : 180, 0.16, 0.035, 'ui');
+          this.audio.play('boss_phase');
         }
         enemy.updateBehavior(this.player, this.survivalMs, (x, y, angle, speed, damage) =>
           this.enemyProjectiles.fire(x, y, angle, speed, damage, this.survivalMs),
@@ -222,12 +231,14 @@ export class GameScene extends Phaser.Scene {
       });
     this.orbs.getChildren().forEach((o) => {
       const orb = o as ExperienceOrb;
-      if (
-        orb.active &&
-        Phaser.Math.Distance.Between(orb.x, orb.y, this.player.x, this.player.y) <
-          this.player.stats.magnetRadius
-      )
-        this.physics.moveToObject(orb, this.player, 300);
+      if (!orb.active) return;
+      const radius = this.player.stats.magnetRadius;
+      const distance = Phaser.Math.Distance.Between(orb.x, orb.y, this.player.x, this.player.y);
+      if (distance >= radius) return;
+      // Accelerate as the orb closes. At a constant speed the pickup felt like the orb was
+      // being dragged; ramping it makes the last few pixels snap in, which is the part that
+      // actually reads as a reward.
+      this.physics.moveToObject(orb, this.player, 200 + (1 - distance / radius) ** 2 * 700);
     });
   }
   private projectileHit(
@@ -240,28 +251,28 @@ export class GameScene extends Phaser.Scene {
     p.hitTargets.add(e);
     if (p.hitsRemaining > 0) p.hitsRemaining--;
     else p.disableBody(true, true);
-    this.audio.tone(135, 0.035);
-    this.effects.impact(p.x, p.y);
-    if (e.hit(p.damage)) {
+    const boss = e.enemyType === EnemyType.BOSS;
+    const fatal = e.hit(p.damage, p.critical);
+    // One tier drives spark, damage number, camera and audio together, so a critical on an
+    // elite cannot end up feeling identical to chipping a grunt.
+    this.impacts.hit(p.x, p.y, p.damage, {
+      critical: p.critical,
+      boss,
+      elite: e.elite,
+      fatal: false,
+    });
+    if (fatal) {
       this.resolveEnemyDeath(e);
     } else {
       this.tweens.add({
         targets: e,
-        x: e.x + (e.x - this.player.x) * 0.06,
-        y: e.y + (e.y - this.player.y) * 0.06,
+        x: e.x + (e.x - this.player.x) * (p.critical ? 0.11 : 0.06),
+        y: e.y + (e.y - this.player.y) * (p.critical ? 0.11 : 0.06),
         duration: 70,
       });
     }
     if (p.mode === 'plasma' && p.splashRadius > 0) this.plasmaExplosion(e.x, e.y, p.damage * 0.55, p.splashRadius, e);
-    if (e.enemyType === EnemyType.BOSS)
-      this.events.emit(Events.BOSS_HEALTH, e.health.current, e.health.max);
-    this.cameras.main.shake(45, 0.0015);
-    this.effects.floatingText(
-      e.x,
-      e.y - 20,
-      `${p.critical ? 'CRIT ' : ''}${p.damage}`,
-      p.critical ? '#fff27a' : '#dffcff',
-    );
+    if (boss) this.events.emit(Events.BOSS_HEALTH, e.health.current, e.health.max);
   }
   private enemyContact(object: Phaser.GameObjects.GameObject) {
     const e = object as Enemy;
@@ -293,8 +304,11 @@ export class GameScene extends Phaser.Scene {
     const orb = object as ExperienceOrb;
     if (!orb.active) return;
     const amount = orb.value * this.player.stats.xpMultiplier;
+    const orbX = orb.x;
+    const orbY = orb.y;
     orb.collect();
-    this.audio.tone(520, 0.05, 0.018);
+    this.effects.xpPickup(orbX, orbY);
+    this.audio.play('xp_collect');
     const previousLevel = this.xp.level;
     const gainedLevels = this.xp.add(amount);
     if (gainedLevels > 0) {
@@ -329,7 +343,7 @@ export class GameScene extends Phaser.Scene {
       this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
     }
     if (id === 'overdrive') this.player.activateOverdrive(10000 + level * 2000);
-    this.audio.tone(760, 0.15, 0.04);
+    this.audio.play('level_up');
     this.state = this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
     this.physics.resume();
     this.events.emit(Events.ABILITY_SELECTED, id);
@@ -375,8 +389,13 @@ export class GameScene extends Phaser.Scene {
     if (time - this.specialLastUsed[id] < ability.cooldown) return;
     this.specialLastUsed[id] = time;
     if (id === 'nova') this.activateNova();
-    else if (id === 'shield') this.player.activateShield(3000);
-    else this.player.activateOverdrive(8000);
+    else if (id === 'shield') {
+      this.player.activateShield(3000);
+      this.audio.play('shield');
+    } else {
+      this.player.activateOverdrive(8000);
+      this.audio.play('overdrive');
+    }
   }
   private activateNova() {
     const radius = 230;
@@ -417,7 +436,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.effects.floatingText(x, y - 22, `${damage}`, '#73efff');
     }
-    this.audio.tone(95, 0.24, 0.045);
+    this.audio.play('nova');
     this.cameras.main.shake(180, 0.006);
   }
   togglePause() {
@@ -454,6 +473,7 @@ export class GameScene extends Phaser.Scene {
   private gameOver(victory: boolean) {
     if (this.state === GameState.GAME_OVER || this.state === GameState.VICTORY) return;
     this.state = victory ? GameState.VICTORY : GameState.GAME_OVER;
+    this.audio.play(victory ? 'victory' : 'game_over');
     this.physics.pause();
     this.runEnd.finish({
       time: this.survivalMs,
@@ -474,12 +494,18 @@ export class GameScene extends Phaser.Scene {
     this.audio.tone(65, 0.2, 0.05);
   }
   private resolveEnemyDeath(enemy: Enemy) {
+    const elite = enemy.elite;
+    const eliteColor = enemy.eliteColor;
     const defeat = this.deaths.resolve(enemy);
     if (!defeat) return;
     this.events.emit(Events.ENEMY_DIED);
-    this.effects.deathBurst(defeat.x, defeat.y, defeat.boss ? 0xd566ff : 0x21e6ff, defeat.boss);
+    this.impacts.death(
+      defeat.x,
+      defeat.y,
+      defeat.boss ? 0xd566ff : elite ? eliteColor : 0x21e6ff,
+      { critical: false, boss: defeat.boss, elite, fatal: true },
+    );
     this.spawnOrb(defeat.x, defeat.y, defeat.xp);
-    this.audio.tone(75, 0.09);
     if (defeat.boss) {
       this.events.emit(Events.BOSS_HEALTH, 0, defeat.maxHealth);
       this.time.delayedCall(500, () => this.gameOver(true));

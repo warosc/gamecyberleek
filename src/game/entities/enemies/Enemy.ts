@@ -99,15 +99,50 @@ export class Enemy extends Phaser.GameObjects.Arc {
       }
     }
   }
-  hit(amount: number) {
+  hit(amount: number, critical = false) {
     this.health.damage(amount);
     this.healthBack.setVisible(true);
     this.healthFill
       .setVisible(true)
       .setDisplaySize(this.def.size * 2 * (this.health.current / this.health.max), 3);
+    this.flashHit(critical);
+    return this.health.dead;
+  }
+
+  /**
+   * Hit reaction on the enemy itself. Without a punch on the body the only sign a shot landed
+   * was the damage number, which is easy to lose in a crowd; the scale pop is what makes a hit
+   * feel connected. Criticals also get a ring, so they read from across the arena.
+   */
+  flashHit(critical = false) {
+    if (!this.active) return;
     this.visual.setAlpha(0.35);
     this.scene.time.delayedCall(60, () => this.active && this.visual.setAlpha(1));
-    return this.health.dead;
+    this.scene.tweens.add({
+      targets: this.visual,
+      scale: critical ? 1.28 : 1.12,
+      duration: critical ? 90 : 60,
+      yoyo: true,
+      ease: 'Quad.Out',
+    });
+    if (!critical) return;
+    const ring = this.scene.add
+      .circle(this.x, this.y, this.def.size + 6, 0xfff27a, 0)
+      .setStrokeStyle(3, 0xfff27a, 0.9)
+      .setDepth(14);
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 1.8,
+      alpha: 0,
+      duration: 220,
+      ease: 'Quad.Out',
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  /** Affix colour when elite, base colour otherwise. Used so a death burst keeps its identity. */
+  get eliteColor() {
+    return this.elite ? ELITE_AFFIX_DEFS[this.eliteAffix].color : this.def.color;
   }
   makeElite() {
     if (this.enemyType === EnemyType.BOSS || this.elite) return this;

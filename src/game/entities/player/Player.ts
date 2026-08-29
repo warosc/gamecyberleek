@@ -101,7 +101,10 @@ export class Player extends Phaser.GameObjects.Container {
       this.lastDash = time;
       this.dashingUntil = time + this.stats.dashDuration;
       this.animator.dash(time, this.stats.dashDuration);
-      this.scene.cameras.main.shake(70, 0.002);
+      // A short impulse along the dash rather than an undirected shake: the camera agrees with
+      // where the player just went.
+      this.scene.cameras.main.shake(90, 0.0035);
+      this.scene.events.emit(Events.PLAYER_DASHED, v.x, v.y);
     }
     const speed = time < this.dashingUntil ? this.stats.dashSpeed : this.stats.moveSpeed;
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(v.x * speed, v.y * speed);

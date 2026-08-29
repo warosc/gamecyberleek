@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { AUDIO_EVENTS, type AudioEventId } from '../audio/AudioEvents';
 
 /**
  * One AudioContext for the whole game, created on the first user gesture that reaches any
@@ -48,16 +49,42 @@ export class AudioManager {
     categoryVolumes[category] = Phaser.Math.Clamp(volume, 0, 1);
   }
 
-  tone(frequency: number, duration = 0.04, volume = 0.025, category: AudioCategory = 'sfx') {
+  tone(
+    frequency: number,
+    duration = 0.04,
+    volume = 0.025,
+    category: AudioCategory = 'sfx',
+    type: OscillatorType = 'square',
+    delayS = 0,
+  ) {
     if (!context || context.state !== 'running') return;
+    const start = context.currentTime + delayS;
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     oscillator.frequency.value = frequency;
-    oscillator.type = 'square';
-    gain.gain.setValueAtTime(volume * categoryVolumes[category], context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + duration);
+    oscillator.type = type;
+    gain.gain.setValueAtTime(volume * categoryVolumes[category], start);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
     oscillator.connect(gain).connect(masterGain ?? context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + duration);
+    oscillator.start(start);
+    oscillator.stop(start + duration);
+  }
+
+  /**
+   * Plays a named gameplay event. Call sites name the moment, not the frequency, so swapping in
+   * original recorded audio later is confined to this method and `AUDIO_EVENTS`.
+   */
+  play(event: AudioEventId) {
+    const definition = AUDIO_EVENTS[event];
+    if (!definition) return;
+    for (const tone of definition.tones)
+      this.tone(
+        tone.frequency,
+        tone.durationS,
+        tone.volume,
+        definition.category,
+        tone.type ?? 'square',
+        (tone.delayMs ?? 0) / 1000,
+      );
   }
 }
