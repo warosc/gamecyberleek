@@ -15,6 +15,7 @@ export const GAMEPLAY = {
   spawnMinimumIntervalMs: 260,
   eliteStartMs: 45000,
   eliteMaxChance: 0.12,
+  eliteAffixWeights: { OVERCHARGED: 55, ARMORED: 25, SWIFT: 20 },
 } as const;
 export const COLORS = {
   navy: 0x07111f,

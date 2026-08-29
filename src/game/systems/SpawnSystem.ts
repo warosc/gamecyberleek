@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ARENA, GAMEPLAY } from '../config/Constants';
 import type { EnemyFactory } from '../entities/enemies/EnemyFactory';
-import { EnemyType } from '../entities/enemies/EnemyTypes';
+import { EnemyType, type EliteAffix } from '../entities/enemies/EnemyTypes';
 export class SpawnSystem {
   private elapsed = 0;
   private next = 500;
@@ -35,7 +35,17 @@ export class SpawnSystem {
       this.elapsed > GAMEPLAY.eliteStartMs &&
       Math.random() < Math.min(GAMEPLAY.eliteMaxChance, this.elapsed / 1200000)
     )
+      enemy.eliteAffix = this.rollEliteAffix();
       enemy.makeElite();
     this.group.add(enemy);
+  }
+
+  private rollEliteAffix(): EliteAffix {
+    const weights = GAMEPLAY.eliteAffixWeights;
+    const total = weights.OVERCHARGED + weights.ARMORED + weights.SWIFT;
+    const roll = Math.random() * total;
+    if (roll < weights.OVERCHARGED) return 'OVERCHARGED';
+    if (roll < weights.OVERCHARGED + weights.ARMORED) return 'ARMORED';
+    return 'SWIFT';
   }
 }

@@ -80,11 +80,14 @@ export class Enemy extends Phaser.GameObjects.Arc {
       return;
     }
     this.chase(target);
-    if (this.def.behavior === 'commander' && time - this.lastAttack > 1300) {
+    if (this.def.behavior === 'commander' && time - this.lastAttack > this.bossAttackCooldown) {
       this.lastAttack = time;
-      this.showAttackTelegraph(0xd566ff, 86);
+      const phase = this.bossPhase;
+      this.showAttackTelegraph(phase === 3 ? 0xff476f : 0xd566ff, phase === 3 ? 104 : 86);
       const base = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
-      for (let index = -2; index <= 2; index++) fire(this.x, this.y, base + index * 0.22, 260, 14);
+      const spread = phase === 1 ? 2 : phase === 2 ? 3 : 4;
+      for (let index = -spread; index <= spread; index++)
+        fire(this.x, this.y, base + index * 0.2, phase === 3 ? 290 : 260, phase === 3 ? 16 : 14);
     }
   }
   hit(amount: number) {
@@ -114,6 +117,14 @@ export class Enemy extends Phaser.GameObjects.Arc {
   }
   get xpReward() {
     return this.def.xp * (this.elite ? 3 : 1);
+  }
+  get bossPhase() {
+    if (this.enemyType !== EnemyType.BOSS) return 1;
+    const ratio = this.health.current / this.health.max;
+    return ratio <= 0.33 ? 3 : ratio <= 0.66 ? 2 : 1;
+  }
+  private get bossAttackCooldown() {
+    return this.bossPhase === 3 ? 780 : this.bossPhase === 2 ? 1000 : 1300;
   }
   destroy(fromScene?: boolean) {
     this.visual?.destroy();
