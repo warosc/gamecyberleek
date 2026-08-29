@@ -109,5 +109,7 @@ const DESKTOP_HINTS: HintSpec[] = [
 const TOUCH_HINTS: HintSpec[] = [
   { action: 'move', label: 'MOVE', x: 135, y: GAME_HEIGHT - 285, delayMs: 500 },
   { action: 'fire', label: 'AIM  ·  FIRE', x: GAME_WIDTH - 135, y: GAME_HEIGHT - 300, delayMs: 1200 },
-  { action: 'dash', label: 'DASH', x: GAME_WIDTH - 285, y: GAME_HEIGHT - 355, delayMs: 2200 },
+  // Beside the dash pad, not above it: directly above sits the AUTO FIRE toggle, and a hint
+  // there labels the wrong control.
+  { action: 'dash', label: 'DASH', x: GAME_WIDTH - 400, y: GAME_HEIGHT - 285, delayMs: 2200 },
 ];
