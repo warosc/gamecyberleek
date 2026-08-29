@@ -27,7 +27,7 @@ Verification method abbreviations: **T** = automated test, **O** = observed in t
 | Idle breathing, never a static sprite | VERIFIED | O |
 | Idle weight shift and head motion | VERIFIED | T `playerRigPlayback` (2.4 s cycle) + O |
 | Leaf follow-through with spring inertia | VERIFIED | O |
-| Occasional glasses shine | IMPLEMENTED | not isolated in review; fires on an idle timer |
+| Occasional glasses shine | IMPLEMENTED | timed sampling of the lens region was inconclusive; fires on an idle timer |
 | Fallback renderer still works when a layer is missing | IMPLEMENTED | unchanged path, not re-exercised |
 | Silhouette stays readable in every state | VERIFIED | O across idle/walk/dash/attack |
 
@@ -136,7 +136,7 @@ Verification method abbreviations: **T** = automated test, **O** = observed in t
 | Gameplay outcome identical under reduced motion | VERIFIED | all guards are presentation-only |
 | Level-up fully keyboard operable | VERIFIED | O |
 | Haptics failure cannot break the run | VERIFIED | existing callable-value guard |
-| Reduced-motion path exercised end-to-end | **NOT DONE** | no run made with the flag set |
+| Reduced-motion path exercised end-to-end | VERIFIED | O — full run under `reducedMotion: reduce`, `Quality LOW`, no errors, loop alive |
 | Colour-blind readability | **NOT ASSESSED** | tiers lean on colour; shape/size differ too |
 
 ## Replay desire
