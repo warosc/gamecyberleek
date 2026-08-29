@@ -16,6 +16,11 @@ export const GAMEPLAY = {
   eliteStartMs: 45000,
   eliteMaxChance: 0.12,
   eliteAffixWeights: { OVERCHARGED: 55, ARMORED: 25, SWIFT: 20 },
+  eliteAffixWeightsBySector: [
+    { OVERCHARGED: 55, ARMORED: 25, SWIFT: 20 },
+    { OVERCHARGED: 45, ARMORED: 30, SWIFT: 25 },
+    { OVERCHARGED: 35, ARMORED: 35, SWIFT: 30 },
+  ],
 } as const;
 export const COLORS = {
   navy: 0x07111f,

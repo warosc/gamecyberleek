@@ -110,7 +110,7 @@ export class GameScene extends Phaser.Scene {
       maxSize: GAMEPLAY.maxXpOrbs,
       runChildUpdate: false,
     });
-    this.spawn = new SpawnSystem(new EnemyFactory(this), this.enemies);
+    this.spawn = new SpawnSystem(new EnemyFactory(this), this.enemies, this.arenaIndex);
     this.audio = new AudioManager(this);
     this.effects = new CombatEffects(this);
     this.loot = new LootSystem(this, {

@@ -8,6 +8,7 @@ export class SpawnSystem {
   constructor(
     private factory: EnemyFactory,
     private group: Phaser.Physics.Arcade.Group,
+    private readonly sector = 0,
   ) {}
   update(delta: number, player: { x: number; y: number }) {
     this.elapsed += delta;
@@ -41,7 +42,9 @@ export class SpawnSystem {
   }
 
   private rollEliteAffix(): EliteAffix {
-    const weights = GAMEPLAY.eliteAffixWeights;
+    const weights = GAMEPLAY.eliteAffixWeightsBySector[
+      Math.min(this.sector, GAMEPLAY.eliteAffixWeightsBySector.length - 1)
+    ] ?? GAMEPLAY.eliteAffixWeights;
     const total = weights.OVERCHARGED + weights.ARMORED + weights.SWIFT;
     const roll = Math.random() * total;
     if (roll < weights.OVERCHARGED) return 'OVERCHARGED';
