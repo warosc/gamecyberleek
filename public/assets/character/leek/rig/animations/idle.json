@@ -1,44 +1,117 @@
 {
   "name": "idle",
   "loop": true,
-  "durationMs": 1200,
+  "durationMs": 2400,
   "keyframes": [
     {
       "timeMs": 0,
       "layers": {
         "torso": {
-          "y": 0
+          "y": 0,
+          "rotation": 0
+        },
+        "head": {
+          "y": 0,
+          "rotation": 0
+        },
+        "arm-left-upper": {
+          "rotation": 0
+        },
+        "arm-right-upper": {
+          "rotation": 0
+        },
+        "arm-left-fore": {
+          "rotation": 0
+        },
+        "arm-right-fore": {
+          "rotation": 0
         },
         "hair-leaves": {
-          "rotation": -0.01
+          "rotation": 0
         }
       }
     },
     {
-      "timeMs": 600,
+      "timeMs": 800,
       "layers": {
         "torso": {
-          "y": 2
+          "y": 1.1,
+          "rotation": 0.016
         },
         "head": {
-          "y": 1
+          "y": 0.4,
+          "rotation": -0.022
+        },
+        "arm-left-upper": {
+          "rotation": 0.035
+        },
+        "arm-right-upper": {
+          "rotation": -0.03
+        },
+        "arm-left-fore": {
+          "rotation": 0.05
+        },
+        "arm-right-fore": {
+          "rotation": -0.04
         },
         "hair-leaves": {
-          "rotation": 0.015
+          "rotation": 0.03
         }
       }
     },
     {
-      "timeMs": 1200,
+      "timeMs": 1600,
       "layers": {
         "torso": {
-          "y": 0
+          "y": -0.5,
+          "rotation": -0.014
         },
         "head": {
-          "y": 0
+          "y": -0.2,
+          "rotation": 0.018
+        },
+        "arm-left-upper": {
+          "rotation": -0.03
+        },
+        "arm-right-upper": {
+          "rotation": 0.028
+        },
+        "arm-left-fore": {
+          "rotation": -0.04
+        },
+        "arm-right-fore": {
+          "rotation": 0.035
         },
         "hair-leaves": {
-          "rotation": -0.01
+          "rotation": -0.028
+        }
+      }
+    },
+    {
+      "timeMs": 2400,
+      "layers": {
+        "torso": {
+          "y": 0,
+          "rotation": 0
+        },
+        "head": {
+          "y": 0,
+          "rotation": 0
+        },
+        "arm-left-upper": {
+          "rotation": 0
+        },
+        "arm-right-upper": {
+          "rotation": 0
+        },
+        "arm-left-fore": {
+          "rotation": 0
+        },
+        "arm-right-fore": {
+          "rotation": 0
+        },
+        "hair-leaves": {
+          "rotation": 0
         }
       }
     }

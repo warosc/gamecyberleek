@@ -32,12 +32,16 @@ export class SpawnSystem {
             ? EnemyType.RUNNER
             : EnemyType.GRUNT;
     const enemy = this.factory.create(type, x, y);
+    // Both statements are the elite branch. Without the braces `makeElite()` ran
+    // unconditionally, so every spawn from the first second was an elite: the crown and
+    // affix label stopped meaning anything and every grunt carried 2.2x health.
     if (
       this.elapsed > GAMEPLAY.eliteStartMs &&
       Math.random() < Math.min(GAMEPLAY.eliteMaxChance, this.elapsed / 1200000)
-    )
+    ) {
       enemy.eliteAffix = this.rollEliteAffix();
       enemy.makeElite();
+    }
     this.group.add(enemy);
   }
 

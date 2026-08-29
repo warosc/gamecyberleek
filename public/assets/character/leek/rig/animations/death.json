@@ -7,23 +7,70 @@
       "timeMs": 0,
       "layers": {
         "torso": {
-          "rotation": 0
+          "rotation": 0,
+          "y": 0
         }
       }
     },
     {
-      "timeMs": 250,
+      "timeMs": 130,
       "layers": {
         "torso": {
-          "rotation": 0.35,
-          "y": 10
+          "rotation": -0.12,
+          "y": -2.6
         },
         "head": {
-          "rotation": 0.15,
-          "y": 8
+          "rotation": -0.14,
+          "y": -1
         },
         "hair-leaves": {
+          "rotation": -0.2
+        },
+        "thigh-left": {
+          "rotation": 0.08
+        },
+        "thigh-right": {
+          "rotation": -0.08
+        },
+        "arm-left-upper": {
+          "rotation": -0.34
+        },
+        "arm-right-upper": {
+          "rotation": 0.34
+        }
+      }
+    },
+    {
+      "timeMs": 320,
+      "layers": {
+        "torso": {
+          "rotation": 0.42,
+          "y": 8
+        },
+        "head": {
+          "rotation": 0.24,
+          "y": 4
+        },
+        "hair-leaves": {
+          "rotation": 0.4
+        },
+        "thigh-left": {
+          "rotation": -0.3
+        },
+        "thigh-right": {
+          "rotation": -0.16
+        },
+        "leg-left": {
+          "rotation": -0.4
+        },
+        "leg-right": {
           "rotation": 0.2
+        },
+        "arm-left-upper": {
+          "rotation": -0.5
+        },
+        "arm-right-upper": {
+          "rotation": 0.42
         }
       }
     },
@@ -31,20 +78,45 @@
       "timeMs": 700,
       "layers": {
         "torso": {
-          "rotation": 1.35,
-          "y": 45
+          "rotation": 1.28,
+          "y": 26
         },
         "head": {
-          "rotation": 0.8,
-          "y": 35
+          "rotation": 0.5,
+          "y": 6
         },
         "hair-leaves": {
-          "rotation": 0.9
+          "rotation": 0.85
         },
         "glasses": {
-          "rotation": 0.35,
-          "x": 12,
-          "y": 18
+          "rotation": 0.5,
+          "x": 13,
+          "y": 17,
+          "alpha": 0.7
+        },
+        "thigh-left": {
+          "rotation": -0.7
+        },
+        "thigh-right": {
+          "rotation": -0.5
+        },
+        "leg-left": {
+          "rotation": -0.55
+        },
+        "leg-right": {
+          "rotation": 0.45
+        },
+        "arm-left-upper": {
+          "rotation": -0.75
+        },
+        "arm-right-upper": {
+          "rotation": 0.6
+        },
+        "arm-left-fore": {
+          "rotation": -0.3
+        },
+        "arm-right-fore": {
+          "rotation": 0.25
         }
       }
     }
