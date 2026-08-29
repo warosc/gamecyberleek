@@ -10,6 +10,16 @@ transient effects.
 Physical low-end Android/iPhone measurements are not yet available in this environment. The test
 plan in `PERFORMANCE_TEST_PLAN.md` is the required procedure before claiming mobile gains.
 
+## Automated verification (2026-08-29)
+
+- `npm run build`: PASS; Vite reports the known non-fatal ~1.47 MB minified / ~395 KB gzip
+  bundle warning.
+- `npm run lint`: PASS.
+- `npm run test`: PASS; 9 files and 25 tests.
+- `npm run test:e2e`: started all 9 configured scenarios (Chromium, WebKit, mobile WebKit), but
+  the interactive runner exceeded the session capture window before printing its final summary.
+  This is recorded as **inconclusive**, not a pass; rerun it in a full terminal before merging.
+
 ## After optimization
 
 | Metric | Baseline | After | Environment | Status |
