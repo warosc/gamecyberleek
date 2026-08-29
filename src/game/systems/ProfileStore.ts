@@ -52,7 +52,9 @@ export function loadProfile(): PlayerProfile {
     if (!localStorage.getItem(KEY)) persist(profile);
     return profile;
   } catch {
-    return { ...defaults };
+    const recovered = { ...defaults, unlocks: [...defaults.unlocks] };
+    persist(recovered);
+    return recovered;
   }
 }
 
