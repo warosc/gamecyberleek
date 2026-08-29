@@ -12,6 +12,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
   private visual: Phaser.GameObjects.Container;
   private healthBack: Phaser.GameObjects.Rectangle;
   private healthFill: Phaser.GameObjects.Rectangle;
+  private eliteLabel?: Phaser.GameObjects.Text;
   /** Per-enemy offset so the idle pulse of a crowd is desynchronised. */
   private readonly visualOffset = Math.random() * Math.PI * 2;
   private visualPhase = 0;
@@ -110,6 +111,10 @@ export class Enemy extends Phaser.GameObjects.Arc {
     const crown = this.scene.add.graphics().lineStyle(4, affix.color, 0.9).strokeCircle(0, 0, this.def.size + 13);
     crown.setBlendMode(Phaser.BlendModes.ADD);
     this.visual.addAt(crown, 1);
+    this.eliteLabel = this.scene.add.text(this.x, this.y - this.def.size - 24, this.eliteAffix, {
+      fontFamily: 'monospace', fontSize: '9px', color: `#${affix.color.toString(16).padStart(6, '0')}`,
+      stroke: '#020710', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(15);
     return this;
   }
   get contactDamage() {
@@ -130,6 +135,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
     this.visual?.destroy();
     this.healthBack?.destroy();
     this.healthFill?.destroy();
+    this.eliteLabel?.destroy();
     super.destroy(fromScene);
   }
 
@@ -227,6 +233,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y) + Math.PI / 2;
     this.healthBack.setPosition(this.x, this.y - this.def.size - 10);
     this.healthFill.setPosition(this.x - this.def.size, this.y - this.def.size - 10);
+    if (this.eliteLabel) this.eliteLabel.setPosition(this.x, this.y - this.def.size - 24);
   }
 
   private showAttackTelegraph(color: number, radius: number) {
