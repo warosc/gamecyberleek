@@ -1,20 +1,25 @@
 export interface PlayerProfile {
+  schemaVersion: 2;
   runs: number;
   bestLevel: number;
   victories: number;
   bioCredits: number;
   vibration: boolean;
   autoFire: boolean;
+  unlocks: string[];
 }
 
-const KEY = 'leek-ops-profile-v1';
+const KEY = 'leek-ops-profile-v2';
+const LEGACY_KEY = 'leek-ops-profile-v1';
 const defaults: PlayerProfile = {
+  schemaVersion: 2,
   runs: 0,
   bestLevel: 1,
   victories: 0,
   bioCredits: 0,
   vibration: true,
   autoFire: false,
+  unlocks: [],
 };
 
 function validNonNegative(value: unknown, fallback: number) {
@@ -26,17 +31,24 @@ function normalizeProfile(value: unknown): PlayerProfile {
   const raw = value as Partial<PlayerProfile>;
   return {
     runs: Math.floor(validNonNegative(raw.runs, defaults.runs)),
+    schemaVersion: 2,
     bestLevel: Math.max(1, Math.floor(validNonNegative(raw.bestLevel, defaults.bestLevel))),
     victories: Math.floor(validNonNegative(raw.victories, defaults.victories)),
     bioCredits: Math.floor(validNonNegative(raw.bioCredits, defaults.bioCredits)),
     vibration: typeof raw.vibration === 'boolean' ? raw.vibration : defaults.vibration,
     autoFire: typeof raw.autoFire === 'boolean' ? raw.autoFire : defaults.autoFire,
+    unlocks: Array.isArray(raw.unlocks)
+      ? [...new Set(raw.unlocks.filter((id): id is string => typeof id === 'string' && id.length < 64))]
+      : defaults.unlocks,
   };
 }
 
 export function loadProfile(): PlayerProfile {
   try {
-    return normalizeProfile(JSON.parse(localStorage.getItem(KEY) ?? '{}'));
+    const stored = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY) ?? '{}';
+    const profile = normalizeProfile(JSON.parse(stored));
+    if (!localStorage.getItem(KEY)) persist(profile);
+    return profile;
   } catch {
     return { ...defaults };
   }
@@ -70,4 +82,15 @@ export function updateProfile(patch: Partial<PlayerProfile>) {
   const profile = { ...loadProfile(), ...patch };
   persist(profile);
   return profile;
+}
+
+export function unlock(id: string) {
+  const profile = loadProfile();
+  if (!profile.unlocks.includes(id)) profile.unlocks.push(id);
+  persist(profile);
+  return profile;
+}
+
+export function isUnlocked(id: string) {
+  return loadProfile().unlocks.includes(id);
 }
