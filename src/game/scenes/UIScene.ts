@@ -43,6 +43,7 @@ export class UIScene extends Phaser.Scene {
   private specialTexts = new Map<SpecialAbilityId, Phaser.GameObjects.Text>();
   private bossPanel!: Phaser.GameObjects.Container;
   private bossFill!: Phaser.GameObjects.Rectangle;
+  private bossPhaseText!: Phaser.GameObjects.Text;
   private weaponText!: Phaser.GameObjects.Text;
   private weaponSlot!: Phaser.GameObjects.Text;
   private armorSlot!: Phaser.GameObjects.Text;
@@ -160,8 +161,11 @@ export class UIScene extends Phaser.Scene {
         color: '#f4d7ff',
       })
       .setOrigin(0.5);
+    this.bossPhaseText = this.add.text(GAME_WIDTH / 2 + 246, 76, 'PHASE 1', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#d566ff', letterSpacing: 1,
+    }).setOrigin(1, 0.5);
     this.bossPanel = this.add
-      .container(0, 0, [bossBack, this.bossFill, bossName])
+      .container(0, 0, [bossBack, this.bossFill, bossName, this.bossPhaseText])
       .setVisible(false);
     this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 22, GAME_WIDTH - 64, 24, 0x07111f, 0.96)
@@ -401,6 +405,10 @@ export class UIScene extends Phaser.Scene {
   }
   private onBossHealth(current: number, max: number) {
     this.bossFill.width = 510 * (current / max);
+    const ratio = current / max;
+    const phase = ratio <= 0.33 ? 3 : ratio <= 0.66 ? 2 : 1;
+    this.bossPhaseText.setText(`PHASE ${phase}`)
+      .setColor(phase === 3 ? '#ff476f' : phase === 2 ? '#ffb52e' : '#d566ff');
   }
   private showChestRewards() {
     const rewards = [

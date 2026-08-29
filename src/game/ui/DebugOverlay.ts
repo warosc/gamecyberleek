@@ -23,6 +23,8 @@ export class DebugOverlay {
     const displayObjects = this.scene.children.length;
     const tweens = this.scene.tweens.getTweens().length;
     const enemies = this.scene.enemies.countActive(true);
+    const eliteCount = this.scene.enemies.getChildren().filter((object) => (object as { elite?: boolean }).elite).length;
+    const boss = this.scene.enemies.getChildren().find((object) => (object as { enemyType?: string }).enemyType === 'BOSS') as { bossPhase?: number } | undefined;
     const projectiles = this.scene.projectiles.group.countActive(true);
     const enemyProjectiles = this.scene.enemyProjectiles.group.countActive(true);
     const orbs = this.scene.orbs.countActive(true);
@@ -31,6 +33,7 @@ export class DebugOverlay {
       `FPS ${Math.round(this.game.loop.actualFps)}  worst ${Math.round(this.reportedWorstFrameMs)}ms`,
       `Display objs ${displayObjects}  tweens ${tweens}`,
       `Enemies ${enemies}`,
+      `Elites ${eliteCount}${boss?.bossPhase ? `  Boss phase ${boss.bossPhase}` : ''}`,
       `Projectiles ${projectiles}  enemy ${enemyProjectiles}`,
       `XP orbs ${orbs}`,
       `HP ${Math.ceil(this.scene.player.health.current)}/${this.scene.player.health.max}`,
