@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { HealthComponent } from '../../components/HealthComponent';
 import { ELITE_AFFIX_DEFS, ENEMY_DEFS, EnemyType, type EliteAffix } from './EnemyTypes';
+import { GAMEPLAY } from '../../config/Constants';
 
 /** Preserves the original feel: 0.075 rad per frame at 60fps. */
 const PULSE_RADIANS_PER_MS = 0.075 * 0.06;
@@ -10,6 +11,12 @@ export class Enemy extends Phaser.GameObjects.Arc {
   lastContact = 0;
   private lastAttack = -9999;
   private bossAttackSequence = 0;
+  /**
+   * A shot that has been telegraphed but not yet fired. Scheduled on gameplay time rather than
+   * through `scene.time`, so a telegraph cannot resolve while the run is paused or a level-up
+   * modal is open.
+   */
+  private pendingAttack?: { at: number; release: () => void };
   private visual: Phaser.GameObjects.Container;
   private healthBack: Phaser.GameObjects.Rectangle;
   private healthFill: Phaser.GameObjects.Rectangle;
@@ -57,6 +64,11 @@ export class Enemy extends Phaser.GameObjects.Arc {
     // Derived from gameplay time, not incremented per frame: a fixed step made the pulse
     // run at the display refresh rate, so a 165Hz screen animated ~2.75x faster than 60Hz.
     this.visualPhase = this.visualOffset + time * PULSE_RADIANS_PER_MS;
+    if (this.pendingAttack && time >= this.pendingAttack.at) {
+      const release = this.pendingAttack.release;
+      this.pendingAttack = undefined;
+      release();
+    }
     const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y);
     if (this.def.behavior === 'kite') {
       if (distance > 390) this.scene.physics.moveToObject(this, target, this.def.speed * this.eliteMultiplier);
@@ -69,14 +81,20 @@ export class Enemy extends Phaser.GameObjects.Arc {
       else (this.body as Phaser.Physics.Arcade.Body).setVelocity(0);
       if (time - this.lastAttack > 1450 && distance < 560) {
         this.lastAttack = time;
-        this.showAttackTelegraph(0xff9a72, 34);
-        fire(
-          this.x,
-          this.y,
-          Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y),
-          310,
-          10,
-        );
+        this.showAttackTelegraph(0xff9a72, 34, GAMEPLAY.telegraphLeadMs.shooter);
+        // Aim is resolved when the shot is released, not when the warning appears, so moving
+        // during the telegraph is a dodge rather than a coin flip.
+        this.pendingAttack = {
+          at: time + GAMEPLAY.telegraphLeadMs.shooter,
+          release: () =>
+            fire(
+              this.x,
+              this.y,
+              Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y),
+              310,
+              10,
+            ),
+        };
       }
       this.syncVisual(target);
       return;
@@ -85,18 +103,30 @@ export class Enemy extends Phaser.GameObjects.Arc {
     if (this.def.behavior === 'commander' && time - this.lastAttack > this.bossAttackCooldown) {
       this.lastAttack = time;
       const phase = this.bossPhase;
-      this.showAttackTelegraph(phase === 3 ? 0xff476f : 0xd566ff, phase === 3 ? 104 : 86);
-      const base = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
       this.bossAttackSequence++;
       const radialPhaseTwo = phase === 2 && this.bossAttackSequence % 2 === 0;
-      if (radialPhaseTwo) {
-        for (let index = 0; index < 8; index++)
-          fire(this.x, this.y, (Math.PI * 2 * index) / 8, 240, 13);
-      } else {
-        const spread = phase === 1 ? 2 : phase === 2 ? 3 : 4;
-        for (let index = -spread; index <= spread; index++)
-          fire(this.x, this.y, base + index * 0.2, phase === 3 ? 290 : 260, phase === 3 ? 16 : 14);
-      }
+      // The two patterns are told apart before they land: the radial burst rings the boss,
+      // the spread cone points at where it is about to shoot.
+      this.showAttackTelegraph(
+        phase === 3 ? 0xff476f : 0xd566ff,
+        phase === 3 ? 104 : 86,
+        GAMEPLAY.telegraphLeadMs.boss,
+        radialPhaseTwo ? undefined : Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y),
+      );
+      this.pendingAttack = {
+        at: time + GAMEPLAY.telegraphLeadMs.boss,
+        release: () => {
+          const base = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
+          if (radialPhaseTwo) {
+            for (let index = 0; index < 8; index++)
+              fire(this.x, this.y, (Math.PI * 2 * index) / 8, 240, 13);
+          } else {
+            const spread = phase === 1 ? 2 : phase === 2 ? 3 : 4;
+            for (let index = -spread; index <= spread; index++)
+              fire(this.x, this.y, base + index * 0.2, phase === 3 ? 290 : 260, phase === 3 ? 16 : 14);
+          }
+        },
+      };
     }
   }
   hit(amount: number, critical = false) {
@@ -279,18 +309,53 @@ export class Enemy extends Phaser.GameObjects.Arc {
     if (this.eliteLabel) this.eliteLabel.setPosition(this.x, this.y - this.def.size - 24);
   }
 
-  private showAttackTelegraph(color: number, radius: number) {
+  /**
+   * Warning drawn before the shot is released. The ring contracts inward over the lead time so
+   * its collapse marks the moment of the attack, which is readable at a glance; a ring that
+   * expanded and faded gave the player no way to time the release.
+   */
+  private showAttackTelegraph(color: number, radius: number, leadMs: number, aim?: number) {
     const ring = this.scene.add
       .circle(this.x, this.y, radius, color, 0.08)
       .setStrokeStyle(3, color, 0.95)
+      .setScale(1.6)
       .setDepth(14);
     this.scene.tweens.add({
       targets: ring,
-      scale: 1.35,
-      alpha: 0,
-      duration: 220,
-      ease: 'Quad.Out',
-      onComplete: () => ring.destroy(),
+      scale: 0.85,
+      alpha: { from: 0.35, to: 1 },
+      duration: leadMs,
+      ease: 'Quad.In',
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: ring,
+          scale: 1.35,
+          alpha: 0,
+          duration: 180,
+          ease: 'Quad.Out',
+          onComplete: () => ring.destroy(),
+        });
+      },
+    });
+    if (aim === undefined) return;
+    // A cone along the firing line, so a directed volley is distinguishable from a radial one.
+    const cone = this.scene.add
+      .triangle(this.x, this.y, 0, -radius * 0.42, 0, radius * 0.42, radius * 2.1, 0, color, 0.16)
+      .setRotation(aim)
+      .setDepth(13);
+    this.scene.tweens.add({
+      targets: cone,
+      alpha: 0.42,
+      duration: leadMs,
+      ease: 'Quad.In',
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: cone,
+          alpha: 0,
+          duration: 150,
+          onComplete: () => cone.destroy(),
+        });
+      },
     });
   }
 }

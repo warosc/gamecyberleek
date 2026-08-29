@@ -239,8 +239,11 @@ export class Player extends Phaser.GameObjects.Container {
       source: 'enemy',
       armorReduction: this.stats.damageReduction,
     });
-    if (this.health.damage(Math.max(1, hit.amount))) {
-      this.scene.events.emit(Events.PLAYER_DAMAGED, this.health.current, this.health.max);
+    const applied = Math.max(1, hit.amount);
+    if (this.health.damage(applied)) {
+      // The third argument is the damage actually applied after armor. Heals emit the same
+      // event without it, so a listener can tell a hit from a repair.
+      this.scene.events.emit(Events.PLAYER_DAMAGED, this.health.current, this.health.max, applied);
       this.animator.hurt(this.gameplayTime);
       this.setAlpha(0.45);
       this.scene.time.delayedCall(90, () => this.setAlpha(1));

@@ -13,6 +13,9 @@ export const GAMEPLAY = {
   maxTransientEffects: 180,
   spawnBaseIntervalMs: 900,
   spawnMinimumIntervalMs: 260,
+  // Warning shown before a shot actually leaves the enemy. Section 13 of the product brief:
+  // a dangerous attack has to communicate before it damages, and the lead has to stay tunable.
+  telegraphLeadMs: { shooter: 260, boss: 400 },
   eliteStartMs: 45000,
   eliteMaxChance: 0.12,
   eliteAffixWeights: { OVERCHARGED: 55, ARMORED: 25, SWIFT: 20 },

@@ -22,6 +22,7 @@ import { LootSystem } from '../systems/LootSystem';
 import { EncounterSystem } from '../systems/EncounterSystem';
 import { RunEndSystem } from '../systems/RunEndSystem';
 import { ImpactPresenter } from '../presentation/ImpactPresenter';
+import { RunTelemetry } from '../systems/RunTelemetry';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -55,6 +56,7 @@ export class GameScene extends Phaser.Scene {
   equippedArmor = 'SIN ARMADURA';
   private effects!: CombatEffects;
   private impacts!: ImpactPresenter;
+  telemetry = new RunTelemetry();
   private worldProps!: ExplosiveBarrelSystem;
   private loot!: LootSystem;
   private encounters!: EncounterSystem;
@@ -62,7 +64,11 @@ export class GameScene extends Phaser.Scene {
   private lastBossPhase = 1;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
+  private readonly handlePlayerDamaged = (_current: number, _max: number, applied?: number) => {
+    if (applied) this.telemetry.tookDamage(applied);
+  };
   private readonly handleBossSpawned = () => {
+    this.telemetry.bossSpawned();
     this.audio.play('boss_spawn');
     if (this.state === GameState.PLAYING) {
       this.state = GameState.BOSS;
@@ -71,6 +77,7 @@ export class GameScene extends Phaser.Scene {
   };
   private readonly handlePlayerDashed = () => this.audio.play('dash');
   private readonly handleWeaponFired = (x: number, y: number, angle: number) => {
+    this.telemetry.shotFired();
     this.audio.play('weapon_fire');
     this.effects.muzzle(x, y, angle);
   };
@@ -96,6 +103,7 @@ export class GameScene extends Phaser.Scene {
     this.pendingEquipmentDrop = false;
     this.lastBossPhase = 1;
     this.deaths = new EnemyDeathResolver();
+    this.telemetry = new RunTelemetry();
     this.mobileInput.movement.set(0, 0);
     this.mobileInput.aim.set(1, 0);
     this.mobileInput.firing = false;
@@ -128,6 +136,7 @@ export class GameScene extends Phaser.Scene {
       onEquipmentChanged: (weapon, armor) => {
         this.equippedWeapon = weapon;
         this.equippedArmor = armor;
+        this.telemetry.equipped(weapon);
       },
     });
     this.chests = this.loot.chests;
@@ -170,6 +179,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.lootDrops, (_, loot) =>
       this.collectEquipment(loot as Phaser.GameObjects.GameObject),
     );
+    this.events.on(Events.PLAYER_DAMAGED, this.handlePlayerDamaged);
     this.events.on(Events.PLAYER_DIED, this.handlePlayerDied);
     this.events.on(Events.BOSS_SPAWNED, this.handleBossSpawned);
     this.events.on('weapon-fired', this.handleWeaponFired);
@@ -186,6 +196,7 @@ export class GameScene extends Phaser.Scene {
     // (ArcadePhysics.start among them) and the next run boots with a null physics world.
     // The keyboard plugin clears its own keys and listeners in its shutdown.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Events.PLAYER_DAMAGED, this.handlePlayerDamaged);
       this.events.off(Events.PLAYER_DIED, this.handlePlayerDied);
       this.events.off(Events.BOSS_SPAWNED, this.handleBossSpawned);
       this.events.off('weapon-fired', this.handleWeaponFired);
@@ -252,6 +263,7 @@ export class GameScene extends Phaser.Scene {
     if (p.hitsRemaining > 0) p.hitsRemaining--;
     else p.disableBody(true, true);
     const boss = e.enemyType === EnemyType.BOSS;
+    this.telemetry.dealtDamage(p.damage);
     const fatal = e.hit(p.damage, p.critical);
     // One tier drives spark, damage number, camera and audio together, so a critical on an
     // elite cannot end up feeling identical to chipping a grunt.
@@ -336,6 +348,7 @@ export class GameScene extends Phaser.Scene {
     const level = (this.abilityLevels.get(id) ?? 0) + 1;
     if (level > ability.maxLevel) return;
     this.abilityLevels.set(id, level);
+    this.telemetry.choseUpgrade(id);
     ability.apply(this.player.stats, level);
     if (id === 'core') {
       this.player.health.max = this.player.stats.maxHp;
@@ -388,6 +401,7 @@ export class GameScene extends Phaser.Scene {
     const ability = SPECIAL_ABILITIES.find((definition) => definition.id === id)!;
     if (time - this.specialLastUsed[id] < ability.cooldown) return;
     this.specialLastUsed[id] = time;
+    this.telemetry.usedAbility(id);
     if (id === 'nova') this.activateNova();
     else if (id === 'shield') {
       this.player.activateShield(3000);
@@ -431,6 +445,7 @@ export class GameScene extends Phaser.Scene {
       const x = enemy.x;
       const y = enemy.y;
       const damage = Math.round(this.player.stats.attackDamage * 1.75);
+      this.telemetry.dealtDamage(damage);
       if (enemy.hit(damage)) {
         this.resolveEnemyDeath(enemy);
       }
@@ -473,6 +488,7 @@ export class GameScene extends Phaser.Scene {
   private gameOver(victory: boolean) {
     if (this.state === GameState.GAME_OVER || this.state === GameState.VICTORY) return;
     this.state = victory ? GameState.VICTORY : GameState.GAME_OVER;
+    this.telemetry.finish(this.survivalMs, this.xp.level, victory ? 'victory' : 'death');
     this.audio.play(victory ? 'victory' : 'game_over');
     this.physics.pause();
     this.runEnd.finish({
@@ -487,6 +503,7 @@ export class GameScene extends Phaser.Scene {
     this.enemies.getChildren().forEach((object) => {
       const enemy = object as Enemy;
       if (!enemy.active || enemy === ignored || Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y) > radius) return;
+      this.telemetry.dealtDamage(damage);
       if (enemy.hit(Math.round(damage))) {
         this.resolveEnemyDeath(enemy);
       }
@@ -499,6 +516,8 @@ export class GameScene extends Phaser.Scene {
     const defeat = this.deaths.resolve(enemy);
     if (!defeat) return;
     this.events.emit(Events.ENEMY_DIED);
+    this.telemetry.killed();
+    if (defeat.boss) this.telemetry.bossKilled();
     this.impacts.death(
       defeat.x,
       defeat.y,

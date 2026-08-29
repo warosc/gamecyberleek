@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
+import { recordRestart } from '../systems/RunTelemetry';
 
 const BUTTON_WIDTH = 270;
 const BUTTON_GAP = 20;
@@ -61,7 +62,13 @@ export class GameOverScene extends Phaser.Scene {
       this.navigating = true;
       this.scene.start(key, sceneData);
     };
-    const redeploy = go('Game', { arenaIndex: nextArenaIndex });
+    const start = go('Game', { arenaIndex: nextArenaIndex });
+    const redeploy = () => {
+      // Restart rate is the alpha's primary behavioural KPI, so the choice to go again is
+      // recorded against the run the player just finished.
+      recordRestart();
+      start();
+    };
     const mainMenu = go('Menu');
 
     const offset = (BUTTON_WIDTH + BUTTON_GAP) / 2;

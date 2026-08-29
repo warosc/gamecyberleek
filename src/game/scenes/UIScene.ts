@@ -10,6 +10,7 @@ import { DebugOverlay } from '../ui/DebugOverlay';
 import { ModalOverlay } from '../ui/ModalOverlay';
 import { MobileControls } from '../ui/MobileControls';
 import { RewardChooser } from '../ui/RewardChooser';
+import { OnboardingHints } from '../ui/OnboardingHints';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -41,6 +42,7 @@ export class UIScene extends Phaser.Scene {
   private modal!: ModalOverlay;
   private mobileControls?: MobileControls;
   private chooser?: RewardChooser;
+  private hints?: OnboardingHints;
   private specialFills = new Map<SpecialAbilityId, Phaser.GameObjects.Rectangle>();
   private specialTexts = new Map<SpecialAbilityId, Phaser.GameObjects.Text>();
   private bossPanel!: Phaser.GameObjects.Container;
@@ -53,6 +55,8 @@ export class UIScene extends Phaser.Scene {
   private xpTargetWidth = 0;
   private xpRatio = 0;
   private hpTargetWidth = 240;
+  private bossTargetWidth = 510;
+  private bossPhaseShown = 1;
   constructor() {
     super('UI');
   }
@@ -154,20 +158,22 @@ export class UIScene extends Phaser.Scene {
       fontFamily: 'Arial Black', fontSize: '11px', color: '#73ef62',
       backgroundColor: '#06101ddd', padding: { x: 10, y: 7 },
     }).setOrigin(0, 0);
+    // Sits below the run clock and the weapon readout rather than across them: at y=88 the
+    // boss bar covered both the moment the encounter that most needs a clock began.
     const bossBack = this.add
-      .rectangle(GAME_WIDTH / 2, 88, 540, 48, 0x100817, 0.95)
+      .rectangle(GAME_WIDTH / 2, 126, 540, 48, 0x100817, 0.95)
       .setStrokeStyle(3, 0xd566ff, 0.85);
     this.bossFill = this.add
-      .rectangle(GAME_WIDTH / 2 - 255, 98, 510, 15, 0x9d36d6)
+      .rectangle(GAME_WIDTH / 2 - 255, 136, 510, 15, 0x9d36d6)
       .setOrigin(0, 0.5);
     const bossName = this.add
-      .text(GAME_WIDTH / 2, 76, 'BROCCOLI COMMANDER', {
+      .text(GAME_WIDTH / 2, 114, 'BROCCOLI COMMANDER', {
         fontFamily: 'Arial Black',
         fontSize: '15px',
         color: '#f4d7ff',
       })
       .setOrigin(0.5);
-    this.bossPhaseText = this.add.text(GAME_WIDTH / 2 + 246, 76, 'PHASE 1', {
+    this.bossPhaseText = this.add.text(GAME_WIDTH / 2 + 246, 114, 'PHASE 1', {
       fontFamily: 'monospace', fontSize: '11px', color: '#d566ff', letterSpacing: 1,
     }).setOrigin(1, 0.5);
     this.bossPanel = this.add
@@ -259,6 +265,10 @@ export class UIScene extends Phaser.Scene {
         })
         .setOrigin(1, 0);
     if (this.debug) this.debugOverlay = new DebugOverlay(this.game, this.gameScene, this.debug);
+    this.hints = new OnboardingHints(this);
+    this.hints.create(loadProfile().runs, this.gameScene.mobileInput.active);
+    this.gameScene.events.on('weapon-fired', this.onWeaponFired, this);
+    this.gameScene.events.on(Events.PLAYER_DASHED, this.onDashed, this);
     this.gameScene.events.on(Events.PLAYER_DAMAGED, this.onHealth, this);
     this.gameScene.events.on(Events.XP_COLLECTED, this.onXp, this);
     this.gameScene.events.on(Events.PLAYER_LEVEL_UP, this.showAbilities, this);
@@ -271,6 +281,9 @@ export class UIScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.closeModal();
       this.mobileControls?.destroy();
+      this.hints?.destroy();
+      this.gameScene.events.off('weapon-fired', this.onWeaponFired, this);
+      this.gameScene.events.off(Events.PLAYER_DASHED, this.onDashed, this);
       this.gameScene.events.off(Events.PLAYER_DAMAGED, this.onHealth, this);
       this.gameScene.events.off(Events.XP_COLLECTED, this.onXp, this);
       this.gameScene.events.off(Events.PLAYER_LEVEL_UP, this.showAbilities, this);
@@ -292,12 +305,17 @@ export class UIScene extends Phaser.Scene {
     const ease = 1 - Math.exp(-delta / 90);
     this.xpFill.width += (this.xpTargetWidth - this.xpFill.width) * ease;
     this.hpFill.width += (this.hpTargetWidth - this.hpFill.width) * ease;
+    if (this.bossPanel.visible)
+      this.bossFill.width += (this.bossTargetWidth - this.bossFill.width) * ease;
     // Anticipation: the bar starts breathing once a level-up is within reach.
     const imminent = this.xpRatio >= 0.85;
     this.xpFill.setFillStyle(
       imminent ? 0xd4ff7a : 0x73ef62,
       imminent ? 0.75 + Math.sin(this.gameScene.survivalMs * 0.012) * 0.25 : 1,
     );
+    const body = this.gameScene.player.body as Phaser.Physics.Arcade.Body | null;
+    if (body && body.velocity.lengthSq() > 100) this.hints?.satisfy('move');
+    this.hints?.update(delta);
     const dashCharge = this.gameScene.player.getDashCharge();
     this.energyFill.width = 240 * dashCharge;
     this.energyFill.setFillStyle(dashCharge >= 1 ? 0x21e6ff : 0x17649a);
@@ -312,6 +330,14 @@ export class UIScene extends Phaser.Scene {
         .setText(charge >= 1 ? 'READY' : `${Math.ceil((ability.cooldown * (1 - charge)) / 1000)}s`);
     }
     this.debugOverlay?.update(delta);
+  }
+  private onWeaponFired() {
+    // Firing implies aiming, so one shot retires both prompts.
+    this.hints?.satisfy('fire');
+    this.hints?.satisfy('aim');
+  }
+  private onDashed() {
+    this.hints?.satisfy('dash');
   }
   private onHealth(current: number, max: number) {
     if (current < max && loadProfile().vibration) pulseHaptics(35);
@@ -408,14 +434,69 @@ export class UIScene extends Phaser.Scene {
 
   private onBossSpawned() {
     this.bossPanel.setVisible(true);
+    this.bossPanel.setScale(1, 0.2);
+    this.bossTargetWidth = 510;
+    this.bossFill.width = 510;
+    this.bossPhaseShown = 1;
+    this.tweens.add({ targets: this.bossPanel, scaleY: 1, duration: 320, ease: 'Back.Out' });
     this.cameras.main.flash(280, 95, 15, 120);
+    // The arrival of the only boss in the run should not be a health bar quietly appearing.
+    const banner = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40).setDepth(120);
+    const plate = this.add.rectangle(0, 0, 720, 96, 0x100817, 0.94).setStrokeStyle(3, 0xd566ff, 0.9);
+    const title = this.add
+      .text(0, -14, 'BROCCOLI COMMANDER', {
+        fontFamily: 'Arial Black', fontSize: '38px', color: '#f4d7ff',
+        stroke: '#1a0326', strokeThickness: 6,
+      })
+      .setOrigin(0.5);
+    const subtitle = this.add
+      .text(0, 26, 'SECTOR THREAT DETECTED', {
+        fontFamily: 'Arial Black', fontSize: '13px', color: '#d566ff', letterSpacing: 5,
+      })
+      .setOrigin(0.5);
+    banner.add([plate, title, subtitle]);
+    banner.setAlpha(0).setScale(0.85);
+    this.tweens.add({
+      targets: banner,
+      alpha: 1,
+      scale: 1,
+      duration: 300,
+      ease: 'Back.Out',
+      hold: 1400,
+      yoyo: true,
+      onComplete: () => banner.destroy(),
+    });
   }
   private onBossHealth(current: number, max: number) {
-    this.bossFill.width = 510 * (current / max);
-    const ratio = current / max;
+    const ratio = Phaser.Math.Clamp(current / max, 0, 1);
+    this.bossTargetWidth = 510 * ratio;
     const phase = ratio <= 0.33 ? 3 : ratio <= 0.66 ? 2 : 1;
     this.bossPhaseText.setText(`PHASE ${phase}`)
       .setColor(phase === 3 ? '#ff476f' : phase === 2 ? '#ffb52e' : '#d566ff');
+    if (phase === this.bossPhaseShown) return;
+    // A phase change alters how the boss attacks, so it has to be impossible to miss.
+    this.bossPhaseShown = phase;
+    this.bossPhaseText.setScale(1);
+    this.tweens.add({ targets: this.bossPhaseText, scale: 1.9, duration: 180, yoyo: true });
+    this.tweens.add({ targets: this.bossPanel, scaleX: 1.04, duration: 140, yoyo: true });
+    const flash = this.add
+      .text(GAME_WIDTH / 2, 208, `PHASE ${phase}`, {
+        fontFamily: 'Arial Black', fontSize: '44px',
+        color: phase === 3 ? '#ff476f' : '#ffb52e',
+        stroke: '#1a0326', strokeThickness: 7,
+      })
+      .setOrigin(0.5)
+      .setDepth(120)
+      .setAlpha(0);
+    this.tweens.add({
+      targets: flash,
+      alpha: 1,
+      y: 188,
+      duration: 220,
+      hold: 700,
+      yoyo: true,
+      onComplete: () => flash.destroy(),
+    });
   }
   private showChestRewards() {
     const rewards = [
