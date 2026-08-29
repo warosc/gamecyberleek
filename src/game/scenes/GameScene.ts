@@ -57,6 +57,7 @@ export class GameScene extends Phaser.Scene {
   private loot!: LootSystem;
   private encounters!: EncounterSystem;
   private runEnd!: RunEndSystem;
+  private lastBossPhase = 1;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
   private readonly handleBossSpawned = () => {
@@ -89,6 +90,7 @@ export class GameScene extends Phaser.Scene {
     this.specialLastUsed = { nova: -99999, shield: -99999, overdrive: -99999 };
     this.nextChestAt = GAMEPLAY.chestFirstMs;
     this.pendingEquipmentDrop = false;
+    this.lastBossPhase = 1;
     this.deaths = new EnemyDeathResolver();
     this.mobileInput.movement.set(0, 0);
     this.mobileInput.aim.set(1, 0);
@@ -206,11 +208,18 @@ export class GameScene extends Phaser.Scene {
     if (!this.encounters.hasBossSpawned) this.spawn.update(delta, this.player);
     this.enemies
       .getChildren()
-      .forEach((object) =>
-        (object as Enemy).updateBehavior(this.player, this.survivalMs, (x, y, angle, speed, damage) =>
+      .forEach((object) => {
+        const enemy = object as Enemy;
+        if (enemy.enemyType === EnemyType.BOSS && enemy.bossPhase !== this.lastBossPhase) {
+          this.lastBossPhase = enemy.bossPhase;
+          this.cameras.main.flash(180, 213, 102, 255, false);
+          this.cameras.main.shake(220, 0.008);
+          this.audio.tone(enemy.bossPhase === 3 ? 120 : 180, 0.16, 0.035, 'ui');
+        }
+        enemy.updateBehavior(this.player, this.survivalMs, (x, y, angle, speed, damage) =>
           this.enemyProjectiles.fire(x, y, angle, speed, damage, this.survivalMs),
-        ),
-      );
+        );
+      });
     this.orbs.getChildren().forEach((o) => {
       const orb = o as ExperienceOrb;
       if (
