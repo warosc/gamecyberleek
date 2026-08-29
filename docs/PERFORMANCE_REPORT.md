@@ -20,6 +20,11 @@ plan in `PERFORMANCE_TEST_PLAN.md` is the required procedure before claiming mob
   the interactive runner exceeded the session capture window before printing its final summary.
   This is recorded as **inconclusive**, not a pass; rerun it in a full terminal before merging.
 
+Telemetry captured while the Chromium scenario was running produced 167 performance samples:
+average 30.3 FPS, minimum 13 FPS, maximum 60 FPS, and a worst observed frame of 91 ms. This is
+an automated/headless baseline only (likely software rendering), not evidence of physical mobile
+performance and not a reason to lower gameplay budgets.
+
 ## After optimization
 
 | Metric | Baseline | After | Environment | Status |
