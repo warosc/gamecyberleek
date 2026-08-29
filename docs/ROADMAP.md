@@ -115,10 +115,14 @@ implementation target is the original audio mixer, followed by a focused HUD/UI 
 
 ## PHASE D — More enemies and boss behavior
 
-- Data-driven enemy behaviors and elite affixes.
-- Multi-phase Broccoli Commander encounter.
-- Additional enemies only through profiled budgets.
-- Explicit BOSS and VICTORY state transitions.
+- [x] Data-driven enemy behaviors and weighted elite affixes.
+- [x] Three-phase Broccoli Commander encounter with alternating attack patterns.
+- [x] Additional content gated by profiled budgets and sector-specific weights.
+- [x] Explicit BOSS and VICTORY state transitions.
+
+Phase D core architecture is complete. New enemy families remain a content task behind the
+existing 80-enemy/90-player-projectile/100-enemy-projectile budgets; they should be introduced
+only after a recorded low-end mobile profile confirms headroom.
 
 ## PHASE E — Run progression and balance
 
