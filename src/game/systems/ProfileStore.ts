@@ -1,3 +1,5 @@
+import { UNLOCKS } from './UnlockRegistry';
+
 export interface PlayerProfile {
   schemaVersion: 2;
   runs: number;
@@ -74,6 +76,10 @@ export function saveRun(level: number, victory: boolean) {
   profile.bestLevel = Math.max(profile.bestLevel, level);
   profile.victories += Number(victory);
   profile.bioCredits += level * 5 + (victory ? 100 : 0);
+  for (const definition of UNLOCKS) {
+    if (!profile.unlocks.includes(definition.id) && definition.requirement(profile))
+      profile.unlocks.push(definition.id);
+  }
   persist(profile);
   return profile;
 }
