@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { HealthComponent } from '../../components/HealthComponent';
-import { ENEMY_DEFS, EnemyType } from './EnemyTypes';
+import { ELITE_AFFIX_DEFS, ENEMY_DEFS, EnemyType, type EliteAffix } from './EnemyTypes';
 
 /** Preserves the original feel: 0.075 rad per frame at 60fps. */
 const PULSE_RADIANS_PER_MS = 0.075 * 0.06;
@@ -16,6 +16,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
   private readonly visualOffset = Math.random() * Math.PI * 2;
   private visualPhase = 0;
   elite = false;
+  eliteAffix: EliteAffix = 'OVERCHARGED';
   private eliteMultiplier = 1;
   constructor(
     scene: Phaser.Scene,
@@ -55,7 +56,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
     // run at the display refresh rate, so a 165Hz screen animated ~2.75x faster than 60Hz.
     this.visualPhase = this.visualOffset + time * PULSE_RADIANS_PER_MS;
     const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y);
-    if (this.enemyType === EnemyType.SHOOTER) {
+    if (this.def.behavior === 'kite') {
       if (distance > 390) this.scene.physics.moveToObject(this, target, this.def.speed * this.eliteMultiplier);
       else if (distance < 230)
         this.scene.physics.velocityFromRotation(
@@ -79,7 +80,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       return;
     }
     this.chase(target);
-    if (this.enemyType === EnemyType.BOSS && time - this.lastAttack > 1300) {
+    if (this.def.behavior === 'commander' && time - this.lastAttack > 1300) {
       this.lastAttack = time;
       this.showAttackTelegraph(0xd566ff, 86);
       const base = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
@@ -99,16 +100,17 @@ export class Enemy extends Phaser.GameObjects.Arc {
   makeElite() {
     if (this.enemyType === EnemyType.BOSS || this.elite) return this;
     this.elite = true;
-    this.eliteMultiplier = 1.28;
-    this.health.max = Math.round(this.health.max * 2.2);
+    const affix = ELITE_AFFIX_DEFS[this.eliteAffix];
+    this.eliteMultiplier = affix.speedMultiplier;
+    this.health.max = Math.round(this.health.max * affix.healthMultiplier);
     this.health.current = this.health.max;
-    const crown = this.scene.add.graphics().lineStyle(4, 0xffb52e, 0.9).strokeCircle(0, 0, this.def.size + 13);
+    const crown = this.scene.add.graphics().lineStyle(4, affix.color, 0.9).strokeCircle(0, 0, this.def.size + 13);
     crown.setBlendMode(Phaser.BlendModes.ADD);
     this.visual.addAt(crown, 1);
     return this;
   }
   get contactDamage() {
-    return this.def.damage * (this.elite ? 1.45 : 1);
+    return this.def.damage * (this.elite ? ELITE_AFFIX_DEFS[this.eliteAffix].damageMultiplier : 1);
   }
   get xpReward() {
     return this.def.xp * (this.elite ? 3 : 1);
