@@ -543,7 +543,7 @@ export class UIScene extends Phaser.Scene {
         fontFamily: 'monospace', fontSize: '12px', color: '#7594a8', letterSpacing: 2,
       }).setOrigin(0.5));
       this.modal.replace(parts, 100);
-    } else if (state === GameState.PLAYING && this.modal.active) {
+    } else if ((state === GameState.PLAYING || state === GameState.BOSS) && this.modal.active) {
       this.modal.clear();
     }
   }

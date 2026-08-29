@@ -28,6 +28,8 @@ export enum GameState {
   PLAYING = 'PLAYING',
   PAUSED = 'PAUSED',
   LEVEL_UP = 'LEVEL_UP',
+  BOSS = 'BOSS',
+  VICTORY = 'VICTORY',
   GAME_OVER = 'GAME_OVER',
 }
 export const Events = {

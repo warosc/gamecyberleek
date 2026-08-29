@@ -59,6 +59,12 @@ export class GameScene extends Phaser.Scene {
   private runEnd!: RunEndSystem;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
+  private readonly handleBossSpawned = () => {
+    if (this.state === GameState.PLAYING) {
+      this.state = GameState.BOSS;
+      this.events.emit(Events.STATE_CHANGED, this.state);
+    }
+  };
   private readonly handleWeaponFired = (x: number, y: number, angle: number) => {
     this.audio.tone(240, 0.025, 0.015);
     this.effects.muzzle(x, y, angle);
@@ -158,6 +164,7 @@ export class GameScene extends Phaser.Scene {
       this.collectEquipment(loot as Phaser.GameObjects.GameObject),
     );
     this.events.on(Events.PLAYER_DIED, this.handlePlayerDied);
+    this.events.on(Events.BOSS_SPAWNED, this.handleBossSpawned);
     this.events.on('weapon-fired', this.handleWeaponFired);
     this.input.keyboard!.on('keydown-ESC', this.handleEscape);
     if (import.meta.env.VITE_DEBUG_GAME === 'true') {
@@ -170,6 +177,7 @@ export class GameScene extends Phaser.Scene {
     // The keyboard plugin clears its own keys and listeners in its shutdown.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.events.off(Events.PLAYER_DIED, this.handlePlayerDied);
+      this.events.off(Events.BOSS_SPAWNED, this.handleBossSpawned);
       this.events.off('weapon-fired', this.handleWeaponFired);
       this.input.keyboard?.off('keydown-ESC', this.handleEscape);
     });
@@ -177,7 +185,7 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(Events.STATE_CHANGED, this.state);
   }
   update(_time: number, delta: number) {
-    if (this.state !== GameState.PLAYING) return;
+    if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
     this.survivalMs += delta;
     this.encounters.update(this.survivalMs);
     if (this.survivalMs >= this.nextChestAt && !this.encounters.hasBossSpawned) {
@@ -313,7 +321,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (id === 'overdrive') this.player.activateOverdrive(10000 + level * 2000);
     this.audio.tone(760, 0.15, 0.04);
-    this.state = GameState.PLAYING;
+    this.state = this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
     this.physics.resume();
     this.events.emit(Events.ABILITY_SELECTED, id);
     this.events.emit(Events.STATE_CHANGED, this.state);
@@ -334,7 +342,7 @@ export class GameScene extends Phaser.Scene {
       this.specialLastUsed = { nova: -99999, shield: -99999, overdrive: -99999 };
       this.player.activateShield(1800);
     } else this.player.stats.attackDamage += 6;
-    this.state = GameState.PLAYING;
+    this.state = this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
     this.physics.resume();
     this.events.emit(Events.STATE_CHANGED, this.state);
   }
@@ -353,7 +361,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
   activateSpecial(id: SpecialAbilityId, time = this.survivalMs) {
-    if (this.state !== GameState.PLAYING) return;
+    if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
     const ability = SPECIAL_ABILITIES.find((definition) => definition.id === id)!;
     if (time - this.specialLastUsed[id] < ability.cooldown) return;
     this.specialLastUsed[id] = time;
@@ -406,7 +414,9 @@ export class GameScene extends Phaser.Scene {
   togglePause() {
     if (this.state === GameState.LEVEL_UP || this.state === GameState.GAME_OVER) return;
     this.pausedByEsc = !this.pausedByEsc;
-    this.state = this.pausedByEsc ? GameState.PAUSED : GameState.PLAYING;
+    this.state = this.pausedByEsc
+      ? GameState.PAUSED
+      : this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
     if (this.pausedByEsc) this.physics.pause();
     else this.physics.resume();
     this.events.emit(Events.STATE_CHANGED, this.state);
@@ -433,8 +443,8 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(Events.STATE_CHANGED, this.state);
   }
   private gameOver(victory: boolean) {
-    if (this.state === GameState.GAME_OVER) return;
-    this.state = GameState.GAME_OVER;
+    if (this.state === GameState.GAME_OVER || this.state === GameState.VICTORY) return;
+    this.state = victory ? GameState.VICTORY : GameState.GAME_OVER;
     this.physics.pause();
     this.runEnd.finish({
       time: this.survivalMs,
