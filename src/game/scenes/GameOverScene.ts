@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
+import { isSectorUnlocked } from '../systems/UnlockRegistry';
+import { loadProfile } from '../systems/ProfileStore';
 import { recordRestart } from '../systems/RunTelemetry';
 
 const BUTTON_WIDTH = 270;
@@ -56,13 +58,14 @@ export class GameOverScene extends Phaser.Scene {
 
     // A clear run earns the next sector; dying retries the one that beat you.
     const nextArenaIndex = data.victory ? data.arenaIndex + 1 : data.arenaIndex;
+    const canAdvance = isSectorUnlocked(nextArenaIndex, loadProfile().unlocks);
     // Guarded so a double click or a click racing the keyboard cannot start two scenes.
     const go = (key: string, sceneData?: object) => () => {
       if (this.navigating) return;
       this.navigating = true;
       this.scene.start(key, sceneData);
     };
-    const start = go('Game', { arenaIndex: nextArenaIndex });
+    const start = go('Game', { arenaIndex: data.victory && canAdvance ? nextArenaIndex : data.arenaIndex });
     const redeploy = () => {
       // Restart rate is the alpha's primary behavioural KPI, so the choice to go again is
       // recorded against the run the player just finished.
@@ -75,7 +78,7 @@ export class GameOverScene extends Phaser.Scene {
     this.button(
       GAME_WIDTH / 2 - offset,
       465,
-      data.victory ? 'NEXT SECTOR' : 'RETRY SECTOR',
+      data.victory && canAdvance ? 'NEXT SECTOR' : 'RETRY SECTOR',
       0x73ef62,
       redeploy,
     );

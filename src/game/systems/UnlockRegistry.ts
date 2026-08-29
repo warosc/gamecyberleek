@@ -10,3 +10,8 @@ export const UNLOCKS: readonly UnlockDefinition[] = [
   { id: 'sector-2', name: 'SECTOR 2', description: 'Reach level 5', requirement: (p) => p.bestLevel >= 5 },
   { id: 'sector-3', name: 'SECTOR 3', description: 'Win one operation', requirement: (p) => p.victories >= 1 },
 ];
+
+export function isSectorUnlocked(index: number, unlocks: readonly string[]) {
+  if (index <= 0) return true;
+  return unlocks.includes(`sector-${index + 1}`);
+}

@@ -51,6 +51,9 @@ export class MenuScene extends Phaser.Scene {
         : 'DESBLOQUEOS  NINGUNO — ALCANZA NIVEL 5 O GANA UNA OPERACIÓN', {
       fontFamily: 'monospace', fontSize: '10px', color: '#21e6ff', letterSpacing: 1,
     });
+    this.add.text(80, 390, `SECTORES  01  ·  02 ${profile.unlocks.includes('sector-2') ? 'READY' : 'LOCKED'}  ·  03 ${profile.unlocks.includes('sector-3') ? 'READY' : 'LOCKED'}`, {
+      fontFamily: 'monospace', fontSize: '9px', color: '#7594a8', letterSpacing: 1,
+    });
     this.add.text(80, 270, 'CYBER VEGETABLE LAB', {
       fontFamily: 'Arial Black',
       fontSize: '25px',
