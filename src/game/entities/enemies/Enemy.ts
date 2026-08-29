@@ -327,7 +327,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       duration: leadMs,
       ease: 'Quad.In',
       onComplete: () => {
-        if (!this.scene.sys.isActive()) {
+        if (!this.scene?.sys?.isActive()) {
           ring.destroy();
           return;
         }
@@ -353,7 +353,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       duration: leadMs,
       ease: 'Quad.In',
       onComplete: () => {
-        if (!this.scene.sys.isActive()) {
+        if (!this.scene?.sys?.isActive()) {
           cone.destroy();
           return;
         }
