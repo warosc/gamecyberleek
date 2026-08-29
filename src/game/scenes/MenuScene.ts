@@ -45,6 +45,12 @@ export class MenuScene extends Phaser.Scene {
     this.add.text(80, 354, `BIO-CRÉDITOS  ${profile.bioCredits}   ·   MEJOR NIVEL  ${profile.bestLevel}`, {
       fontFamily: 'Arial Black', fontSize: '12px', color: '#73ef62', letterSpacing: 1,
     });
+    this.add.text(80, 378,
+      profile.unlocks.length > 0
+        ? `DESBLOQUEOS  ${profile.unlocks.join('  ·  ').toUpperCase()}`
+        : 'DESBLOQUEOS  NINGUNO — ALCANZA NIVEL 5 O GANA UNA OPERACIÓN', {
+      fontFamily: 'monospace', fontSize: '10px', color: '#21e6ff', letterSpacing: 1,
+    });
     this.add.text(80, 270, 'CYBER VEGETABLE LAB', {
       fontFamily: 'Arial Black',
       fontSize: '25px',
