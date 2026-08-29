@@ -9,6 +9,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
   readonly health;
   lastContact = 0;
   private lastAttack = -9999;
+  private bossAttackSequence = 0;
   private visual: Phaser.GameObjects.Container;
   private healthBack: Phaser.GameObjects.Rectangle;
   private healthFill: Phaser.GameObjects.Rectangle;
@@ -86,9 +87,16 @@ export class Enemy extends Phaser.GameObjects.Arc {
       const phase = this.bossPhase;
       this.showAttackTelegraph(phase === 3 ? 0xff476f : 0xd566ff, phase === 3 ? 104 : 86);
       const base = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
-      const spread = phase === 1 ? 2 : phase === 2 ? 3 : 4;
-      for (let index = -spread; index <= spread; index++)
-        fire(this.x, this.y, base + index * 0.2, phase === 3 ? 290 : 260, phase === 3 ? 16 : 14);
+      this.bossAttackSequence++;
+      const radialPhaseTwo = phase === 2 && this.bossAttackSequence % 2 === 0;
+      if (radialPhaseTwo) {
+        for (let index = 0; index < 8; index++)
+          fire(this.x, this.y, (Math.PI * 2 * index) / 8, 240, 13);
+      } else {
+        const spread = phase === 1 ? 2 : phase === 2 ? 3 : 4;
+        for (let index = -spread; index <= spread; index++)
+          fire(this.x, this.y, base + index * 0.2, phase === 3 ? 290 : 260, phase === 3 ? 16 : 14);
+      }
     }
   }
   hit(amount: number) {
