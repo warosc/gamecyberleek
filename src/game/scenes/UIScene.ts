@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { Events, GAME_HEIGHT, GAME_WIDTH, GameState } from '../config/Constants';
-import { xpForLevel } from '../systems/ExperienceSystem';
 import type { Ability } from '../abilities/AbilityRegistry';
 import type { GameScene } from './GameScene';
 import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
@@ -11,6 +10,7 @@ import { ModalOverlay } from '../ui/ModalOverlay';
 import { MobileControls } from '../ui/MobileControls';
 import { RewardChooser } from '../ui/RewardChooser';
 import { OnboardingHints } from '../ui/OnboardingHints';
+import { StatusHud } from '../ui/StatusHud';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -28,15 +28,8 @@ function pulseHaptics(durationMs: number) {
 }
 export class UIScene extends Phaser.Scene {
   private gameScene!: GameScene;
-  private hp!: Phaser.GameObjects.Text;
-  private hpFill!: Phaser.GameObjects.Rectangle;
-  private energyFill!: Phaser.GameObjects.Rectangle;
-  private energyText!: Phaser.GameObjects.Text;
-  private playerFrame!: Phaser.GameObjects.Rectangle;
+  private statusHud!: StatusHud;
   private damageFlash!: Phaser.GameObjects.Rectangle;
-  private level!: Phaser.GameObjects.Text;
-  private timer!: Phaser.GameObjects.Text;
-  private xpFill!: Phaser.GameObjects.Rectangle;
   private debug?: Phaser.GameObjects.Text;
   private debugOverlay?: DebugOverlay;
   private modal!: ModalOverlay;
@@ -48,13 +41,6 @@ export class UIScene extends Phaser.Scene {
   private bossPanel!: Phaser.GameObjects.Container;
   private bossFill!: Phaser.GameObjects.Rectangle;
   private bossPhaseText!: Phaser.GameObjects.Text;
-  private weaponText!: Phaser.GameObjects.Text;
-  private weaponSlot!: Phaser.GameObjects.Text;
-  private armorSlot!: Phaser.GameObjects.Text;
-  /** Interpolation targets. A bar that snaps gives the player nothing to feel. */
-  private xpTargetWidth = 0;
-  private xpRatio = 0;
-  private hpTargetWidth = 240;
   private bossTargetWidth = 510;
   private bossPhaseShown = 1;
   constructor() {
@@ -66,98 +52,12 @@ export class UIScene extends Phaser.Scene {
     this.damageFlash = this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0xff214f, 0)
       .setDepth(90);
-    this.playerFrame = this.add
-      .rectangle(16, 14, 370, 112, 0x06101d, 0.94)
-      .setOrigin(0, 0)
-      .setStrokeStyle(3, 0x21e6ff, 0.7);
-    this.add
-      .rectangle(24, 22, 88, 88, 0x0b1e30, 1)
-      .setOrigin(0, 0)
-      .setStrokeStyle(4, 0x73ef62, 0.8);
-    this.add.image(68, 66, 'leek-avatar').setDisplaySize(80, 80);
-    this.add.circle(104, 104, 20, 0x07111f, 1).setStrokeStyle(3, 0x73ef62, 0.9);
-    this.add
-      .rectangle(GAME_WIDTH - 16, 14, 290, 64, 0x06101d, 0.86)
-      .setOrigin(1, 0)
-      .setStrokeStyle(2, 0x73ef62, 0.45);
-    this.hp = this.add.text(126, 29, 'HP 100 / 100', {
-      fontFamily: 'Arial Black',
-      fontSize: '16px',
-      color: '#eaffff',
-    });
-    this.add
-      .rectangle(124, 54, 246, 22, 0x260c17, 1)
-      .setOrigin(0, 0.5)
-      .setStrokeStyle(2, 0x5f2235, 1);
-    this.hpFill = this.add.rectangle(127, 54, 240, 16, 0xd83952).setOrigin(0, 0.5);
-    this.add
-      .rectangle(124, 88, 246, 18, 0x07152a, 1)
-      .setOrigin(0, 0.5)
-      .setStrokeStyle(2, 0x164f7d, 1);
-    this.energyFill = this.add.rectangle(127, 88, 240, 12, 0x21aee6).setOrigin(0, 0.5);
-    this.energyText = this.add
-      .text(247, 88, 'DASH ENERGY', {
-        fontFamily: 'Arial Black',
-        fontSize: '10px',
-        color: '#eaffff',
-      })
-      .setOrigin(0.5);
-    this.level = this.add
-      .text(104, 104, '1', {
-        fontFamily: 'Arial Black',
-        fontSize: '18px',
-        color: '#eaffff',
-      })
-      .setOrigin(0.5);
-    this.add
-      .text(GAME_WIDTH - 28, 25, this.gameScene.arenaName, {
-        fontFamily: 'Arial Black',
-        fontSize: '16px',
-        color: '#73ef62',
-      })
-      .setOrigin(1, 0);
-    this.add
-      .text(GAME_WIDTH - 28, 51, 'ACTIVE OPERATION', {
-        fontSize: '11px',
-        color: '#8ba5b8',
-        letterSpacing: 2,
-      })
-      .setOrigin(1, 0);
-    const pauseButton = this.add
-      .rectangle(GAME_WIDTH - 330, 44, 44, 44, 0x06101d, 0.94)
-      .setStrokeStyle(2, 0x21e6ff, 0.7)
-      .setInteractive({ useHandCursor: true });
-    const pauseLabel = this.add
-      .text(GAME_WIDTH - 330, 44, 'Ⅱ', {
-        fontFamily: 'Arial Black', fontSize: '18px', color: '#eaffff',
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    pauseButton.on('pointerup', () => this.gameScene.togglePause());
-    pauseLabel.on('pointerup', () => this.gameScene.togglePause());
-    this.timer = this.add
-      .text(GAME_WIDTH / 2, 24, '00:00', {
-        fontFamily: 'Arial Black',
-        fontSize: '24px',
-        color: '#21e6ff',
-      })
-      .setOrigin(0.5, 0);
-    this.weaponText = this.add
-      .text(GAME_WIDTH / 2, 55, this.gameScene.player.stats.weaponName, {
-        fontFamily: 'Arial Black',
-        fontSize: '11px',
-        color: '#a9bbc9',
-        letterSpacing: 2,
-      })
-      .setOrigin(0.5, 0);
-    this.weaponSlot = this.add.text(GAME_WIDTH - 300, 94, '⚡ PULSEGUN-01', {
-      fontFamily: 'Arial Black', fontSize: '11px', color: '#21e6ff',
-      backgroundColor: '#06101ddd', padding: { x: 10, y: 7 },
-    }).setOrigin(0, 0);
-    this.armorSlot = this.add.text(GAME_WIDTH - 300, 130, '◆ SIN ARMADURA', {
-      fontFamily: 'Arial Black', fontSize: '11px', color: '#73ef62',
-      backgroundColor: '#06101ddd', padding: { x: 10, y: 7 },
-    }).setOrigin(0, 0);
+    this.statusHud = new StatusHud(
+      this,
+      this.gameScene.arenaName,
+      this.gameScene.player.stats.weaponName,
+      () => this.gameScene.togglePause(),
+    );
     // Sits below the run clock and the weapon readout rather than across them: at y=88 the
     // boss bar covered both the moment the encounter that most needs a clock began.
     const bossBack = this.add
@@ -179,26 +79,6 @@ export class UIScene extends Phaser.Scene {
     this.bossPanel = this.add
       .container(0, 0, [bossBack, this.bossFill, bossName, this.bossPhaseText])
       .setVisible(false);
-    this.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 22, GAME_WIDTH - 64, 24, 0x07111f, 0.96)
-      .setStrokeStyle(3, 0x21e6ff, 0.65);
-    this.xpFill = this.add.rectangle(35, GAME_HEIGHT - 22, 0, 16, 0x73ef62).setOrigin(0, 0.5);
-    this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT - 22, 'EXPERIENCE', {
-        fontFamily: 'Arial Black',
-        fontSize: '10px',
-        color: '#eaffff',
-      })
-      .setOrigin(0.5);
-    for (let index = 1; index < 10; index++)
-      this.add.rectangle(
-        32 + ((GAME_WIDTH - 64) * index) / 10,
-        GAME_HEIGHT - 22,
-        2,
-        16,
-        0x07111f,
-        0.7,
-      );
     const mobileHud = this.gameScene.mobileInput.active;
     if (mobileHud)
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 84, 430, 96, 0x04101c, 0.7)
@@ -296,32 +176,14 @@ export class UIScene extends Phaser.Scene {
     });
   }
   update(_time: number, delta: number) {
-    const seconds = Math.floor(this.gameScene.survivalMs / 1000);
-    this.timer.setText(
-      `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`,
-    );
-    // Ease both bars toward their target. The step is frame-rate independent so a 165Hz
-    // display and a 60Hz display fill at the same speed.
     const ease = 1 - Math.exp(-delta / 90);
-    this.xpFill.width += (this.xpTargetWidth - this.xpFill.width) * ease;
-    this.hpFill.width += (this.hpTargetWidth - this.hpFill.width) * ease;
     if (this.bossPanel.visible)
       this.bossFill.width += (this.bossTargetWidth - this.bossFill.width) * ease;
-    // Anticipation: the bar starts breathing once a level-up is within reach.
-    const imminent = this.xpRatio >= 0.85;
-    this.xpFill.setFillStyle(
-      imminent ? 0xd4ff7a : 0x73ef62,
-      imminent ? 0.75 + Math.sin(this.gameScene.survivalMs * 0.012) * 0.25 : 1,
-    );
     const body = this.gameScene.player.body as Phaser.Physics.Arcade.Body | null;
     if (body && body.velocity.lengthSq() > 100) this.hints?.satisfy('move');
     this.hints?.update(delta);
     const dashCharge = this.gameScene.player.getDashCharge();
-    this.energyFill.width = 240 * dashCharge;
-    this.energyFill.setFillStyle(dashCharge >= 1 ? 0x21e6ff : 0x17649a);
-    this.energyText.setText(
-      dashCharge >= 1 ? 'DASH READY' : `DASH ${Math.round(dashCharge * 100)}%`,
-    );
+    this.statusHud.update(delta, this.gameScene.survivalMs, dashCharge);
     for (const ability of SPECIAL_ABILITIES) {
       const charge = this.gameScene.getSpecialCharge(ability.id);
       this.specialFills.get(ability.id)!.width = 86 * charge;
@@ -341,39 +203,10 @@ export class UIScene extends Phaser.Scene {
   }
   private onHealth(current: number, max: number) {
     if (current < max && loadProfile().vibration) pulseHaptics(35);
-    this.hp
-      .setText(`HP ${Math.ceil(current)} / ${max}`)
-      .setColor(current / max < 0.3 ? '#ff476f' : '#eaffff');
-    this.hpTargetWidth = 240 * Phaser.Math.Clamp(current / max, 0, 1);
-    this.hpFill.setFillStyle(current / max < 0.3 ? 0xff214f : 0xd83952);
-    this.playerFrame.setStrokeStyle(4, 0xff476f, 1);
-    this.damageFlash.setAlpha(0.18);
-    this.tweens.add({ targets: this.damageFlash, alpha: 0, duration: 180, ease: 'Quad.Out' });
-    this.tweens.add({
-      targets: this.playerFrame,
-      alpha: { from: 0.55, to: 1 },
-      duration: 90,
-      yoyo: true,
-      onComplete: () => this.playerFrame.setStrokeStyle(3, 0x21e6ff, 0.7),
-    });
+    this.statusHud.setHealth(current, max, this.damageFlash);
   }
   private onXp(xp: number, level: number) {
-    const levelled = this.level.text !== String(level);
-    if (levelled) {
-      this.level.setText(String(level));
-      this.tweens.add({ targets: this.level, scale: 1.7, duration: 120, yoyo: true });
-      // The bar has to visibly empty and refill, or a level-up looks like the bar glitching.
-      this.xpFill.width = 0;
-      this.tweens.add({
-        targets: this.xpFill,
-        alpha: { from: 1, to: 0.35 },
-        duration: 110,
-        yoyo: true,
-        repeat: 1,
-      });
-    }
-    this.xpRatio = Phaser.Math.Clamp(xp / xpForLevel(level), 0, 1);
-    this.xpTargetWidth = (GAME_WIDTH - 70) * this.xpRatio;
+    this.statusHud.setExperience(xp, level);
   }
   private showAbilities(abilities: Ability[]) {
     const parts: Phaser.GameObjects.GameObject[] = [
@@ -546,7 +379,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   private showLootBanner(equipment: Equipment) {
-    this.weaponText.setText(
+    this.statusHud.setLootSummary(
       equipment.kind === 'weapon'
         ? equipment.name
         : `${this.gameScene.player.stats.weaponName}  ·  ARMOR ${Math.round(this.gameScene.player.stats.damageReduction * 100)}%`,
@@ -575,8 +408,7 @@ export class UIScene extends Phaser.Scene {
     });
   }
   private onEquipmentChanged(weapon: string, armor: string) {
-    this.weaponSlot.setText(`⚡ ${weapon}`);
-    this.armorSlot.setText(`◆ ${armor}`);
+    this.statusHud.setEquipment(weapon, armor);
   }
   private onState(state: GameState) {
     if (state === GameState.PAUSED && !this.modal.active) {
