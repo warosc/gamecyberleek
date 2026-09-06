@@ -14,7 +14,7 @@ export interface StreamingEventGateway {
 }
 
 export class OfflineStreamingGateway implements StreamingEventGateway {
-  async enqueue() { return false; }
+  async enqueue(event: StreamEvent) { void event; return false; }
   async disconnect() { /* Offline no-op. */ }
 }
 

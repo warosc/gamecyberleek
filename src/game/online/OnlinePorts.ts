@@ -22,7 +22,7 @@ export interface OnlineService {
 
 export class OfflineOnlineService implements OnlineService {
   async signIn() { return null; }
-  async uploadProfile() { /* Offline no-op. */ }
+  async uploadProfile(profile: PlayerProfile) { void profile; /* Offline no-op. */ }
   async fetchLeaderboard() { return [] as const; }
   async signOut() { /* Offline no-op. */ }
 }
