@@ -28,6 +28,7 @@ import { RunTelemetry } from '../systems/RunTelemetry';
 import { starterWeapon, type StarterWeaponId } from '../weapons/WeaponRegistry';
 import { CombatMomentum } from '../systems/CombatMomentum';
 import { applyWeaponMastery } from '../weapons/WeaponMastery';
+import { SectorHazardSystem } from '../systems/SectorHazardSystem';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -72,6 +73,7 @@ export class GameScene extends Phaser.Scene {
   private encounters!: EncounterSystem;
   private runEnd!: RunEndSystem;
   private lastBossPhase = 1;
+  private sectorHazards!: SectorHazardSystem;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
   private readonly handlePlayerDamaged = (_current: number, _max: number, applied?: number) => {
@@ -190,6 +192,7 @@ export class GameScene extends Phaser.Scene {
     this.worldProps = new ExplosiveBarrelSystem(this, (x, y, damage, radius) =>
       this.plasmaExplosion(x, y, damage, radius),
     );
+    this.sectorHazards = new SectorHazardSystem(this, this.player, this.arenaIndex);
     this.worldProps.bindProjectiles(this.projectiles.group);
     this.mobileInput.active =
       navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
@@ -266,6 +269,7 @@ export class GameScene extends Phaser.Scene {
     if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
     this.survivalMs += delta;
     this.encounters.update(this.survivalMs);
+    this.sectorHazards.update(this.survivalMs, !this.encounters.hasBossSpawned);
     const expiredMomentum = this.momentum.update(this.survivalMs);
     if (expiredMomentum) this.events.emit(Events.MOMENTUM_CHANGED, expiredMomentum);
     const phase = runPhase(this.survivalMs);
