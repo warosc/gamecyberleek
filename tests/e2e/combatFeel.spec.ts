@@ -1,0 +1,139 @@
+﻿import { test, expect, type Page } from '@playwright/test';
+import type Phaser from 'phaser';
+import type { GameScene } from '../../src/game/scenes/GameScene';
+import type { Enemy } from '../../src/game/entities/enemies/Enemy';
+
+declare global { interface Window { combatGame: Phaser.Game } }
+async function deploy(page: Page) {
+  await page.route(url => url.pathname === '/src/main.ts', async route => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: (await response.text()).replace('new Phaser.Game(gameConfig);', 'window.combatGame = new Phaser.Game(gameConfig);') });
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => window.combatGame?.scene.isActive('Menu'));
+  const b = (await page.locator('canvas').boundingBox())!;
+  await page.mouse.click(b.x + b.width * 245 / 1280, b.y + b.height * 425 / 720);
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Game'));
+}
+
+test('charge locks its direction, recovers, and shooter respects its warning', async ({page}) => {
+  await deploy(page);
+  const result = await page.evaluate(async () => {
+    const s = window.combatGame.scene.getScene('Game') as GameScene;
+    s.togglePause();
+    const path = '/src/game/entities/enemies/Enemy.ts';
+    const { Enemy } = await import(path);
+    const runner = new Enemy(s, 500, 500, 'RUNNER') as Enemy;
+    const target = {x:750,y:500};
+    const body = runner.body as Phaser.Physics.Arcade.Body;
+    runner.updateBehavior(target, 1000, () => {});
+    const windup = body.velocity.length();
+    target.y = 800;
+    runner.updateBehavior(target, 1699, () => {});
+    const stillWaiting = body.velocity.length();
+    runner.updateBehavior(target, 1701, () => {});
+    const impulse = {x:body.velocity.x, y:body.velocity.y};
+    runner.updateBehavior(target, 2251, () => {});
+    const recovery = body.velocity.length();
+    runner.destroy();
+    const shooter = new Enemy(s, 500, 500, 'SHOOTER') as Enemy;
+    const shots: number[] = [];
+    target.x=800; target.y=500;
+    const fire=(_x:number,_y:number,a:number)=>shots.push(a);
+    shooter.updateBehavior(target, 1000, fire);
+    target.y=800;
+    shooter.updateBehavior(target, 1649, fire);
+    const before=shots.length;
+    shooter.updateBehavior(target, 1651, fire);
+    shooter.destroy();
+    return {windup,stillWaiting,impulse,recovery,before,shots};
+  });
+  expect(result.windup).toBe(0); expect(result.stillWaiting).toBe(0);
+  expect(result.impulse.x).toBe(520); expect(result.impulse.y).toBe(0);
+  expect(result.recovery).toBe(0); expect(result.before).toBe(0); expect(result.shots).toEqual([0]);
+});
+
+test('dash commits to input direction and protects only during its window', async ({page}) => {
+  await deploy(page);
+  const r = await page.evaluate(() => {
+    const s = window.combatGame.scene.getScene('Game') as GameScene;
+    s.togglePause();
+    const v=s.mobileInput; v.active=true; v.dash=true; v.movement.set(1,0);
+    s.player.update(10000,s.input.activePointer,()=>{},v);
+    s.player.takeDamage(10);
+    const during=s.player.health.current;
+    v.dash=false; v.movement.set(-1,0);
+    s.player.update(10080,s.input.activePointer,()=>{},v);
+    const direction=(s.player.body as Phaser.Physics.Arcade.Body).velocity.x;
+    s.player.update(10200,s.input.activePointer,()=>{},v);
+    s.player.takeDamage(10);
+    const after=s.player.health.current;
+    s.player.takeDamage(10);
+    return {during,direction,after,protectedFromStack:s.player.health.current};
+  });
+  expect(r.during).toBe(100); expect(r.direction).toBe(600);
+  expect(r.after).toBe(90); expect(r.protectedFromStack).toBe(90);
+});
+
+test('three milestone choices resume safely and the finale starts once at four minutes', async ({page}) => {
+  await deploy(page);
+  const r=await page.evaluate(() => {
+    const s=window.combatGame.scene.getScene('Game') as GameScene;
+    const offered: string[][]=[];
+    s.events.on('player-level-up',(options:{id:string}[])=>offered.push(options.map(o=>o.id)));
+    for (const t of [60000,120000,180000]) {
+      s.survivalMs=t-1; s.update(0,1);
+      if (s.state !== 'LEVEL_UP') throw Error('Missing milestone');
+      s.selectAbility('breach');
+      s.selectAbility('fan'); // A double click must not grant a second upgrade.
+    }
+    s.survivalMs=239999; s.update(0,1); s.update(0,1);
+    return {offered, piercing:s.player.stats.bonusPiercing, count:s.player.stats.projectileCount,
+      bosses:s.enemies.getChildren().filter(e=>(e as Enemy).enemyType==='BOSS').length,state:s.state};
+  });
+  expect(r.offered).toHaveLength(3);
+  expect(r.offered.every(o=>o.join(',')==='breach,fan,phase_dash')).toBe(true);
+  expect(r.piercing).toBe(3); expect(r.count).toBe(1); expect(r.bosses).toBe(1); expect(r.state).toBe('BOSS');
+});
+
+test('melee has a warning window and dead enemies remove their attack indicators', async ({page}) => {
+  await deploy(page);
+  const r=await page.evaluate(async () => {
+    const s=window.combatGame.scene.getScene('Game') as GameScene;
+    s.togglePause();
+    const path='/src/game/entities/enemies/Enemy.ts';
+    const {Enemy}=await import(path);
+    const e=new Enemy(s,500,500,'GRUNT') as Enemy;
+    const before=s.children.length;
+    e.updateBehavior({x:550,y:500},1000,()=>{});
+    const warning=e.canContact;
+    const hasIndicator=s.children.length>before;
+    e.updateBehavior({x:550,y:500},1499,()=>{});
+    const early=e.canContact;
+    e.updateBehavior({x:550,y:500},1501,()=>{});
+    const strike=e.canContact;
+    e.updateBehavior({x:550,y:500},1681,()=>{});
+    const recover=e.canContact;
+    e.destroy();
+    return {warning,hasIndicator,early,strike,recover,remaining:s.children.length};
+  });
+  expect(r.warning).toBe(false); expect(r.hasIndicator).toBe(true);
+  expect(r.early).toBe(false); expect(r.strike).toBe(true); expect(r.recover).toBe(false);
+});
+
+test('crowds cannot prepare more than three attacks at once', async ({page}) => {
+  await deploy(page);
+  const count=await page.evaluate(async () => {
+    const s=window.combatGame.scene.getScene('Game') as GameScene;
+    const path='/src/game/entities/enemies/Enemy.ts';
+    const {Enemy}=await import(path);
+    s.enemies.clear(true,true);
+    for(let i=0;i<12;i++) {
+      const angle=i*Math.PI/6;
+      s.enemies.add(new Enemy(s,s.player.x+Math.cos(angle)*200,s.player.y+Math.sin(angle)*200,'RUNNER'));
+    }
+    s.update(0,16);
+    return s.enemies.getChildren().filter(e=>(e as Enemy).isPreparingAttack).length;
+  });
+  expect(count).toBe(3);
+});

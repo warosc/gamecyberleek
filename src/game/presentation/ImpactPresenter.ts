@@ -14,6 +14,7 @@ import {
  * as noise rather than as weight.
  */
 export class ImpactPresenter {
+  private lastCameraAt = -1000;
   private readonly reducedMotion =
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -44,7 +45,10 @@ export class ImpactPresenter {
 
   /** Camera reaction alone, for moments that are not a damage event (a phase change, a spawn). */
   camera(tier: ImpactTier) {
-    if (this.reducedMotion) return;
+    if (this.reducedMotion || tier === 'normal' || tier === 'enemyDeath') return;
+    const now = this.scene.time.now;
+    if (tier !== 'bossDeath' && now - this.lastCameraAt < 140) return;
+    this.lastCameraAt = now;
     const profile = impactProfile(tier);
     if (profile.shakeMs > 0) this.scene.cameras.main.shake(profile.shakeMs, profile.shakeIntensity);
     if (profile.flash)

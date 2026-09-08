@@ -12,7 +12,10 @@ export class Player extends Phaser.GameObjects.Container {
   readonly health = new HealthComponent(this.stats.maxHp);
   private controller: PlayerController;
   private lastShot = 0;
+  private readonly weapon: Phaser.GameObjects.Container;
   private lastDash = -9999;
+  private readonly dashDirection = new Phaser.Math.Vector2();
+  private hurtUntil = 0;
   private dashingUntil = 0;
   aim = 0;
   private overdriveUntil = 0;
@@ -76,6 +79,14 @@ export class Player extends Phaser.GameObjects.Container {
       reference,
     ]);
     if (rig) this.add(rig);
+    const gun = scene.add.graphics();
+    gun.fillStyle(0x07111f).fillRoundedRect(-7, -8, 35, 16, 3)
+      .lineStyle(2, 0x5b8191).strokeRoundedRect(-7, -8, 35, 16, 3)
+      .fillStyle(0x21e6ff).fillRect(2, -3, 28, 6)
+      .fillStyle(0x73ef62).fillRect(-4, -5, 5, 10);
+    this.weapon = scene.add.container(22, 0, [gun]);
+    this.weapon.name = 'player-aimed-weapon';
+    this.add(this.weapon);
     this.animator = new PlayerAnimator(scene, reference, rig?.setAnimationState.bind(rig));
     this.setSize(46, 75);
     (this.body as Phaser.Physics.Arcade.Body)
@@ -99,6 +110,7 @@ export class Player extends Phaser.GameObjects.Container {
       v.lengthSq() > 0
     ) {
       this.lastDash = time;
+      this.dashDirection.copy(v);
       this.dashingUntil = time + this.stats.dashDuration;
       this.animator.dash(time, this.stats.dashDuration);
       // A short impulse along the dash rather than an undirected shake: the camera agrees with
@@ -106,6 +118,7 @@ export class Player extends Phaser.GameObjects.Container {
       this.scene.cameras.main.shake(90, 0.0035);
       this.scene.events.emit(Events.PLAYER_DASHED, v.x, v.y);
     }
+    if (time < this.dashingUntil) v.copy(this.dashDirection);
     const speed = time < this.dashingUntil ? this.stats.dashSpeed : this.stats.moveSpeed;
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(v.x * speed, v.y * speed);
     const mouseFiring = !pointer.wasTouch && pointer.leftButtonDown();
@@ -116,7 +129,11 @@ export class Player extends Phaser.GameObjects.Container {
       const world = pointer.positionToCamera(this.scene.cameras.main) as Phaser.Math.Vector2;
       this.aim = Phaser.Math.Angle.Between(this.x, this.y, world.x, world.y);
     }
-    const facing = Math.cos(this.aim) < 0 ? -1 : 1;
+    const recoil = Math.max(0, 1 - (time - this.lastShot) / 120) * 5;
+    this.weapon.setPosition(Math.cos(this.aim) * (22 - recoil), Math.sin(this.aim) * (22 - recoil))
+      .setRotation(this.aim).setAlpha(time < this.dashingUntil ? 0.5 : 1);
+    const facingAngle = time < this.dashingUntil ? this.dashDirection.angle() : this.aim;
+    const facing = Math.cos(facingAngle) < 0 ? -1 : 1;
     const dashing = time < this.dashingUntil;
     // Mirror the rig first: it converts world velocity into its own local axis using facing.
     this.layeredRig?.setFlipX(facing < 0);
@@ -178,7 +195,7 @@ export class Player extends Phaser.GameObjects.Container {
       this.animator.attack(time);
       const spread = 0.12;
       for (let i = 0; i < this.stats.projectileCount; i++)
-        shoot(this.x, this.y, this.aim + (i - (this.stats.projectileCount - 1) / 2) * spread);
+        shoot(this.x + Math.cos(this.aim) * 46, this.y + Math.sin(this.aim) * 46, this.aim + (i - (this.stats.projectileCount - 1) / 2) * spread);
     }
   }
   activateOverdrive(durationMs: number) {
@@ -232,6 +249,7 @@ export class Player extends Phaser.GameObjects.Container {
     return Phaser.Math.Clamp((time - this.lastDash) / this.stats.dashCooldown, 0, 1);
   }
   takeDamage(amount: number) {
+    if (this.gameplayTime < this.dashingUntil || this.gameplayTime < this.hurtUntil) return;
     if (this.gameplayTime < this.shieldUntil) {
       // A blocked hit has to be as readable as a taken one, or the shield feels like nothing.
       this.scene.tweens.add({ targets: this.shieldVisual, scale: 1.18, duration: 70, yoyo: true });
@@ -246,6 +264,7 @@ export class Player extends Phaser.GameObjects.Container {
     });
     const applied = Math.max(1, hit.amount);
     if (this.health.damage(applied)) {
+      this.hurtUntil = this.gameplayTime + 350;
       // The third argument is the damage actually applied after armor. Heals emit the same
       // event without it, so a listener can tell a hit from a repair.
       this.scene.events.emit(Events.PLAYER_DAMAGED, this.health.current, this.health.max, applied);

@@ -14,5 +14,5 @@ export function detectQualityProfile(): QualityProfile {
     return { tier: 'low', transientBudgetScale: 0.5, impactParticles: 2 };
   if ((typeof memory === 'number' && memory >= 8) && (typeof cores !== 'number' || cores >= 8))
     return { tier: 'high', transientBudgetScale: 1, impactParticles: 5 };
-  return { tier: 'balanced', transientBudgetScale: 0.75, impactParticles: 3 };
+  return { tier: 'balanced', transientBudgetScale: 0.75, impactParticles: 2 };
 }

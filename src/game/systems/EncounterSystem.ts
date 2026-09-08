@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { ARENA, Events, RUN_DURATION_MS } from '../config/Constants';
+import { BOSS_START_MS } from '../config/RunPacing';
+import { ARENA, Events } from '../config/Constants';
 import { Enemy } from '../entities/enemies/Enemy';
 import { EnemyType } from '../entities/enemies/EnemyTypes';
 import type { Player } from '../entities/player/Player';
@@ -20,12 +21,14 @@ export class EncounterSystem {
   }
 
   update(survivalMs: number) {
-    if (survivalMs >= RUN_DURATION_MS && !this.bossSpawned) this.spawnBoss();
+    if (survivalMs >= BOSS_START_MS && !this.bossSpawned) this.spawnBoss();
   }
 
   spawnBoss() {
     if (this.bossSpawned) return false;
     this.bossSpawned = true;
+    // Clear the teaching wave so the finale can be read without a crowd of old warnings.
+    this.enemies.clear(true, true);
     const x = Phaser.Math.Clamp(this.player.x + 520, 100, ARENA.width - 100);
     const y = Phaser.Math.Clamp(this.player.y - 300, 100, ARENA.height - 100);
     const boss = new Enemy(this.scene, x, y, EnemyType.BOSS);

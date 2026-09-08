@@ -3,10 +3,10 @@ import { GAME_WIDTH } from '../config/Constants';
 import { VEGETABLE_ROSTER, vegetableTexture, type VegetableType } from '../entities/enemies/VegetableRoster';
 
 const TACTICS = {
-  GRUNT: 'Te persigue y golpea de cerca.\nMantén distancia de sus puños.',
-  RUNNER: 'Rápida y ligera.\nUsa el dash para separarte.',
+  GRUNT: 'Te persigue y prepara un golpe.\nAl ver el aro rojo, sepárate.',
+  RUNNER: 'Marca una línea y embiste.\nSal a un lado antes del impulso.',
   TANK: 'Lenta, con mucha resistencia.\nEvita quedar acorralado.',
-  SHOOTER: 'Dispara y mantiene distancia.\nEsquiva cuando carga su cañón.',
+  SHOOTER: 'Fija la mira antes de disparar.\nSal de la línea naranja.',
 };
 
 /** A touch-friendly way to inspect the new characters before encountering them. */

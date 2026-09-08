@@ -283,6 +283,17 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
           : 0;
       this.squash = Phaser.Math.Linear(this.squash, dashShape, Math.min(1, step * 0.02));
       torso.rotation += this.lean;
+      const stride = Math.sin(this.gaitTime * Math.PI * 2 / 440);
+      if (state === 'walk' || state === 'attack') {
+        torso.y -= Math.abs(stride) * Math.min(this.speed, 1) * 1.5;
+        head.y += Math.abs(stride) * Math.min(this.speed, 1) * 0.4;
+      }
+      if (state === 'dash') {
+        torso.rotation += 0.16;
+        this.pose.get('arm-left-upper')!.rotation -= 0.28;
+        this.pose.get('thigh-left')!.rotation -= 0.18;
+        this.pose.get('thigh-right')!.rotation += 0.18;
+      }
       head.rotation -= this.lean * 0.45;
     }
   }

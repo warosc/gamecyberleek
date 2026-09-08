@@ -48,8 +48,7 @@ On touch devices, LEEK OPS displays a left movement joystick, a right aim/fire j
 
 The four common enemy roles now have original vegetable character art: RÁB-01 the radish soldier,
 ZAN-7 the carrot runner, BER-8 the armored eggplant, and TOM-4 the tomato gunner. Open **ENEMIGOS**
-from the main menu to inspect the roster and read its combat cues. Their existing hitboxes, damage,
-spawn weights and attack timings are preserved. Each shared cutout texture is animated with body
+from the main menu to inspect the roster and read its combat cues. Their original art and hitboxes are retained; attack behavior and pacing now follow the five-minute combat slice. Each shared cutout texture is animated with body
 sway/recoil and role-specific lighting; these are not separate-limb rigs. Decorative movement is
 reduced on the low-quality profile, while attack warnings remain visible.
 
@@ -93,3 +92,24 @@ Use **Dev Containers: Reopen in Container** in VS Code. If HMR stalls on Windows
 ## Roadmap
 
 Professional character rig and animation, audio, PWA/mobile controls, gamepads, additional arenas and bosses, then opt-in online/stream integrations. No backend or streaming integration is part of this milestone.
+
+
+## Combat slice: expressive movement and readable attacks
+
+The player carries an aim-aligned pulse weapon with recoil and a matching muzzle origin. Walking
+continues underneath firing. Dash commits to its initial direction for 150ms and avoids damage
+during the impulse; a taken hit grants 350ms protection against stacked damage.
+
+Radishes pursue, warn for 500ms, then lunge into a short melee window. Carrots mark a 286px lane,
+wait 700ms, charge along that fixed direction, and recover. Tomatoes stop and mark their firing
+line for 650ms, then fire along that line. Up to three ordinary attacks can prepare simultaneously.
+Critical impacts retain camera feedback; ordinary hits use local effects and sound. Knockback is
+bounded and does not displace an enemy while it is committing to a marked attack.
+
+The run introduces pursuit at 0:00, charges at 0:30, ranged fire at 1:15, and mixed formations at
+2:15. At 1:00, 2:00 and 3:00, choose piercing shots, an extra projectile or a faster dash.
+BRÓK-9 arrives at 4:00 and clears the previous wave. Five minutes is the intended completion time,
+not an automatic win: the boss must be defeated, and the timer can exceed 5:00.
+
+See [combat performance measurements](docs/combat-performance.md) for capacities, methodology and
+emulation limits. Reproduce with Vite running on port 5174 and `node scripts/measure-combat.mjs`.

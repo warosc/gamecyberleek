@@ -8,6 +8,9 @@ import type { AudioCategory } from '../managers/AudioManager';
  * alone. No copyrighted audio is imported: every event below is synthesised at runtime.
  */
 export type AudioEventId =
+  | 'charge_warning'
+  | 'shot_warning'
+  | 'player_hit'
   | 'weapon_fire'
   | 'enemy_hit'
   | 'critical_hit'
@@ -44,6 +47,9 @@ export interface AudioEventDefinition {
  * fatigue a playtester, and the mix is what the original audio pass will replace.
  */
 export const AUDIO_EVENTS: Record<AudioEventId, AudioEventDefinition> = {
+  charge_warning: { category: 'sfx', tones: [{ frequency: 330, durationS: 0.14, volume: 0.025, type: 'sawtooth' }] },
+  shot_warning: { category: 'sfx', tones: [{ frequency: 860, durationS: 0.09, volume: 0.02, type: 'triangle' }] },
+  player_hit: { category: 'sfx', tones: [{ frequency: 80, durationS: 0.12, volume: 0.04, type: 'triangle' }] },
   weapon_fire: { category: 'sfx', tones: [{ frequency: 240, durationS: 0.025, volume: 0.015, type: 'square' }] },
   enemy_hit: { category: 'sfx', tones: [{ frequency: 135, durationS: 0.035, volume: 0.025, type: 'square' }] },
   // A critical reads as a hit plus a bright overtone, so it is recognisable without being louder.

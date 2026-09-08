@@ -87,6 +87,12 @@ export const ABILITIES: Ability[] = [
     maxLevel: 3,
     apply: () => {},
   },
+  { id: 'breach', name: 'AGUJA DE PLASMA', description: '+1 enemigo atravesado por disparo', icon: '↠', maxLevel: 3,
+    apply: s => { s.bonusPiercing++; } },
+  { id: 'fan', name: 'ABANICO VERDE', description: '+1 proyectil por disparo', icon: '⋔', maxLevel: 3,
+    apply: s => { s.projectileCount++; } },
+  { id: 'phase_dash', name: 'PASO FANTASMA', description: 'Dash 20% más frecuente y +20 velocidad', icon: '»', maxLevel: 3,
+    apply: s => { s.dashCooldown *= 0.8; s.moveSpeed += 20; } },
 ];
 /** Fisher-Yates over a copy. Kept engine-free so this data module stays runtime-independent. */
 function shuffled<T>(items: readonly T[]): T[] {
@@ -98,6 +104,6 @@ function shuffled<T>(items: readonly T[]): T[] {
   return result;
 }
 export function chooseAbilities(levels: Map<string, number>, count = 3) {
-  return shuffled(ABILITIES.filter((a) => (levels.get(a.id) ?? 0) < a.maxLevel)).slice(0, count);
+  return shuffled(ABILITIES.filter((a) => !['breach', 'fan', 'phase_dash'].includes(a.id) && (levels.get(a.id) ?? 0) < a.maxLevel)).slice(0, count);
 }
 export const getAbilityById = (id: string) => ABILITIES.find((ability) => ability.id === id);

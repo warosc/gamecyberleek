@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { runPhase } from '../config/RunPacing';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { xpForLevel } from '../systems/ExperienceSystem';
 
@@ -11,6 +12,7 @@ export class StatusHud {
   private readonly energyText: Phaser.GameObjects.Text;
   private readonly level: Phaser.GameObjects.Text;
   private readonly timer: Phaser.GameObjects.Text;
+  private readonly phase: Phaser.GameObjects.Text;
   private readonly xpFill: Phaser.GameObjects.Rectangle;
   private readonly weaponText: Phaser.GameObjects.Text;
   private readonly weaponSlot: Phaser.GameObjects.Text;
@@ -64,6 +66,7 @@ export class StatusHud {
     this.timer = scene.add.text(GAME_WIDTH / 2, 24, '00:00', {
       fontFamily: 'Arial Black', fontSize: '24px', color: '#21e6ff',
     }).setOrigin(0.5, 0);
+    this.phase = scene.add.text(GAME_WIDTH / 2, 78, '', { fontFamily: 'monospace', fontSize: '12px', color: '#ffc857', backgroundColor: '#07111fcc', padding: { x: 8, y: 4 } }).setOrigin(0.5, 0);
     this.weaponText = scene.add.text(GAME_WIDTH / 2, 55, weaponName, {
       fontFamily: 'Arial Black', fontSize: '11px', color: '#a9bbc9', letterSpacing: 2,
     }).setOrigin(0.5, 0);
@@ -87,6 +90,7 @@ export class StatusHud {
 
   update(delta: number, survivalMs: number, dashCharge: number) {
     const seconds = Math.floor(survivalMs / 1000);
+    this.phase.setText(runPhase(survivalMs).label);
     this.timer.setText(`${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`);
     const ease = 1 - Math.exp(-delta / 90);
     this.xpFill.width += (this.xpTargetWidth - this.xpFill.width) * ease;

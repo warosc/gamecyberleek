@@ -32,6 +32,7 @@ function unlock() {
 }
 
 export class AudioManager {
+  private lastPlayed = new Map<AudioEventId, number>();
   constructor(scene: Phaser.Scene) {
     // Re-arm per scene only while no context exists: a run where the player never taps
     // leaves nothing behind, and the next run gets another chance to unlock.
@@ -75,6 +76,10 @@ export class AudioManager {
    * original recorded audio later is confined to this method and `AUDIO_EVENTS`.
    */
   play(event: AudioEventId) {
+    const now = performance.now();
+    const gap = event.endsWith('warning') ? 220 : event === 'enemy_hit' || event === 'enemy_death' ? 65 : 20;
+    if (now - (this.lastPlayed.get(event) ?? -10000) < gap) return;
+    this.lastPlayed.set(event, now);
     const definition = AUDIO_EVENTS[event];
     if (!definition) return;
     for (const tone of definition.tones)

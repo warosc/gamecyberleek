@@ -31,8 +31,8 @@ export class CombatEffects {
   }
 
   muzzle(x: number, y: number, angle: number) {
-    const muzzleX = x + Math.cos(angle) * 50;
-    const muzzleY = y + Math.sin(angle) * 50;
+    const muzzleX = x;
+    const muzzleY = y;
     const flash = this.track(this.scene.add
       .circle(muzzleX, muzzleY, 8, COLORS.cyan, 0.8)
       .setDepth(20));

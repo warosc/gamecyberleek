@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { UPGRADE_MILESTONES } from '../config/RunPacing';
 import { ARENA, COLORS, Events, GAMEPLAY, GameState } from '../config/Constants';
 import { Player } from '../entities/player/Player';
 import { ProjectileManager } from '../entities/projectiles/ProjectileManager';
@@ -50,6 +51,8 @@ export class GameScene extends Phaser.Scene {
   private audio!: AudioManager;
   private nextChestAt = GAMEPLAY.chestFirstMs;
   private pendingEquipmentDrop = false;
+  private milestoneIndex = 0;
+  private offeredAbilities: string[] = [];
   private victoryPending = false;
   private deaths = new EnemyDeathResolver();
   equippedWeapon = 'PULSEGUN-01';
@@ -65,7 +68,7 @@ export class GameScene extends Phaser.Scene {
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
   private readonly handlePlayerDamaged = (_current: number, _max: number, applied?: number) => {
-    if (applied) this.telemetry.tookDamage(applied);
+    if (applied) { this.telemetry.tookDamage(applied); this.audio.play('player_hit'); }
   };
   private readonly handleBossSpawned = () => {
     this.telemetry.bossSpawned();
@@ -75,6 +78,7 @@ export class GameScene extends Phaser.Scene {
       this.events.emit(Events.STATE_CHANGED, this.state);
     }
   };
+  private readonly handleEnemyWarning = (kind: string) => this.audio.play(kind === 'charge' ? 'charge_warning' : 'shot_warning');
   private readonly handlePlayerDashed = () => this.audio.play('dash');
   private readonly handleWeaponFired = (x: number, y: number, angle: number) => {
     this.telemetry.shotFired();
@@ -113,6 +117,8 @@ export class GameScene extends Phaser.Scene {
     this.xp = new ExperienceSystem();
     this.abilityLevels = new Map<string, number>();
     this.survivalMs = 0;
+    this.milestoneIndex = 0;
+    this.offeredAbilities = [];
     this.specialLastUsed = { nova: -99999, shield: -99999, overdrive: -99999 };
     this.nextChestAt = GAMEPLAY.chestFirstMs;
     this.pendingEquipmentDrop = false;
@@ -201,6 +207,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on(Events.PLAYER_DIED, this.handlePlayerDied);
     this.events.on(Events.BOSS_SPAWNED, this.handleBossSpawned);
     this.events.on('weapon-fired', this.handleWeaponFired);
+    this.events.on('enemy-warning', this.handleEnemyWarning);
     this.events.on(Events.PLAYER_DASHED, this.handlePlayerDashed);
     this.input.keyboard!.on('keydown-ESC', this.handleEscape);
     this.game.events.on(Phaser.Core.Events.BLUR, this.handleFocusLost);
@@ -221,6 +228,7 @@ export class GameScene extends Phaser.Scene {
       this.events.off(Events.PLAYER_DIED, this.handlePlayerDied);
       this.events.off(Events.BOSS_SPAWNED, this.handleBossSpawned);
       this.events.off('weapon-fired', this.handleWeaponFired);
+      this.events.off('enemy-warning', this.handleEnemyWarning);
       this.events.off(Events.PLAYER_DASHED, this.handlePlayerDashed);
       this.input.keyboard?.off('keydown-ESC', this.handleEscape);
       this.game.events.off(Phaser.Core.Events.BLUR, this.handleFocusLost);
@@ -235,6 +243,12 @@ export class GameScene extends Phaser.Scene {
     if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
     this.survivalMs += delta;
     this.encounters.update(this.survivalMs);
+    const milestone = UPGRADE_MILESTONES[this.milestoneIndex];
+    if (milestone !== undefined && this.survivalMs >= milestone && !this.encounters.hasBossSpawned) {
+      this.milestoneIndex++;
+      this.openLevelUp(true);
+      return;
+    }
     if (this.survivalMs >= this.nextChestAt && !this.encounters.hasBossSpawned) {
       this.nextChestAt += GAMEPLAY.chestIntervalMs;
       this.loot.spawnChest();
@@ -251,6 +265,7 @@ export class GameScene extends Phaser.Scene {
     this.projectiles.update(this.survivalMs);
     this.enemyProjectiles.update(this.survivalMs);
     if (!this.encounters.hasBossSpawned) this.spawn.update(delta, this.player);
+    let attacks = this.enemies.getChildren().filter(object => (object as Enemy).isPreparingAttack).length;
     this.enemies
       .getChildren()
       .forEach((object) => {
@@ -261,9 +276,12 @@ export class GameScene extends Phaser.Scene {
           this.cameras.main.shake(220, 0.008);
           this.audio.play('boss_phase');
         }
+        const preparing = enemy.isPreparingAttack;
         enemy.updateBehavior(this.player, this.survivalMs, (x, y, angle, speed, damage) =>
           this.enemyProjectiles.fire(x, y, angle, speed, damage, this.survivalMs),
+          attacks < GAMEPLAY.maxConcurrentAttacks,
         );
+        if (!preparing && enemy.isPreparingAttack) attacks++;
       });
     this.orbs.getChildren().forEach((o) => {
       const orb = o as ExperienceOrb;
@@ -301,19 +319,14 @@ export class GameScene extends Phaser.Scene {
     if (fatal) {
       this.resolveEnemyDeath(e);
     } else {
-      this.tweens.add({
-        targets: e,
-        x: e.x + (e.x - this.player.x) * (p.critical ? 0.11 : 0.06),
-        y: e.y + (e.y - this.player.y) * (p.critical ? 0.11 : 0.06),
-        duration: 70,
-      });
+      e.knockback(Phaser.Math.Angle.Between(this.player.x, this.player.y, e.x, e.y), p.critical);
     }
     if (p.mode === 'plasma' && p.splashRadius > 0) this.plasmaExplosion(e.x, e.y, p.damage * 0.55, p.splashRadius, e);
   }
   private enemyContact(object: Phaser.GameObjects.GameObject) {
     const e = object as Enemy;
-    if (this.time.now - e.lastContact < 650) return;
-    e.lastContact = this.time.now;
+    if (!e.active || !e.canContact || this.survivalMs - e.lastContact < 650) return;
+    e.lastContact = this.survivalMs;
     this.player.takeDamage(e.contactDamage);
     this.cameras.main.shake(90, 0.004);
   }
@@ -355,9 +368,11 @@ export class GameScene extends Phaser.Scene {
     }
     this.events.emit(Events.XP_COLLECTED, this.xp.xp, this.xp.level);
   }
-  private openLevelUp() {
+  private openLevelUp(milestone = false) {
     if (this.victoryPending) return;
-    const options = chooseAbilities(this.abilityLevels);
+    const options = milestone ? ['breach', 'fan', 'phase_dash'].map(id => getAbilityById(id)!)
+      .filter(ability => (this.abilityLevels.get(ability.id) ?? 0) < ability.maxLevel) : chooseAbilities(this.abilityLevels);
+    this.offeredAbilities = options.map(ability => ability.id);
     if (options.length === 0) {
       this.player.health.heal(20);
       this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
@@ -369,10 +384,12 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(Events.PLAYER_LEVEL_UP, options);
   }
   selectAbility(id: string) {
+    if (this.state !== GameState.LEVEL_UP || !this.offeredAbilities.includes(id)) return;
     const ability = getAbilityById(id);
     if (!ability) return;
     const level = (this.abilityLevels.get(id) ?? 0) + 1;
     if (level > ability.maxLevel) return;
+    this.offeredAbilities = [];
     this.abilityLevels.set(id, level);
     this.telemetry.choseUpgrade(id);
     ability.apply(this.player.stats, level);

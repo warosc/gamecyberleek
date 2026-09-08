@@ -14,6 +14,38 @@ export class Enemy extends Phaser.GameObjects.Arc {
   readonly health;
   lastContact = 0;
   private lastAttack = -9999;
+  private melee?: { strike: number; end: number };
+  get isPreparingAttack() { return !!this.pendingAttack || !!this.charge || !!this.melee; }
+  get canContact() {
+    if (this.enemyType === EnemyType.SHOOTER) return false;
+    if (this.enemyType === EnemyType.RUNNER) return Boolean(this.charge &&
+      this.visualTime >= this.charge.start && this.visualTime < this.charge.end);
+    return this.enemyType !== EnemyType.GRUNT && this.enemyType !== EnemyType.TANK ||
+      Boolean(this.melee && this.visualTime >= this.melee.strike && this.visualTime < this.melee.strike + 180);
+  }
+  private charge?: { angle: number; start: number; end: number; recover: number };
+  private warning?: Phaser.GameObjects.Graphics;
+  private readonly telegraphs = new Set<Phaser.GameObjects.GameObject>();
+  private knockbackUntil = 0;
+  private knockbackX = 0;
+  private knockbackY = 0;
+
+  /** Bounded impulse; distance from the player never amplifies knockback. */
+  knockback(angle: number, critical: boolean) {
+    if (this.enemyType === EnemyType.BOSS || this.charge || this.pendingAttack || this.melee) return;
+    const speed = (critical ? 170 : 95) * (this.enemyType === EnemyType.TANK ? 0.35 : 1);
+    this.knockbackX = Math.cos(angle) * speed;
+    this.knockbackY = Math.sin(angle) * speed;
+    this.knockbackUntil = this.visualTime + 90;
+  }
+
+  private showLane(angle: number, length: number, width: number, color: number) {
+    this.warning?.destroy();
+    this.warning = this.scene.add.graphics().setPosition(this.x, this.y).setRotation(angle).setDepth(3);
+    this.warning.fillStyle(color, 0.13).fillRect(0, -width / 2, length, width)
+      .lineStyle(2, color, 0.85).strokeRect(0, -width / 2, length, width)
+      .lineBetween(length - 18, -12, length, 0).lineBetween(length, 0, length - 18, 12);
+  }
   private bossAttackSequence = 0;
   /**
    * A shot that has been telegraphed but not yet fired. Scheduled on gameplay time rather than
@@ -78,6 +110,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
     target: { x: number; y: number },
     time: number,
     fire: (x: number, y: number, angle: number, speed: number, damage: number) => void,
+    allowAttack = true,
   ) {
     // Derived from gameplay time, not incremented per frame: a fixed step made the pulse
     // run at the display refresh rate, so a 165Hz screen animated ~2.75x faster than 60Hz.
@@ -87,9 +120,53 @@ export class Enemy extends Phaser.GameObjects.Arc {
       const release = this.pendingAttack.release;
       this.pendingAttack = undefined;
       this.firedAt = time;
+      this.warning?.destroy();
+      this.warning = undefined;
       release();
     }
     const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y);
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    if (this.melee) {
+      body.setVelocity(0);
+      if (time >= this.melee.strike && time < this.melee.strike + 180)
+        this.scene.physics.moveToObject(this, target, 240);
+      if (time >= this.melee.end) this.melee = undefined;
+      this.syncVisual(target);
+      return;
+    }
+    if (allowAttack && (this.enemyType === EnemyType.GRUNT || this.enemyType === EnemyType.TANK) && distance < this.def.size + 55) {
+      this.melee = { strike: time + 500, end: time + 1000 };
+      body.setVelocity(0);
+      this.showAttackTelegraph(0xff476f, this.def.size + 24, 500);
+      this.syncVisual(target);
+      return;
+    }
+    if (this.charge) {
+      const charge = this.charge;
+      if (time < charge.start) body.setVelocity(0);
+      else if (time < charge.end) {
+        this.warning?.destroy(); this.warning = undefined;
+        body.setVelocity(Math.cos(charge.angle) * 520, Math.sin(charge.angle) * 520);
+      } else body.setVelocity(0);
+      this.syncVisual({ x: this.x + Math.cos(charge.angle) * 100, y: this.y + Math.sin(charge.angle) * 100 });
+      if (time >= charge.recover) this.charge = undefined;
+      return;
+    }
+    if (time < this.knockbackUntil) {
+      body.setVelocity(this.knockbackX, this.knockbackY);
+      this.syncVisual(target);
+      return;
+    }
+    if (allowAttack && this.enemyType === EnemyType.RUNNER && distance < 430 && time - this.lastAttack > 2300) {
+      this.lastAttack = time;
+      const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
+      this.charge = { angle, start: time + 700, end: time + 1250, recover: time + 1900 };
+      this.showLane(angle, 286, this.def.size * 2 + 14, 0xffc857);
+      this.scene.events.emit('enemy-warning', 'charge');
+      body.setVelocity(0);
+      this.syncVisual(target);
+      return;
+    }
     if (this.def.behavior === 'kite') {
       if (distance > 390) this.scene.physics.moveToObject(this, target, this.def.speed * this.eliteMultiplier);
       else if (distance < 230)
@@ -99,19 +176,23 @@ export class Enemy extends Phaser.GameObjects.Arc {
           (this.body as Phaser.Physics.Arcade.Body).velocity,
         );
       else (this.body as Phaser.Physics.Arcade.Body).setVelocity(0);
-      if (time - this.lastAttack > 1450 && distance < 560) {
+      if (this.pendingAttack) { body.setVelocity(0); this.syncVisual(target); return; }
+      if (allowAttack && time - this.lastAttack > 1900 && distance < 560) {
         this.lastAttack = time;
+        const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
+        body.setVelocity(0);
+        this.showLane(angle, 560, 18, 0xff7b55);
         this.showAttackTelegraph(0xff9a72, 34, GAMEPLAY.telegraphLeadMs.shooter);
-        // Aim is resolved when the shot is released, not when the warning appears, so moving
-        // during the telegraph is a dodge rather than a coin flip.
+        this.scene.events.emit('enemy-warning', 'shot');
+        // Lock the indicated line: stepping away during the warning reliably avoids the shot.
         this.pendingAttack = {
           at: time + GAMEPLAY.telegraphLeadMs.shooter,
           release: () =>
             fire(
               this.x,
               this.y,
-              Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y),
-              310,
+              angle,
+              280,
               10,
             ),
         };
@@ -119,9 +200,12 @@ export class Enemy extends Phaser.GameObjects.Arc {
       this.syncVisual(target);
       return;
     }
+    if (this.pendingAttack) { body.setVelocity(0); this.syncVisual(target); return; }
     this.chase(target);
     if (this.def.behavior === 'commander' && time - this.lastAttack > this.bossAttackCooldown) {
       this.lastAttack = time;
+      body.setVelocity(0);
+      const lockedAim = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
       const phase = this.bossPhase;
       this.bossAttackSequence++;
       const radialPhaseTwo = phase === 2 && this.bossAttackSequence % 2 === 0;
@@ -131,12 +215,12 @@ export class Enemy extends Phaser.GameObjects.Arc {
         phase === 3 ? 0xff476f : 0xd566ff,
         phase === 3 ? 104 : 86,
         GAMEPLAY.telegraphLeadMs.boss,
-        radialPhaseTwo ? undefined : Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y),
+        radialPhaseTwo ? undefined : lockedAim,
       );
       this.pendingAttack = {
         at: time + GAMEPLAY.telegraphLeadMs.boss,
         release: () => {
-          const base = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
+          const base = lockedAim;
           if (radialPhaseTwo) {
             for (let index = 0; index < 8; index++)
               fire(this.x, this.y, (Math.PI * 2 * index) / 8, 240, 13);
@@ -222,6 +306,13 @@ export class Enemy extends Phaser.GameObjects.Arc {
     return this.bossPhase === 3 ? 780 : this.bossPhase === 2 ? 1000 : 1300;
   }
   destroy(fromScene?: boolean) {
+    this.warning?.destroy();
+    for (const telegraph of this.telegraphs) {
+      this.scene.tweens.killTweensOf(telegraph);
+      telegraph.destroy();
+    }
+    this.telegraphs.clear();
+    this.pendingAttack = undefined;
     this.visual?.destroy();
     this.healthBack?.destroy();
     this.healthFill?.destroy();
@@ -385,7 +476,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
     const recoil = Math.max(0, 1 - (this.visualTime - this.firedAt) / 220);
     if (this.vegetableVisual) {
       this.vegetableVisual.updatePose(this.visualTime, this.visualOffset, moving, target.x < this.x,
-        !!this.pendingAttack, recoil, hit);
+        !!this.pendingAttack || !!this.charge || !!this.melee, recoil, hit);
       const top = this.y - this.vegetableVisual.artHeight * 0.7 - 5;
       this.healthBack.setPosition(this.x, top);
       this.healthFill.setPosition(this.x - this.def.size, top);
@@ -443,6 +534,8 @@ export class Enemy extends Phaser.GameObjects.Arc {
       .setStrokeStyle(3, color, 0.95)
       .setScale(1.6)
       .setDepth(14);
+    this.telegraphs.add(ring);
+    ring.once('destroy', () => this.telegraphs.delete(ring));
     this.scene.tweens.add({
       targets: ring,
       scale: 0.85,
@@ -470,6 +563,8 @@ export class Enemy extends Phaser.GameObjects.Arc {
       .triangle(this.x, this.y, 0, -radius * 0.42, 0, radius * 0.42, radius * 2.1, 0, color, 0.16)
       .setRotation(aim)
       .setDepth(13);
+    this.telegraphs.add(cone);
+    cone.once('destroy', () => this.telegraphs.delete(cone));
     this.scene.tweens.add({
       targets: cone,
       alpha: 0.42,

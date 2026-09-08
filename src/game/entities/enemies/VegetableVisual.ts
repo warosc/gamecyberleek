@@ -52,7 +52,8 @@ export class VegetableVisual extends Phaser.GameObjects.Container {
     this.model.setPosition(recoil * 2 * (facingLeft ? 1 : -1) * detail,
       -(stride + (shooter ? 1.5 : 0) + recoil * 2) * detail);
     this.model.scaleX = facingLeft ? -1 : 1;
-    this.model.rotation = (moving ? wave * (heavy ? 0.035 : 0.025) : 0) * detail;
+    this.model.y += charging ? 3 : 0;
+    this.model.rotation = (charging ? -0.09 : 0) + (moving ? wave * (heavy ? 0.035 : 0.025) : 0) * detail;
     this.shadow.setScale(1 - stride * 0.025 * detail, 1);
     for (const jet of this.jets) jet.setVisible(moving)
       .setScale(1, this.motion ? 0.8 + Math.abs(wave) * 0.65 : 0.7);

@@ -43,5 +43,5 @@ export default defineConfig({
   preview: { host: '0.0.0.0', port: 4173 },
   // tests/e2e belongs to Playwright, which drives a real browser; vitest runs in node and
   // cannot load @playwright/test.
-  test: { exclude: ['**/node_modules/**', '**/dist/**', 'tests/e2e/**'] },
+  test: { include: ['tests/**/*.test.ts'], exclude: ['**/node_modules/**', '**/dist/**', 'tests/e2e/**'] },
 });

@@ -17,6 +17,7 @@ export interface PlayerStats {
   projectileScale: number;
   weaponMode: 'pulse' | 'arc' | 'laser' | 'plasma';
   projectilePiercing: number;
+  bonusPiercing: number;
   splashRadius: number;
 }
 export const createPlayerStats = (): PlayerStats => ({
@@ -38,5 +39,6 @@ export const createPlayerStats = (): PlayerStats => ({
   projectileScale: 1,
   weaponMode: 'pulse',
   projectilePiercing: 0,
+  bonusPiercing: 0,
   splashRadius: 0,
 });
