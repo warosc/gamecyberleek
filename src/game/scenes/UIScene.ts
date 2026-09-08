@@ -221,7 +221,7 @@ export class UIScene extends Phaser.Scene {
   private onBossSpawned() {
     this.bossBanner.show();
   }
-  private onMinibossSpawned() { this.minibossBanner.show(); }
+  private onMinibossSpawned(name: string, title: string, color: number) { this.minibossBanner.show(name, title, color); }
   private onMinibossHealth(current: number, max: number) { this.minibossBanner.setHealth(current, max); }
   private onBossHealth(current: number, max: number) {
     this.bossBanner.setHealth(current, max);

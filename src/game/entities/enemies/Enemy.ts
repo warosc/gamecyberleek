@@ -6,6 +6,7 @@ import { detectQualityProfile } from '../../config/QualityProfile';
 import { BossVisual, BOSS_IDENTITY } from './BossVisual';
 import { VegetableVisual } from './VegetableVisual';
 import { isVegetableType, vegetableTexture, VEGETABLE_ROSTER } from './VegetableRoster';
+import { MinibossVisual } from './MinibossVisual';
 
 /** Preserves the original feel: 0.075 rad per frame at 60fps. */
 const PULSE_RADIANS_PER_MS = 0.075 * 0.06;
@@ -57,6 +58,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
   private visual: Phaser.GameObjects.Container;
   private bossVisual?: BossVisual;
   private vegetableVisual?: VegetableVisual;
+  private minibossVisual?: MinibossVisual;
   private chassis!: Phaser.GameObjects.Container;
   private shadow!: Phaser.GameObjects.Ellipse;
   private feet: Phaser.GameObjects.Ellipse[] = [];
@@ -83,6 +85,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
     x: number,
     y: number,
     public enemyType: EnemyType,
+    private readonly visualVariant = 0,
   ) {
     const d = ENEMY_DEFS[enemyType];
     super(scene, x, y, d.size, 0, 360, false, d.color);
@@ -365,6 +368,10 @@ export class Enemy extends Phaser.GameObjects.Arc {
   }
 
   private createVisual(scene: Phaser.Scene, size: number, color: number) {
+    if (this.enemyType === EnemyType.MINIBOSS) {
+      this.minibossVisual = new MinibossVisual(scene, this.visualVariant);
+      return scene.add.container(this.x, this.y, [this.minibossVisual]).setDepth(6);
+    }
     if (this.enemyType === EnemyType.BOSS && scene.textures.exists(BOSS_IDENTITY.texture)) {
       this.bossVisual = new BossVisual(scene);
       return scene.add.container(this.x, this.y, [this.bossVisual]).setDepth(6);
@@ -456,19 +463,6 @@ export class Enemy extends Phaser.GameObjects.Arc {
       }
     }
 
-    if (this.enemyType === EnemyType.MINIBOSS) {
-      // REM-Ω reads as a cybernetic beet: layered bulb, leaf crown and a bright targeting visor.
-      body.clear()
-        .fillStyle(0x130813).fillCircle(0, 2, size + 5)
-        .fillStyle(0x75133f).fillCircle(0, 4, size)
-        .lineStyle(4, 0xff4e8a, 0.9).strokeCircle(0, 4, size)
-        .fillStyle(0x103e37).fillTriangle(-22, -size + 4, -7, -size - 25, 1, -size + 1)
-        .fillStyle(0x17634d).fillTriangle(-4, -size + 1, 10, -size - 31, 18, -size + 6)
-        .fillStyle(0x21e6ff).fillRoundedRect(-25, -8, 50, 12, 4)
-        .fillStyle(0xeaffff).fillCircle(0, -2, 4)
-        .fillStyle(0xff3b76).fillTriangle(-8, size - 1, 8, size - 1, 0, size + 18);
-    }
-
     if (this.enemyType === EnemyType.BOSS) {
       // A broccoli canopy distinguishes the commander from an enlarged tank.
       for (let index = -2; index <= 2; index++) {
@@ -502,7 +496,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
         attachments.push(foot);
       }
     }
-    if (this.enemyType === EnemyType.SHOOTER || this.enemyType === EnemyType.MINIBOSS || this.enemyType === EnemyType.BOSS) {
+    if (this.enemyType === EnemyType.SHOOTER || this.enemyType === EnemyType.BOSS) {
       this.chargeGlow = scene.add.circle(0, -size * 0.45, size * 0.35, 0xffb979, 0.15)
         .setStrokeStyle(2, 0xffe5bf, 0.6).setBlendMode(Phaser.BlendModes.ADD);
     }
@@ -544,6 +538,12 @@ export class Enemy extends Phaser.GameObjects.Arc {
       this.bossVisual.updatePose(this.visualTime, this.bossPhase, !!this.pendingAttack,
         recoil, hit, moving, target.x < this.x);
       // The global boss panel carries its health; a miniature bar would cut through the face.
+      this.healthBack.setVisible(false);
+      this.healthFill.setVisible(false);
+      return;
+    }
+    if (this.minibossVisual) {
+      this.minibossVisual.updatePose(this.visualTime, moving, !!this.pendingAttack, recoil, hit, target.x < this.x);
       this.healthBack.setVisible(false);
       this.healthFill.setVisible(false);
       return;

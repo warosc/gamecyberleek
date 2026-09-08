@@ -5,6 +5,7 @@ import { Enemy } from '../entities/enemies/Enemy';
 import { EnemyType } from '../entities/enemies/EnemyTypes';
 import type { Player } from '../entities/player/Player';
 import { BOSS_IDENTITY } from '../entities/enemies/BossVisual';
+import { MINIBOSS_VARIANTS } from '../entities/enemies/MinibossVisual';
 
 /** Owns encounter milestones; combat and victory resolution remain in GameScene. */
 export class EncounterSystem {
@@ -32,12 +33,13 @@ export class EncounterSystem {
     this.minibossSpawned = true;
     const x = Phaser.Math.Clamp(this.player.x + 430, 90, ARENA.width - 90);
     const y = Phaser.Math.Clamp(this.player.y - 230, 90, ARENA.height - 90);
-    const miniboss = new Enemy(this.scene, x, y, EnemyType.MINIBOSS);
+    const miniboss = new Enemy(this.scene, x, y, EnemyType.MINIBOSS, this.sector);
     const multiplier = 1 + Math.min(this.sector, 2) * 0.18;
     miniboss.health.max = Math.round(miniboss.health.max * multiplier);
     miniboss.health.current = miniboss.health.max;
     this.enemies.add(miniboss);
-    this.scene.events.emit(Events.MINIBOSS_SPAWNED, 'REM-Ω', miniboss.health.max);
+    const identity = MINIBOSS_VARIANTS[Math.min(this.sector, 2)];
+    this.scene.events.emit(Events.MINIBOSS_SPAWNED, identity.name, identity.title, identity.accent, miniboss.health.max);
     this.scene.cameras.main.shake(420, 0.008);
     return true;
   }
