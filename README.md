@@ -46,6 +46,9 @@ Landscape phones use their full aspect ratio instead of shrinking a 16:9 canvas 
 The gameplay camera is closer on touch devices so combatants remain legible, while the UI camera
 stays at its original scale. Touch controls anchor to the device's logical edges and use compact,
 translucent artwork to preserve visibility around the player.
+On mobile, secondary operation and equipment labels are removed from the live HUD. Touch sticks
+stay subdued while idle and brighten during interaction, keeping combat readable without hiding
+the controls a player needs.
 
 ## Architecture
 

@@ -152,6 +152,9 @@ test('the canvas fills phone landscape and mobile zoom enlarges only the world',
       touch: scene.mobileInput.active,
       worldZoom: scene.cameras.main.zoom,
       uiZoom: ui.cameras.main.zoom,
+      secondaryHudVisible: ['hud-operation-panel', 'hud-arena-name', 'hud-operation-state', 'hud-weapon-slot', 'hud-armor-slot']
+        .some(name => (ui.children.getByName(name) as Phaser.GameObjects.Components.Visible | null)?.visible),
+      pauseVisible: (ui.children.getByName('hud-pause') as Phaser.GameObjects.Components.Visible | null)?.visible,
     };
   });
   expect(layout.coverageX).toBeGreaterThan(0.995);
@@ -160,8 +163,11 @@ test('the canvas fills phone landscape and mobile zoom enlarges only the world',
     expect(layout.logicalWidth).toBeGreaterThanOrEqual(1280);
     expect(layout.worldZoom).toBe(1.35);
     expect(layout.uiZoom).toBe(1);
+    expect(layout.secondaryHudVisible).toBe(false);
+    expect(layout.pauseVisible).toBe(true);
   } else {
     expect(layout.logicalWidth).toBe(1280);
     expect(layout.worldZoom).toBe(1);
+    expect(layout.secondaryHudVisible).toBe(true);
   }
 });

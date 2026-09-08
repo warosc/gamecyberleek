@@ -26,6 +26,7 @@ export class StatusHud {
     arenaName: string,
     weaponName: string,
     onPause: () => void,
+    mobile = false,
   ) {
     this.frame = scene.add.rectangle(16, 14, 370, 112, 0x06101d, 0.94)
       .setOrigin(0, 0).setStrokeStyle(3, 0x21e6ff, 0.7);
@@ -33,8 +34,8 @@ export class StatusHud {
       .setOrigin(0, 0).setStrokeStyle(4, 0x73ef62, 0.8);
     scene.add.image(68, 66, 'leek-avatar').setDisplaySize(80, 80);
     scene.add.circle(104, 104, 20, 0x07111f, 1).setStrokeStyle(3, 0x73ef62, 0.9);
-    scene.add.rectangle(GAME_WIDTH - 16, 14, 290, 64, 0x06101d, 0.86)
-      .setOrigin(1, 0).setStrokeStyle(2, 0x73ef62, 0.45);
+    const operationPanel = scene.add.rectangle(GAME_WIDTH - 16, 14, 290, 64, 0x06101d, 0.86)
+      .setOrigin(1, 0).setStrokeStyle(2, 0x73ef62, 0.45).setVisible(!mobile).setName('hud-operation-panel');
     this.hp = scene.add.text(126, 29, 'HP 100 / 100', {
       fontFamily: 'Arial Black', fontSize: '16px', color: '#eaffff',
     });
@@ -50,15 +51,16 @@ export class StatusHud {
     this.level = scene.add.text(104, 104, '1', {
       fontFamily: 'Arial Black', fontSize: '18px', color: '#eaffff',
     }).setOrigin(0.5);
-    scene.add.text(GAME_WIDTH - 28, 25, arenaName, {
+    const arena = scene.add.text(GAME_WIDTH - 28, 25, arenaName, {
       fontFamily: 'Arial Black', fontSize: '16px', color: '#73ef62',
-    }).setOrigin(1, 0);
-    scene.add.text(GAME_WIDTH - 28, 51, 'ACTIVE OPERATION', {
+    }).setOrigin(1, 0).setVisible(!mobile).setName('hud-arena-name');
+    const operation = scene.add.text(GAME_WIDTH - 28, 51, 'ACTIVE OPERATION', {
       fontSize: '11px', color: '#8ba5b8', letterSpacing: 2,
-    }).setOrigin(1, 0);
-    const pauseButton = scene.add.rectangle(GAME_WIDTH - 330, 44, 44, 44, 0x06101d, 0.94)
-      .setStrokeStyle(2, 0x21e6ff, 0.7).setInteractive({ useHandCursor: true });
-    const pauseLabel = scene.add.text(GAME_WIDTH - 330, 44, 'Ⅱ', {
+    }).setOrigin(1, 0).setVisible(!mobile).setName('hud-operation-state');
+    const pauseX = mobile ? GAME_WIDTH - 42 : GAME_WIDTH - 330;
+    const pauseButton = scene.add.rectangle(pauseX, 42, mobile ? 52 : 44, mobile ? 52 : 44, 0x06101d, 0.88)
+      .setStrokeStyle(2, 0x21e6ff, 0.7).setInteractive({ useHandCursor: true }).setName('hud-pause');
+    const pauseLabel = scene.add.text(pauseX, 42, 'Ⅱ', {
       fontFamily: 'Arial Black', fontSize: '18px', color: '#eaffff',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     pauseButton.on('pointerup', onPause);
@@ -66,18 +68,21 @@ export class StatusHud {
     this.timer = scene.add.text(GAME_WIDTH / 2, 24, '00:00', {
       fontFamily: 'Arial Black', fontSize: '24px', color: '#21e6ff',
     }).setOrigin(0.5, 0);
-    this.phase = scene.add.text(GAME_WIDTH / 2, 78, '', { fontFamily: 'monospace', fontSize: '12px', color: '#ffc857', backgroundColor: '#07111fcc', padding: { x: 8, y: 4 } }).setOrigin(0.5, 0);
+    this.phase = scene.add.text(GAME_WIDTH / 2, 78, '', { fontFamily: 'monospace', fontSize: mobile ? '14px' : '12px', color: '#ffc857', backgroundColor: '#07111fcc', padding: { x: 8, y: 4 } }).setOrigin(0.5, 0);
     this.weaponText = scene.add.text(GAME_WIDTH / 2, 55, weaponName, {
       fontFamily: 'Arial Black', fontSize: '11px', color: '#a9bbc9', letterSpacing: 2,
     }).setOrigin(0.5, 0);
     this.weaponSlot = scene.add.text(GAME_WIDTH - 300, 94, '⚡ PULSEGUN-01', {
       fontFamily: 'Arial Black', fontSize: '11px', color: '#21e6ff',
       backgroundColor: '#06101ddd', padding: { x: 10, y: 7 },
-    }).setOrigin(0, 0);
+    }).setOrigin(0, 0).setVisible(!mobile).setName('hud-weapon-slot');
     this.armorSlot = scene.add.text(GAME_WIDTH - 300, 130, '◆ SIN ARMADURA', {
       fontFamily: 'Arial Black', fontSize: '11px', color: '#73ef62',
       backgroundColor: '#06101ddd', padding: { x: 10, y: 7 },
-    }).setOrigin(0, 0);
+    }).setOrigin(0, 0).setVisible(!mobile).setName('hud-armor-slot');
+    // Keep references alive for Phaser's scene ownership while documenting the intentionally
+    // omitted mobile operation panel.
+    void operationPanel; void arena; void operation;
     scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 22, GAME_WIDTH - 64, 24, 0x07111f, 0.96)
       .setStrokeStyle(3, 0x21e6ff, 0.65);
     this.xpFill = scene.add.rectangle(35, GAME_HEIGHT - 22, 0, 16, 0x73ef62).setOrigin(0, 0.5);
