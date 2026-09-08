@@ -57,11 +57,16 @@ export class StatusHud {
     const operation = scene.add.text(GAME_WIDTH - 28, 51, 'ACTIVE OPERATION', {
       fontSize: '11px', color: '#8ba5b8', letterSpacing: 2,
     }).setOrigin(1, 0).setVisible(!mobile).setName('hud-operation-state');
-    const pauseX = mobile ? GAME_WIDTH - 42 : GAME_WIDTH - 330;
-    const pauseButton = scene.add.rectangle(pauseX, 42, mobile ? 52 : 44, mobile ? 52 : 44, 0x06101d, 0.88)
+    // On phone landscape the logical canvas is scaled down to as little as half size
+    // (shortest edge / 720), so a 52px button rendered barely 26 CSS px wide — well under the
+    // ~44px minimum touch target. 90px logical stays >=44px CSS even on the narrowest phones.
+    const pauseSize = mobile ? 90 : 44;
+    const pauseX = mobile ? GAME_WIDTH - 16 - pauseSize / 2 : GAME_WIDTH - 330;
+    const pauseY = mobile ? 14 + pauseSize / 2 : 42;
+    const pauseButton = scene.add.rectangle(pauseX, pauseY, pauseSize, pauseSize, 0x06101d, 0.88)
       .setStrokeStyle(2, 0x21e6ff, 0.7).setInteractive({ useHandCursor: true }).setName('hud-pause');
-    const pauseLabel = scene.add.text(pauseX, 42, 'Ⅱ', {
-      fontFamily: 'Arial Black', fontSize: '18px', color: '#eaffff',
+    const pauseLabel = scene.add.text(pauseX, pauseY, 'Ⅱ', {
+      fontFamily: 'Arial Black', fontSize: mobile ? '28px' : '18px', color: '#eaffff',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     pauseButton.on('pointerup', onPause);
     pauseLabel.on('pointerup', onPause);

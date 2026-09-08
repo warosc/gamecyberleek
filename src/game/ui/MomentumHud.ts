@@ -11,7 +11,9 @@ export class MomentumHud {
 
   constructor(scene: Phaser.Scene, mobile: boolean) {
     const x = GAME_WIDTH - (mobile ? 118 : 145);
-    const y = mobile ? 110 : 205;
+    // On mobile the pause button now grows to a 90px hit target anchored at the same top-right
+    // corner (see StatusHud); 110 sat directly under it, so the panel is nudged down to clear it.
+    const y = mobile ? 142 : 205;
     const back = scene.add.rectangle(0, 0, 220, 68, 0x06101d, 0.88).setStrokeStyle(2, 0xffc857, 0.75);
     this.count = scene.add.text(-92, -20, 'CHAIN x2', {
       fontFamily: 'Arial Black', fontSize: '16px', color: '#ffffff',

@@ -21,8 +21,11 @@ export class PhaseBanner {
       fontFamily: 'monospace', fontSize: this.mobile ? '11px' : '12px',
       color: `#${phase.color.toString(16).padStart(6, '0')}`, letterSpacing: 2,
     }).setOrigin(0.5);
+    // Depth 90 keeps this under the level-up/chest/pause modals (depth 100+): a phase
+    // callout can fire the instant an XP level-up opens one, and at depth 125 the banner
+    // used to render on top of the modal's title, making it unreadable mid-combat.
     const banner = this.scene.add.container(GAME_WIDTH / 2, 120, [back, marker, title, brief])
-      .setName('phase-banner').setDepth(125).setAlpha(0).setScale(0.88);
+      .setName('phase-banner').setDepth(90).setAlpha(0).setScale(0.88);
     this.active = banner;
     this.scene.tweens.add({
       targets: banner, y: 150, alpha: 1, scale: 1, duration: 220, ease: 'Back.Out', hold: 1450, yoyo: true,
