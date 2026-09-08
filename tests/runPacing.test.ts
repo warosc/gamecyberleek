@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { runPhase, BOSS_START_MS, UPGRADE_MILESTONES } from '../src/game/config/RunPacing';
+import { runPhase, BOSS_START_MS, RUN_PHASE_CALLOUTS, UPGRADE_MILESTONES } from '../src/game/config/RunPacing';
 import { EnemyType } from '../src/game/entities/enemies/EnemyTypes';
 import { getAbilityById } from '../src/game/abilities/AbilityRegistry';
 import { createPlayerStats } from '../src/game/entities/player/PlayerStats';
@@ -13,6 +13,8 @@ describe('five-minute combat pacing', () => {
     expect(runPhase(BOSS_START_MS).cap).toBe(0);
     expect(runPhase(300000).types).toEqual([]);
     expect(UPGRADE_MILESTONES.every(time=>time<BOSS_START_MS)).toBe(true);
+    expect(RUN_PHASE_CALLOUTS[30000].title).toBe('EMBESTIDA DETECTADA');
+    expect(RUN_PHASE_CALLOUTS[210000].brief).toContain('BROK-9');
   });
   it('offers distinct benefits and preserves piercing when a weapon changes', () => {
     const s=createPlayerStats();

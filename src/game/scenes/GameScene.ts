@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { UPGRADE_MILESTONES } from '../config/RunPacing';
+import { RUN_PHASE_CALLOUTS, runPhase, UPGRADE_MILESTONES } from '../config/RunPacing';
 import { currentViewportShape, mobileWorldZoom } from '../config/ViewportLayout';
 import { ARENA, COLORS, Events, GAMEPLAY, GameState } from '../config/Constants';
 import { Player } from '../entities/player/Player';
@@ -53,6 +53,7 @@ export class GameScene extends Phaser.Scene {
   private nextChestAt = GAMEPLAY.chestFirstMs;
   private pendingEquipmentDrop = false;
   private milestoneIndex = 0;
+  private lastRunPhaseAt = 0;
   private offeredAbilities: string[] = [];
   private victoryPending = false;
   private deaths = new EnemyDeathResolver();
@@ -121,6 +122,7 @@ export class GameScene extends Phaser.Scene {
     this.abilityLevels = new Map<string, number>();
     this.survivalMs = 0;
     this.milestoneIndex = 0;
+    this.lastRunPhaseAt = 0;
     this.offeredAbilities = [];
     this.specialLastUsed = { nova: -99999, shield: -99999, overdrive: -99999 };
     this.nextChestAt = GAMEPLAY.chestFirstMs;
@@ -249,6 +251,15 @@ export class GameScene extends Phaser.Scene {
     if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
     this.survivalMs += delta;
     this.encounters.update(this.survivalMs);
+    const phase = runPhase(this.survivalMs);
+    if (phase.at !== this.lastRunPhaseAt) {
+      this.lastRunPhaseAt = phase.at;
+      const callout = RUN_PHASE_CALLOUTS[phase.at as keyof typeof RUN_PHASE_CALLOUTS];
+      if (callout) {
+        this.audio.play('phase_change');
+        this.events.emit(Events.RUN_PHASE_CHANGED, callout);
+      }
+    }
     this.audio.updateMusic(
       this.survivalMs,
       this.encounters.hasBossSpawned ? 'boss' : this.survivalMs >= 135000 ? 'danger' : 'combat',

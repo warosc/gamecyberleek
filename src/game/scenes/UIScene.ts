@@ -13,6 +13,8 @@ import { StatusHud } from '../ui/StatusHud';
 import { BossBanner } from '../ui/BossBanner';
 import { AbilityBar } from '../ui/AbilityBar';
 import { PauseMenu } from '../ui/PauseMenu';
+import { PhaseBanner } from '../ui/PhaseBanner';
+import type { RunPhaseCallout } from '../config/RunPacing';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -41,6 +43,7 @@ export class UIScene extends Phaser.Scene {
   private bossBanner!: BossBanner;
   private abilityBar!: AbilityBar;
   private pauseMenu!: PauseMenu;
+  private phaseBanner!: PhaseBanner;
   constructor() {
     super('UI');
   }
@@ -65,6 +68,7 @@ export class UIScene extends Phaser.Scene {
       (id) => this.gameScene.activateSpecial(id),
     );
     this.pauseMenu = new PauseMenu(this, this.gameScene);
+    this.phaseBanner = new PhaseBanner(this, this.gameScene.mobileInput.active);
     if (this.gameScene.mobileInput.active) {
       this.mobileControls = new MobileControls(this, this.gameScene);
       this.mobileControls.create();
@@ -94,6 +98,7 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.CHEST_OPENED, this.showChestRewards, this);
     this.gameScene.events.on(Events.LOOT_COLLECTED, this.showLootBanner, this);
     this.gameScene.events.on(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
+    this.gameScene.events.on(Events.RUN_PHASE_CHANGED, this.onRunPhaseChanged, this);
     this.events.once('shutdown', () => {
       this.closeModal();
       this.mobileControls?.destroy();
@@ -109,6 +114,8 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.CHEST_OPENED, this.showChestRewards, this);
       this.gameScene.events.off(Events.LOOT_COLLECTED, this.showLootBanner, this);
       this.gameScene.events.off(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
+      this.gameScene.events.off(Events.RUN_PHASE_CHANGED, this.onRunPhaseChanged, this);
+      this.phaseBanner.destroy();
     });
   }
   update(_time: number, delta: number) {
@@ -277,6 +284,9 @@ export class UIScene extends Phaser.Scene {
   }
   private onEquipmentChanged(weapon: string, armor: string) {
     this.statusHud.setEquipment(weapon, armor);
+  }
+  private onRunPhaseChanged(phase: RunPhaseCallout) {
+    this.phaseBanner.show(phase);
   }
   private onState(state: GameState) {
     if (state === GameState.PAUSED && !this.modal.active) {

@@ -14,6 +14,7 @@ export type AudioEventId =
   | 'enemy_charge'
   | 'enemy_shot'
   | 'boss_attack'
+  | 'phase_change'
   | 'player_hit'
   | 'weapon_fire'
   | 'enemy_hit'
@@ -61,6 +62,13 @@ export const AUDIO_EVENTS: Record<AudioEventId, AudioEventDefinition> = {
     tones: [
       { frequency: 62, durationS: 0.22, volume: 0.045, type: 'sawtooth' },
       { frequency: 124, durationS: 0.16, volume: 0.025, delayMs: 55, type: 'square' },
+    ],
+  },
+  phase_change: {
+    category: 'ui',
+    tones: [
+      { frequency: 294, durationS: 0.1, volume: 0.025, type: 'triangle' },
+      { frequency: 440, durationS: 0.16, volume: 0.025, delayMs: 85, type: 'triangle' },
     ],
   },
   player_hit: { category: 'sfx', tones: [{ frequency: 80, durationS: 0.12, volume: 0.04, type: 'triangle' }] },

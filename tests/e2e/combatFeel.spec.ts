@@ -80,18 +80,22 @@ test('three milestone choices resume safely and the finale starts once at four m
   const r=await page.evaluate(() => {
     const s=window.combatGame.scene.getScene('Game') as GameScene;
     const offered: string[][]=[];
+    const callouts: string[]=[];
     s.events.on('player-level-up',(options:{id:string}[])=>offered.push(options.map(o=>o.id)));
+    s.events.on('run-phase-changed',(phase:{title:string})=>callouts.push(phase.title));
     for (const t of [60000,120000,180000]) {
       s.survivalMs=t-1; s.update(0,1);
       if (s.state !== 'LEVEL_UP') throw Error('Missing milestone');
       s.selectAbility('breach');
       s.selectAbility('fan'); // A double click must not grant a second upgrade.
     }
+    s.survivalMs=209999; s.update(0,1);
     s.survivalMs=239999; s.update(0,1); s.update(0,1);
-    return {offered, piercing:s.player.stats.bonusPiercing, count:s.player.stats.projectileCount,
+    return {offered, callouts, piercing:s.player.stats.bonusPiercing, count:s.player.stats.projectileCount,
       bosses:s.enemies.getChildren().filter(e=>(e as Enemy).enemyType==='BOSS').length,state:s.state};
   });
   expect(r.offered).toHaveLength(3);
+  expect(r.callouts).toEqual(['EMBESTIDA DETECTADA','FUEGO A DISTANCIA','BRECHA ABIERTA','ULTIMA OLEADA']);
   expect(r.offered.every(o=>o.join(',')==='breach,fan,phase_dash')).toBe(true);
   expect(r.piercing).toBe(3); expect(r.count).toBe(1); expect(r.bosses).toBe(1); expect(r.state).toBe('BOSS');
 });
