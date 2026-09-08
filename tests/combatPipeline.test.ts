@@ -37,7 +37,7 @@ describe('typed combat pipeline', () => {
       destroy,
     };
     const resolver = new EnemyDeathResolver();
-    expect(resolver.resolve(enemy)).toEqual({ x: 12, y: 34, xp: 90, boss: true, maxHealth: 1800 });
+    expect(resolver.resolve(enemy)).toEqual({ x: 12, y: 34, xp: 90, boss: true, miniboss: false, maxHealth: 1800 });
     expect(resolver.resolve(enemy)).toBeNull();
     expect(destroy).toHaveBeenCalledTimes(1);
   });

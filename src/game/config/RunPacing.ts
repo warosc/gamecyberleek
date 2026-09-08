@@ -1,6 +1,7 @@
 import { EnemyType } from '../entities/enemies/EnemyTypes';
 
 export const BOSS_START_MS = 240000;
+export const MINIBOSS_START_MS = 150000;
 export const UPGRADE_MILESTONES = [60000, 120000, 180000] as const;
 export const RUN_PHASES = [
   { at: 0, label: 'RÁBANOS · MANTÉN DISTANCIA', interval: 1300, cap: 12, types: [EnemyType.GRUNT] },

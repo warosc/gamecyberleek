@@ -17,6 +17,7 @@ import { PhaseBanner } from '../ui/PhaseBanner';
 import type { RunPhaseCallout } from '../config/RunPacing';
 import { MomentumHud } from '../ui/MomentumHud';
 import type { MomentumState } from '../systems/CombatMomentum';
+import { MinibossBanner } from '../ui/MinibossBanner';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -47,6 +48,7 @@ export class UIScene extends Phaser.Scene {
   private pauseMenu!: PauseMenu;
   private phaseBanner!: PhaseBanner;
   private momentumHud!: MomentumHud;
+  private minibossBanner!: MinibossBanner;
   constructor() {
     super('UI');
   }
@@ -73,6 +75,7 @@ export class UIScene extends Phaser.Scene {
     this.pauseMenu = new PauseMenu(this, this.gameScene);
     this.phaseBanner = new PhaseBanner(this, this.gameScene.mobileInput.active);
     this.momentumHud = new MomentumHud(this, this.gameScene.mobileInput.active);
+    this.minibossBanner = new MinibossBanner(this);
     if (this.gameScene.mobileInput.active) {
       this.mobileControls = new MobileControls(this, this.gameScene);
       this.mobileControls.create();
@@ -99,6 +102,8 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.STATE_CHANGED, this.onState, this);
     this.gameScene.events.on(Events.BOSS_SPAWNED, this.onBossSpawned, this);
     this.gameScene.events.on(Events.BOSS_HEALTH, this.onBossHealth, this);
+    this.gameScene.events.on(Events.MINIBOSS_SPAWNED, this.onMinibossSpawned, this);
+    this.gameScene.events.on(Events.MINIBOSS_HEALTH, this.onMinibossHealth, this);
     this.gameScene.events.on(Events.CHEST_OPENED, this.showChestRewards, this);
     this.gameScene.events.on(Events.LOOT_COLLECTED, this.showLootBanner, this);
     this.gameScene.events.on(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
@@ -117,6 +122,8 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.STATE_CHANGED, this.onState, this);
       this.gameScene.events.off(Events.BOSS_SPAWNED, this.onBossSpawned, this);
       this.gameScene.events.off(Events.BOSS_HEALTH, this.onBossHealth, this);
+      this.gameScene.events.off(Events.MINIBOSS_SPAWNED, this.onMinibossSpawned, this);
+      this.gameScene.events.off(Events.MINIBOSS_HEALTH, this.onMinibossHealth, this);
       this.gameScene.events.off(Events.CHEST_OPENED, this.showChestRewards, this);
       this.gameScene.events.off(Events.LOOT_COLLECTED, this.showLootBanner, this);
       this.gameScene.events.off(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
@@ -124,10 +131,12 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.WEAPON_EVOLVED, this.onWeaponEvolved, this);
       this.gameScene.events.off(Events.MOMENTUM_CHANGED, this.onMomentumChanged, this);
       this.phaseBanner.destroy();
+      this.minibossBanner.destroy();
     });
   }
   update(_time: number, delta: number) {
     this.bossBanner.update(delta);
+    this.minibossBanner.update(delta);
     const body = this.gameScene.player.body as Phaser.Physics.Arcade.Body | null;
     if (body && body.velocity.lengthSq() > 100) this.hints?.satisfy('move');
     this.hints?.update(delta);
@@ -212,6 +221,8 @@ export class UIScene extends Phaser.Scene {
   private onBossSpawned() {
     this.bossBanner.show();
   }
+  private onMinibossSpawned() { this.minibossBanner.show(); }
+  private onMinibossHealth(current: number, max: number) { this.minibossBanner.setHealth(current, max); }
   private onBossHealth(current: number, max: number) {
     this.bossBanner.setHealth(current, max);
   }

@@ -242,6 +242,24 @@ test('three rapid eliminations activate momentum and increase XP', async ({ page
   expect(result.momentumVisible).toBe(true);
 });
 
+test('mid-run miniboss spawns once, keeps the run active and guarantees equipment', async ({ page }) => {
+  await deploy(page);
+  const result = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const internal = scene as unknown as {
+      encounters: { spawnMiniboss: () => boolean };
+      resolveEnemyDeath: (enemy: Enemy) => void;
+    };
+    internal.encounters.spawnMiniboss();
+    internal.encounters.spawnMiniboss();
+    const minibosses = scene.enemies.getChildren().filter(object => (object as Enemy).enemyType === 'MINIBOSS') as Enemy[];
+    const stateAtSpawn = scene.state;
+    internal.resolveEnemyDeath(minibosses[0]);
+    return { count: minibosses.length, stateAtSpawn, drops: scene.lootDrops.getChildren().length };
+  });
+  expect(result).toEqual({ count: 1, stateAtSpawn: 'PLAYING', drops: 1 });
+});
+
 test('weapon mastery migrates safely and applies permanent rank bonuses', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('leek-ops-profile-v3', JSON.stringify({
     schemaVersion: 3, runs: 4, bestLevel: 7, victories: 1, bioCredits: 140,

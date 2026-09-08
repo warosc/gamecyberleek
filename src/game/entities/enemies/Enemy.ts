@@ -32,7 +32,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
 
   /** Bounded impulse; distance from the player never amplifies knockback. */
   knockback(angle: number, critical: boolean) {
-    if (this.enemyType === EnemyType.BOSS || this.charge || this.pendingAttack || this.melee) return;
+    if (this.enemyType === EnemyType.BOSS || this.enemyType === EnemyType.MINIBOSS || this.charge || this.pendingAttack || this.melee) return;
     const speed = (critical ? 170 : 95) * (this.enemyType === EnemyType.TANK ? 0.35 : 1);
     this.knockbackX = Math.cos(angle) * speed;
     this.knockbackY = Math.sin(angle) * speed;
@@ -47,6 +47,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       .lineBetween(length - 18, -12, length, 0).lineBetween(length, 0, length - 18, 12);
   }
   private bossAttackSequence = 0;
+  private wardenAttackSequence = 0;
   /**
    * A shot that has been telegraphed but not yet fired. Scheduled on gameplay time rather than
    * through `scene.time`, so a telegraph cannot resolve while the run is paused or a level-up
@@ -210,6 +211,36 @@ export class Enemy extends Phaser.GameObjects.Arc {
       this.syncVisual(target);
       return;
     }
+    if (this.def.behavior === 'warden') {
+      if (this.pendingAttack) { body.setVelocity(0); this.syncVisual(target); return; }
+      if (distance > 330) this.scene.physics.moveToObject(this, target, this.def.speed);
+      else body.setVelocity(0);
+      if (allowAttack && time - this.lastAttack > 2100 && distance < 620) {
+        this.lastAttack = time;
+        body.setVelocity(0);
+        const lockedAim = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
+        const radial = ++this.wardenAttackSequence % 2 === 0;
+        this.showAttackTelegraph(0xff3b76, radial ? 92 : 72, GAMEPLAY.telegraphLeadMs.miniboss,
+          radial ? undefined : lockedAim);
+        if (!radial) this.showLane(lockedAim, 600, 42, 0xff3b76);
+        this.scene.events.emit('enemy-warning', 'miniboss');
+        this.pendingAttack = {
+          at: time + GAMEPLAY.telegraphLeadMs.miniboss,
+          release: () => {
+            this.scene.events.emit('enemy-attack', 'miniboss');
+            if (radial) {
+              for (let index = 0; index < 10; index++)
+                fire(this.x, this.y, (Math.PI * 2 * index) / 10, 225, 11);
+            } else {
+              for (let index = -1; index <= 1; index++)
+                fire(this.x, this.y, lockedAim + index * 0.16, 315, 14);
+            }
+          },
+        };
+      }
+      this.syncVisual(target);
+      return;
+    }
     if (this.pendingAttack) { body.setVelocity(0); this.syncVisual(target); return; }
     this.chase(target);
     if (this.def.behavior === 'commander' && time - this.lastAttack > this.bossAttackCooldown) {
@@ -253,6 +284,8 @@ export class Enemy extends Phaser.GameObjects.Arc {
     this.flashHit(critical);
     if (this.enemyType === EnemyType.BOSS)
       this.scene.events.emit(Events.BOSS_HEALTH, this.health.current, this.health.max);
+    else if (this.enemyType === EnemyType.MINIBOSS)
+      this.scene.events.emit(Events.MINIBOSS_HEALTH, this.health.current, this.health.max);
     return this.health.dead;
   }
 
@@ -287,7 +320,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       isVegetableType(this.enemyType) ? VEGETABLE_ROSTER[this.enemyType].color : this.def.color;
   }
   makeElite() {
-    if (this.enemyType === EnemyType.BOSS || this.elite) return this;
+    if (this.enemyType === EnemyType.BOSS || this.enemyType === EnemyType.MINIBOSS || this.elite) return this;
     this.elite = true;
     const affix = ELITE_AFFIX_DEFS[this.eliteAffix];
     this.eliteMultiplier = affix.speedMultiplier;
@@ -423,6 +456,19 @@ export class Enemy extends Phaser.GameObjects.Arc {
       }
     }
 
+    if (this.enemyType === EnemyType.MINIBOSS) {
+      // REM-Ω reads as a cybernetic beet: layered bulb, leaf crown and a bright targeting visor.
+      body.clear()
+        .fillStyle(0x130813).fillCircle(0, 2, size + 5)
+        .fillStyle(0x75133f).fillCircle(0, 4, size)
+        .lineStyle(4, 0xff4e8a, 0.9).strokeCircle(0, 4, size)
+        .fillStyle(0x103e37).fillTriangle(-22, -size + 4, -7, -size - 25, 1, -size + 1)
+        .fillStyle(0x17634d).fillTriangle(-4, -size + 1, 10, -size - 31, 18, -size + 6)
+        .fillStyle(0x21e6ff).fillRoundedRect(-25, -8, 50, 12, 4)
+        .fillStyle(0xeaffff).fillCircle(0, -2, 4)
+        .fillStyle(0xff3b76).fillTriangle(-8, size - 1, 8, size - 1, 0, size + 18);
+    }
+
     if (this.enemyType === EnemyType.BOSS) {
       // A broccoli canopy distinguishes the commander from an enlarged tank.
       for (let index = -2; index <= 2; index++) {
@@ -456,7 +502,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
         attachments.push(foot);
       }
     }
-    if (this.enemyType === EnemyType.SHOOTER || this.enemyType === EnemyType.BOSS) {
+    if (this.enemyType === EnemyType.SHOOTER || this.enemyType === EnemyType.MINIBOSS || this.enemyType === EnemyType.BOSS) {
       this.chargeGlow = scene.add.circle(0, -size * 0.45, size * 0.35, 0xffb979, 0.15)
         .setStrokeStyle(2, 0xffe5bf, 0.6).setBlendMode(Phaser.BlendModes.ADD);
     }

@@ -18,7 +18,7 @@ export const GAMEPLAY = {
   spawnMinimumIntervalMs: 260,
   // Warning shown before a shot actually leaves the enemy. Section 13 of the product brief:
   // a dangerous attack has to communicate before it damages, and the lead has to stay tunable.
-  telegraphLeadMs: { shooter: 650, boss: 550 },
+  telegraphLeadMs: { shooter: 650, miniboss: 800, boss: 550 },
   eliteStartMs: 120000,
   eliteMaxChance: 0.12,
   eliteAffixWeights: { OVERCHARGED: 55, ARMORED: 25, SWIFT: 20 },
@@ -55,6 +55,9 @@ export const Events = {
   STATE_CHANGED: 'state-changed',
   BOSS_SPAWNED: 'boss-spawned',
   BOSS_HEALTH: 'boss-health',
+  MINIBOSS_SPAWNED: 'miniboss-spawned',
+  MINIBOSS_HEALTH: 'miniboss-health',
+  MINIBOSS_DEFEATED: 'miniboss-defeated',
   CHEST_OPENED: 'chest-opened',
   LOOT_COLLECTED: 'loot-collected',
   EQUIPMENT_CHANGED: 'equipment-changed',

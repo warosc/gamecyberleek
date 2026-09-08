@@ -91,7 +91,8 @@ export class GameScene extends Phaser.Scene {
   };
   private readonly handleEnemyWarning = (kind: string) => this.audio.play(kind === 'charge' ? 'charge_warning' : 'shot_warning');
   private readonly handleEnemyAttack = (kind: string) =>
-    this.audio.play(kind === 'boss' ? 'boss_attack' : kind === 'charge' ? 'enemy_charge' : kind === 'shot' ? 'enemy_shot' : 'enemy_melee');
+    this.audio.play(kind === 'boss' ? 'boss_attack' : kind === 'charge' ? 'enemy_charge' :
+      kind === 'shot' || kind === 'miniboss' ? 'enemy_shot' : 'enemy_melee');
   private readonly handlePlayerDashed = () => this.audio.play('dash');
   private readonly handleWeaponFired = (x: number, y: number, angle: number) => {
     this.telemetry.shotFired();
@@ -184,7 +185,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.chests = this.loot.chests;
     this.lootDrops = this.loot.drops;
-    this.encounters = new EncounterSystem(this, this.enemies, this.player);
+    this.encounters = new EncounterSystem(this, this.enemies, this.player, this.arenaIndex);
     this.runEnd = new RunEndSystem(this, () => this.scene.stop('UI'));
     this.worldProps = new ExplosiveBarrelSystem(this, (x, y, damage, radius) =>
       this.plasmaExplosion(x, y, damage, radius),
@@ -641,6 +642,12 @@ export class GameScene extends Phaser.Scene {
       { critical: false, boss: defeat.boss, elite, fatal: true },
     );
     this.spawnOrb(defeat.x, defeat.y, Math.round(defeat.xp * momentum.xpMultiplier));
+    if (defeat.miniboss) {
+      this.loot.spawnEquipmentDrop();
+      this.events.emit(Events.MINIBOSS_HEALTH, 0, defeat.maxHealth);
+      this.events.emit(Events.MINIBOSS_DEFEATED);
+      this.audio.tone(1180, 0.32, 0.055);
+    }
     if (defeat.boss) {
       // Freeze combat during the death effect. XP must not open a modal and pause the
       // victory timer before the result screen is reached.
