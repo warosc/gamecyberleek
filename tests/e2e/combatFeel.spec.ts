@@ -241,3 +241,18 @@ test('three rapid eliminations activate momentum and increase XP', async ({ page
   expect(result.values[2]).toBeGreaterThan(result.values[0]);
   expect(result.momentumVisible).toBe(true);
 });
+
+test('weapon mastery migrates safely and applies permanent rank bonuses', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('leek-ops-profile-v3', JSON.stringify({
+    schemaVersion: 3, runs: 4, bestLevel: 7, victories: 1, bioCredits: 140,
+    vibration: true, autoFire: false, unlocks: [], weaponMastery: { pulse: 60, spore: 0, arc: 0 },
+  })));
+  await deploy(page);
+  const stats = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    return { damage: scene.player.stats.attackDamage, cooldown: scene.player.stats.attackCooldown, critical: scene.player.stats.criticalChance };
+  });
+  expect(stats.damage).toBe(21);
+  expect(stats.cooldown).toBeCloseTo(218.5);
+  expect(stats.critical).toBeCloseTo(0.11);
+});

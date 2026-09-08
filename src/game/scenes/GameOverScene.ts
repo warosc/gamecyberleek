@@ -14,7 +14,7 @@ export class GameOverScene extends Phaser.Scene {
     super('GameOver');
   }
 
-  create(data: { time: number; level: number; victory: boolean; arenaIndex: number; weaponId: string }) {
+  create(data: { time: number; level: number; victory: boolean; arenaIndex: number; weaponId: string; masteryEarned?: number }) {
     this.input.enabled = true;
     this.navigating = false;
     this.add
@@ -55,6 +55,9 @@ export class GameOverScene extends Phaser.Scene {
     this.statCard(360, 300, 'SURVIVAL', `${minutes}:${String(remainingSeconds).padStart(2, '0')}`);
     this.statCard(640, 300, 'LEVEL REACHED', String(data.level));
     this.statCard(920, 300, 'SECTOR', String(data.arenaIndex + 1));
+    this.add.text(GAME_WIDTH / 2, 392, `WEAPON MASTERY  +${data.masteryEarned ?? 0}`, {
+      fontFamily: 'Arial Black', fontSize: '15px', color: '#ffc857', letterSpacing: 2,
+    }).setOrigin(0.5);
 
     // A clear run earns the next sector; dying retries the one that beat you.
     const nextArenaIndex = data.victory ? data.arenaIndex + 1 : data.arenaIndex;

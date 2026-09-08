@@ -27,6 +27,7 @@ import { ImpactPresenter } from '../presentation/ImpactPresenter';
 import { RunTelemetry } from '../systems/RunTelemetry';
 import { starterWeapon, type StarterWeaponId } from '../weapons/WeaponRegistry';
 import { CombatMomentum } from '../systems/CombatMomentum';
+import { applyWeaponMastery } from '../weapons/WeaponMastery';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -156,6 +157,8 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, ARENA.width, ARENA.height);
     new ArenaPresenter(this).draw(ARENA_THEMES[this.arenaIndex]);
     this.player = new Player(this, ARENA.width / 2, ARENA.height / 2, this.selectedWeaponId);
+    applyWeaponMastery(this.player.stats, this.selectedWeaponId, loadProfile().weaponMastery[this.selectedWeaponId]);
+    this.telemetry.equipped(this.player.stats.weaponName);
     this.projectiles = new ProjectileManager(this);
     this.enemyProjectiles = new EnemyProjectileManager(this);
     this.enemies = this.physics.add.group({ runChildUpdate: false });

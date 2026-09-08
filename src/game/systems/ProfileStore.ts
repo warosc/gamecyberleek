@@ -1,7 +1,9 @@
 import { UNLOCKS } from './UnlockRegistry';
+import { EMPTY_WEAPON_MASTERY, masteryEarnedForRun, type WeaponMastery } from '../weapons/WeaponMastery';
+import type { StarterWeaponId } from '../weapons/WeaponRegistry';
 
 export interface PlayerProfile {
-  schemaVersion: 2;
+  schemaVersion: 3;
   runs: number;
   bestLevel: number;
   victories: number;
@@ -9,12 +11,13 @@ export interface PlayerProfile {
   vibration: boolean;
   autoFire: boolean;
   unlocks: string[];
+  weaponMastery: WeaponMastery;
 }
 
-const KEY = 'leek-ops-profile-v2';
-const LEGACY_KEY = 'leek-ops-profile-v1';
+const KEY = 'leek-ops-profile-v3';
+const LEGACY_KEYS = ['leek-ops-profile-v2', 'leek-ops-profile-v1'] as const;
 const defaults: PlayerProfile = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   runs: 0,
   bestLevel: 1,
   victories: 0,
@@ -22,6 +25,7 @@ const defaults: PlayerProfile = {
   vibration: true,
   autoFire: false,
   unlocks: [],
+  weaponMastery: { ...EMPTY_WEAPON_MASTERY },
 };
 
 function validNonNegative(value: unknown, fallback: number) {
@@ -33,7 +37,7 @@ function normalizeProfile(value: unknown): PlayerProfile {
   const raw = value as Partial<PlayerProfile>;
   return {
     runs: Math.floor(validNonNegative(raw.runs, defaults.runs)),
-    schemaVersion: 2,
+    schemaVersion: 3,
     bestLevel: Math.max(1, Math.floor(validNonNegative(raw.bestLevel, defaults.bestLevel))),
     victories: Math.floor(validNonNegative(raw.victories, defaults.victories)),
     bioCredits: Math.floor(validNonNegative(raw.bioCredits, defaults.bioCredits)),
@@ -42,12 +46,17 @@ function normalizeProfile(value: unknown): PlayerProfile {
     unlocks: Array.isArray(raw.unlocks)
       ? [...new Set(raw.unlocks.filter((id): id is string => typeof id === 'string' && id.length < 64))]
       : defaults.unlocks,
+    weaponMastery: {
+      pulse: Math.floor(validNonNegative(raw.weaponMastery?.pulse, 0)),
+      spore: Math.floor(validNonNegative(raw.weaponMastery?.spore, 0)),
+      arc: Math.floor(validNonNegative(raw.weaponMastery?.arc, 0)),
+    },
   };
 }
 
 export function loadProfile(): PlayerProfile {
   try {
-    const stored = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY) ?? '{}';
+    const stored = localStorage.getItem(KEY) ?? LEGACY_KEYS.map(key => localStorage.getItem(key)).find(Boolean) ?? '{}';
     const profile = normalizeProfile(JSON.parse(stored));
     if (!localStorage.getItem(KEY)) persist(profile);
     return profile;
@@ -72,12 +81,13 @@ function persist(profile: PlayerProfile) {
   }
 }
 
-export function saveRun(level: number, victory: boolean) {
+export function saveRun(level: number, victory: boolean, weaponId: StarterWeaponId = 'pulse') {
   const profile = loadProfile();
   profile.runs++;
   profile.bestLevel = Math.max(profile.bestLevel, level);
   profile.victories += Number(victory);
   profile.bioCredits += level * 5 + (victory ? 100 : 0);
+  profile.weaponMastery[weaponId] += masteryEarnedForRun(level, victory);
   for (const definition of UNLOCKS) {
     if (!profile.unlocks.includes(definition.id) && definition.requirement(profile))
       profile.unlocks.push(definition.id);

@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { loadProfile } from '../systems/ProfileStore';
 import { AudioManager } from '../managers/AudioManager';
 import { STARTER_WEAPONS, type StarterWeaponId } from '../weapons/WeaponRegistry';
+import { masteryRank, type WeaponMastery } from '../weapons/WeaponMastery';
 
 export class MenuScene extends Phaser.Scene {
   private audio?: AudioManager;
@@ -94,7 +95,7 @@ export class MenuScene extends Phaser.Scene {
       })
       .setVisible(false);
 
-    this.createWeaponSelector();
+    this.createWeaponSelector(profile.weaponMastery);
 
     this.createAtmosphere();
     this.createHeroShowcase();
@@ -122,7 +123,7 @@ export class MenuScene extends Phaser.Scene {
     this.audio?.updateMusic(time, 'menu');
   }
 
-  private createWeaponSelector() {
+  private createWeaponSelector(mastery: WeaponMastery) {
     const cards: Phaser.GameObjects.Rectangle[] = [];
     const label = this.add.text(920, 532, 'SELECT LOADOUT  ·  1 / 2 / 3', {
       fontFamily: 'Arial Black', fontSize: '12px', color: '#eaffff', letterSpacing: 2,
@@ -142,6 +143,9 @@ export class MenuScene extends Phaser.Scene {
       const role = this.add.text(x, 624, weapon.role, {
         fontFamily: 'monospace', fontSize: '10px', color: `#${weapon.color.toString(16).padStart(6, '0')}`,
       }).setOrigin(0.5).setDepth(10);
+      const masteryText = this.add.text(x, 642, `MASTERY ${masteryRank(mastery[weapon.id])}  ·  ${mastery[weapon.id]} MP`, {
+        fontFamily: 'monospace', fontSize: '9px', color: '#ffc857',
+      }).setOrigin(0.5).setDepth(10);
       const description = this.add.text(x, 652, weapon.description, {
         fontFamily: 'Arial', fontSize: '11px', color: '#a9bbc9', align: 'center', wordWrap: { width: 180 },
       }).setOrigin(0.5).setDepth(10);
@@ -154,7 +158,8 @@ export class MenuScene extends Phaser.Scene {
       };
       card.on('pointerup', select);
       cards.push(card);
-      void number; void name; void role; void description;
+      description.setY(666);
+      void number; void name; void role; void masteryText; void description;
       this.input.keyboard?.on(`keydown-${index + 1}`, select);
     });
   }

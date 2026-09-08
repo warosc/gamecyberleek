@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
 import { saveRun } from './ProfileStore';
+import { masteryEarnedForRun } from '../weapons/WeaponMastery';
+import type { StarterWeaponId } from '../weapons/WeaponRegistry';
 
 export interface RunEndData {
   time: number;
   level: number;
   victory: boolean;
   arenaIndex: number;
-  weaponId: string;
+  weaponId: StarterWeaponId;
 }
 
 /** Owns the one-way handoff from gameplay into the result screen. */
@@ -18,9 +20,9 @@ export class RunEndSystem {
   finish(data: RunEndData) {
     if (this.ended) return false;
     this.ended = true;
-    saveRun(data.level, data.victory);
+    saveRun(data.level, data.victory, data.weaponId);
     this.stopUi();
-    this.scene.scene.start('GameOver', data);
+    this.scene.scene.start('GameOver', { ...data, masteryEarned: masteryEarnedForRun(data.level, data.victory) });
     return true;
   }
 }
