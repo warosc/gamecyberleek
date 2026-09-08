@@ -49,6 +49,8 @@ function watch(page: Page): Telemetry {
 async function canvasMapper(page: Page) {
   const canvas = page.locator('canvas');
   await expect(canvas).toBeVisible();
+  // Canvas visibility starts in BootScene; wait until the menu has installed its input hit areas.
+  await expect(canvas).toHaveAttribute('data-scene', 'Menu');
   const box = await canvas.boundingBox();
   if (!box) throw new Error('canvas has no bounding box');
   return (x: number, y: number) => ({

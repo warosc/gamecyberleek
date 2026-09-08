@@ -50,6 +50,7 @@ const NUMERIC_KEYS: readonly (keyof PlayerStats)[] = [
   'maxHp', 'moveSpeed', 'dashSpeed', 'dashDuration', 'dashCooldown', 'attackDamage',
   'attackCooldown', 'projectileSpeed', 'criticalChance', 'xpMultiplier', 'projectileCount',
   'magnetRadius', 'damageReduction', 'projectileScale', 'projectilePiercing', 'splashRadius',
+  'chainTargets', 'chainRange',
 ];
 
 function structuredModifiers(apply: (stats: PlayerStats) => void): EquipmentModifier[] {

@@ -6,6 +6,7 @@ export interface RunEndData {
   level: number;
   victory: boolean;
   arenaIndex: number;
+  weaponId: string;
 }
 
 /** Owns the one-way handoff from gameplay into the result screen. */

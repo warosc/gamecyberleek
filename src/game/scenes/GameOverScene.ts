@@ -14,7 +14,7 @@ export class GameOverScene extends Phaser.Scene {
     super('GameOver');
   }
 
-  create(data: { time: number; level: number; victory: boolean; arenaIndex: number }) {
+  create(data: { time: number; level: number; victory: boolean; arenaIndex: number; weaponId: string }) {
     this.input.enabled = true;
     this.navigating = false;
     this.add
@@ -65,7 +65,7 @@ export class GameOverScene extends Phaser.Scene {
       this.navigating = true;
       this.scene.start(key, sceneData);
     };
-    const start = go('Game', { arenaIndex: data.victory && canAdvance ? nextArenaIndex : data.arenaIndex });
+    const start = go('Game', { arenaIndex: data.victory && canAdvance ? nextArenaIndex : data.arenaIndex, weaponId: data.weaponId });
     const redeploy = () => {
       // Restart rate is the alpha's primary behavioural KPI, so the choice to go again is
       // recorded against the run the player just finished.

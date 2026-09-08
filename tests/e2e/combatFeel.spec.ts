@@ -175,3 +175,46 @@ test('the canvas fills phone landscape and mobile zoom enlarges only the world',
     expect(layout.secondaryHudVisible).toBe(true);
   }
 });
+
+test('loadout selection changes combat and Arc Leek chains between nearby enemies', async ({ page }) => {
+  await page.route(url => url.pathname === '/src/main.ts', async route => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: (await response.text()).replace('new Phaser.Game(gameConfig);', 'window.combatGame = new Phaser.Game(gameConfig);') });
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => window.combatGame?.scene.isActive('Menu'));
+  await page.evaluate(() => {
+    const menu = window.combatGame.scene.getScene('Menu');
+    menu.children.getByName('weapon-arc')?.emit('pointerup');
+    menu.scene.start('Game', { weaponId: 'arc' });
+  });
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Game'));
+  const result = await page.evaluate(async () => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    scene.togglePause();
+    scene.enemies.clear(true, true);
+    const enemyModulePath = '/src/game/entities/enemies/Enemy.ts';
+    const { Enemy } = await import(enemyModulePath);
+    const targets = [0, 1, 2].map(index => {
+      const enemy = new Enemy(scene, 620 + index * 90, 500, 'GRUNT') as Enemy;
+      scene.enemies.add(enemy);
+      return enemy;
+    });
+    scene.projectiles.fire(570, 500, 0, scene.player.stats, 1000);
+    const projectile = scene.projectiles.group.getChildren().find(item => item.active)!;
+    (scene as unknown as { projectileHit: (p: Phaser.GameObjects.GameObject, e: Phaser.GameObjects.GameObject) => void })
+      .projectileHit(projectile, targets[0]);
+    return {
+      name: scene.player.stats.weaponName,
+      mode: scene.player.stats.weaponMode,
+      chainTargets: scene.player.stats.chainTargets,
+      health: targets.map(target => target.health.current),
+    };
+  });
+  expect(result.name).toBe('ARC LEEK');
+  expect(result.mode).toBe('arc');
+  expect(result.chainTargets).toBe(2);
+  expect(result.health[0]).toBeLessThan(50);
+  expect(result.health[1]).toBeLessThan(50);
+  expect(result.health[2]).toBeLessThan(50);
+});

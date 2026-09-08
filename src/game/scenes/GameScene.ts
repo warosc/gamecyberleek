@@ -25,6 +25,7 @@ import { EncounterSystem } from '../systems/EncounterSystem';
 import { RunEndSystem } from '../systems/RunEndSystem';
 import { ImpactPresenter } from '../presentation/ImpactPresenter';
 import { RunTelemetry } from '../systems/RunTelemetry';
+import { starterWeapon, type StarterWeaponId } from '../weapons/WeaponRegistry';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -58,6 +59,7 @@ export class GameScene extends Phaser.Scene {
   private victoryPending = false;
   private deaths = new EnemyDeathResolver();
   equippedWeapon = 'PULSEGUN-01';
+  selectedWeaponId: StarterWeaponId = 'pulse';
   equippedArmor = 'SIN ARMADURA';
   private effects!: CombatEffects;
   private impacts!: ImpactPresenter;
@@ -86,7 +88,7 @@ export class GameScene extends Phaser.Scene {
   private readonly handlePlayerDashed = () => this.audio.play('dash');
   private readonly handleWeaponFired = (x: number, y: number, angle: number) => {
     this.telemetry.shotFired();
-    this.audio.play('weapon_fire');
+    this.audio.play(this.player.stats.weaponMode === 'plasma' ? 'spore_fire' : this.player.stats.weaponMode === 'arc' ? 'arc_fire' : 'weapon_fire');
     this.effects.muzzle(x, y, angle);
   };
   private readonly handleEscape = (event: KeyboardEvent) => {
@@ -114,9 +116,10 @@ export class GameScene extends Phaser.Scene {
   constructor() {
     super('Game');
   }
-  init(data: { arenaIndex?: number }) {
+  init(data: { arenaIndex?: number; weaponId?: StarterWeaponId }) {
     this.arenaIndex = (data.arenaIndex ?? this.arenaIndex) % ARENA_THEMES.length;
     this.arenaName = ARENA_THEMES[this.arenaIndex].name;
+    this.selectedWeaponId = data.weaponId ?? 'pulse';
     this.state = GameState.PLAYING;
     this.xp = new ExperienceSystem();
     this.abilityLevels = new Map<string, number>();
@@ -136,15 +139,16 @@ export class GameScene extends Phaser.Scene {
     this.mobileInput.firing = false;
     this.mobileInput.dash = false;
     this.mobileInput.autoFire = loadProfile().autoFire;
-    this.equippedWeapon = 'PULSEGUN-01';
+    this.equippedWeapon = starterWeapon(this.selectedWeaponId).name;
     this.equippedArmor = 'SIN ARMADURA';
   }
   create() {
+    this.game.canvas.dataset.scene = 'Game';
     this.time.paused = false;
     this.tweens.resumeAll();
     this.physics.world.setBounds(0, 0, ARENA.width, ARENA.height);
     new ArenaPresenter(this).draw(ARENA_THEMES[this.arenaIndex]);
-    this.player = new Player(this, ARENA.width / 2, ARENA.height / 2);
+    this.player = new Player(this, ARENA.width / 2, ARENA.height / 2, this.selectedWeaponId);
     this.projectiles = new ProjectileManager(this);
     this.enemyProjectiles = new EnemyProjectileManager(this);
     this.enemies = this.physics.add.group({ runChildUpdate: false });
@@ -343,6 +347,28 @@ export class GameScene extends Phaser.Scene {
       e.knockback(Phaser.Math.Angle.Between(this.player.x, this.player.y, e.x, e.y), p.critical);
     }
     if (p.mode === 'plasma' && p.splashRadius > 0) this.plasmaExplosion(e.x, e.y, p.damage * 0.55, p.splashRadius, e);
+    if (p.mode === 'arc' && this.player.stats.chainTargets > 0)
+      this.arcChain(e, p.damage * 0.72, this.player.stats.chainTargets, this.player.stats.chainRange, p.hitTargets);
+  }
+  private arcChain(origin: Enemy, damage: number, jumps: number, range: number, excluded: Set<object>) {
+    let source = origin;
+    for (let jump = 0; jump < jumps; jump++) {
+      const next = this.enemies.getChildren()
+        .map(object => object as Enemy)
+        .filter(enemy => enemy.active && !excluded.has(enemy) && Phaser.Math.Distance.Between(source.x, source.y, enemy.x, enemy.y) <= range)
+        .sort((a, b) => Phaser.Math.Distance.Squared(source.x, source.y, a.x, a.y) - Phaser.Math.Distance.Squared(source.x, source.y, b.x, b.y))[0];
+      if (!next) break;
+      excluded.add(next);
+      const beam = this.add.graphics().setDepth(18).lineStyle(4, 0x73ef62, 0.9)
+        .lineBetween(source.x, source.y, next.x, next.y).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: beam, alpha: 0, duration: 120, onComplete: () => beam.destroy() });
+      const applied = Math.max(1, Math.round(damage * Math.pow(0.82, jump)));
+      this.telemetry.dealtDamage(applied);
+      const fatal = next.hit(applied);
+      this.impacts.hit(next.x, next.y, applied, { critical: false, boss: next.enemyType === EnemyType.BOSS, elite: next.elite, fatal: false });
+      if (fatal) this.resolveEnemyDeath(next);
+      source = next;
+    }
   }
   private enemyContact(object: Phaser.GameObjects.GameObject) {
     const e = object as Enemy;
@@ -564,6 +590,7 @@ export class GameScene extends Phaser.Scene {
       level: this.xp.level,
       victory,
       arenaIndex: this.arenaIndex,
+      weaponId: this.selectedWeaponId,
     });
   }
   private plasmaExplosion(x: number, y: number, damage: number, radius: number, ignored?: Enemy) {

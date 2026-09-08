@@ -17,6 +17,8 @@ export type AudioEventId =
   | 'phase_change'
   | 'player_hit'
   | 'weapon_fire'
+  | 'spore_fire'
+  | 'arc_fire'
   | 'enemy_hit'
   | 'critical_hit'
   | 'enemy_death'
@@ -73,6 +75,14 @@ export const AUDIO_EVENTS: Record<AudioEventId, AudioEventDefinition> = {
   },
   player_hit: { category: 'sfx', tones: [{ frequency: 80, durationS: 0.12, volume: 0.04, type: 'triangle' }] },
   weapon_fire: { category: 'sfx', tones: [{ frequency: 240, durationS: 0.025, volume: 0.015, type: 'square' }] },
+  spore_fire: { category: 'sfx', tones: [{ frequency: 92, durationS: 0.14, volume: 0.035, type: 'sawtooth' }] },
+  arc_fire: {
+    category: 'sfx',
+    tones: [
+      { frequency: 390, durationS: 0.055, volume: 0.024, type: 'square' },
+      { frequency: 780, durationS: 0.04, volume: 0.016, delayMs: 20, type: 'triangle' },
+    ],
+  },
   enemy_hit: { category: 'sfx', tones: [{ frequency: 135, durationS: 0.035, volume: 0.025, type: 'square' }] },
   // A critical reads as a hit plus a bright overtone, so it is recognisable without being louder.
   critical_hit: {

@@ -19,6 +19,8 @@ export interface PlayerStats {
   projectilePiercing: number;
   bonusPiercing: number;
   splashRadius: number;
+  chainTargets: number;
+  chainRange: number;
 }
 export const createPlayerStats = (): PlayerStats => ({
   maxHp: 100,
@@ -41,4 +43,6 @@ export const createPlayerStats = (): PlayerStats => ({
   projectilePiercing: 0,
   bonusPiercing: 0,
   splashRadius: 0,
+  chainTargets: 0,
+  chainRange: 0,
 });

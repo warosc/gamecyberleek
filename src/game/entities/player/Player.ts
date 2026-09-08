@@ -6,6 +6,7 @@ import { PlayerAnimator } from './PlayerAnimator';
 import { PlayerController, type VirtualPlayerInput } from './PlayerController';
 import { resolveDamage } from '../../systems/CombatSystem';
 import { LayeredPlayerRig } from './LayeredPlayerRig';
+import { applyStarterWeapon, type StarterWeaponId } from '../../weapons/WeaponRegistry';
 
 export class Player extends Phaser.GameObjects.Container {
   readonly stats = createPlayerStats();
@@ -29,8 +30,9 @@ export class Player extends Phaser.GameObjects.Container {
   private overdriveRing: Phaser.GameObjects.Graphics;
   private shadow: Phaser.GameObjects.Ellipse;
   private gameplayTime = 0;
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, weaponId: StarterWeaponId = 'pulse') {
     super(scene, x, y);
+    applyStarterWeapon(this.stats, weaponId);
     scene.add.existing(this);
     scene.physics.add.existing(this);
     const rig = LayeredPlayerRig.create(scene);
@@ -80,9 +82,11 @@ export class Player extends Phaser.GameObjects.Container {
     ]);
     if (rig) this.add(rig);
     const gun = scene.add.graphics();
-    gun.fillStyle(0x07111f).fillRoundedRect(-7, -8, 35, 16, 3)
-      .lineStyle(2, 0x5b8191).strokeRoundedRect(-7, -8, 35, 16, 3)
-      .fillStyle(0x21e6ff).fillRect(2, -3, 28, 6)
+    const weaponColor = this.stats.projectileColor;
+    const weaponLength = this.stats.weaponMode === 'plasma' ? 41 : 35;
+    gun.fillStyle(0x07111f).fillRoundedRect(-7, -8, weaponLength, 16, 3)
+      .lineStyle(2, 0x5b8191).strokeRoundedRect(-7, -8, weaponLength, 16, 3)
+      .fillStyle(weaponColor).fillRect(2, -3, weaponLength - 7, 6)
       .fillStyle(0x73ef62).fillRect(-4, -5, 5, 10);
     this.weapon = scene.add.container(22, 0, [gun]);
     this.weapon.name = 'player-aimed-weapon';

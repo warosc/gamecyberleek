@@ -2,15 +2,19 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { loadProfile } from '../systems/ProfileStore';
 import { AudioManager } from '../managers/AudioManager';
+import { STARTER_WEAPONS, type StarterWeaponId } from '../weapons/WeaponRegistry';
 
 export class MenuScene extends Phaser.Scene {
   private audio?: AudioManager;
+  private selectedWeaponId: StarterWeaponId = 'pulse';
   constructor() {
     super('Menu');
   }
 
   create() {
+    this.game.canvas.dataset.scene = 'Menu';
     this.audio = new AudioManager(this);
+    this.selectedWeaponId = 'pulse';
     const profile = loadProfile();
     const backdrop = this.add
       .image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'menu-backdrop')
@@ -73,7 +77,8 @@ export class MenuScene extends Phaser.Scene {
       },
     );
 
-    this.createButton(80, 392, 330, 66, 'DEPLOY', 0x73ef62, () => this.scene.start('Game'));
+    this.createButton(80, 392, 330, 66, 'DEPLOY', 0x73ef62, () =>
+      this.scene.start('Game', { weaponId: this.selectedWeaponId }));
     this.createButton(80, 474, 220, 48, 'HOW TO PLAY', 0x21e6ff, () =>
       controls.setVisible(!controls.visible),
     );
@@ -88,6 +93,8 @@ export class MenuScene extends Phaser.Scene {
         lineSpacing: 9,
       })
       .setVisible(false);
+
+    this.createWeaponSelector();
 
     this.createAtmosphere();
     this.createHeroShowcase();
@@ -113,6 +120,43 @@ export class MenuScene extends Phaser.Scene {
 
   update(time: number) {
     this.audio?.updateMusic(time, 'menu');
+  }
+
+  private createWeaponSelector() {
+    const cards: Phaser.GameObjects.Rectangle[] = [];
+    const label = this.add.text(920, 532, 'SELECT LOADOUT  ·  1 / 2 / 3', {
+      fontFamily: 'Arial Black', fontSize: '12px', color: '#eaffff', letterSpacing: 2,
+      backgroundColor: '#06101dcc', padding: { x: 12, y: 6 },
+    }).setOrigin(0.5).setDepth(9);
+    STARTER_WEAPONS.forEach((weapon, index) => {
+      const x = 700 + index * 220;
+      const card = this.add.rectangle(x, 620, 202, 126, 0x06101d, 0.9)
+        .setStrokeStyle(2, weapon.color, index === 0 ? 1 : 0.42)
+        .setInteractive({ useHandCursor: true }).setDepth(9).setName(`weapon-${weapon.id}`);
+      const number = this.add.text(x - 82, 574, String(index + 1), {
+        fontFamily: 'Arial Black', fontSize: '14px', color: `#${weapon.color.toString(16).padStart(6, '0')}`,
+      }).setOrigin(0.5).setDepth(10);
+      const name = this.add.text(x, 600, weapon.name, {
+        fontFamily: 'Arial Black', fontSize: '15px', color: '#ffffff', align: 'center',
+      }).setOrigin(0.5).setDepth(10);
+      const role = this.add.text(x, 624, weapon.role, {
+        fontFamily: 'monospace', fontSize: '10px', color: `#${weapon.color.toString(16).padStart(6, '0')}`,
+      }).setOrigin(0.5).setDepth(10);
+      const description = this.add.text(x, 652, weapon.description, {
+        fontFamily: 'Arial', fontSize: '11px', color: '#a9bbc9', align: 'center', wordWrap: { width: 180 },
+      }).setOrigin(0.5).setDepth(10);
+      const select = () => {
+        this.selectedWeaponId = weapon.id;
+        cards.forEach((item, cardIndex) => item
+          .setFillStyle(cardIndex === index ? weapon.color : 0x06101d, cardIndex === index ? 0.2 : 0.9)
+          .setStrokeStyle(2, STARTER_WEAPONS[cardIndex].color, cardIndex === index ? 1 : 0.42));
+        label.setText(`LOADOUT READY  ·  ${weapon.name}`);
+      };
+      card.on('pointerup', select);
+      cards.push(card);
+      void number; void name; void role; void description;
+      this.input.keyboard?.on(`keydown-${index + 1}`, select);
+    });
   }
 
   private createAtmosphere() {
