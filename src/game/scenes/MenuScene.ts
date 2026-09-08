@@ -1,13 +1,16 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { loadProfile } from '../systems/ProfileStore';
+import { AudioManager } from '../managers/AudioManager';
 
 export class MenuScene extends Phaser.Scene {
+  private audio?: AudioManager;
   constructor() {
     super('Menu');
   }
 
   create() {
+    this.audio = new AudioManager(this);
     const profile = loadProfile();
     const backdrop = this.add
       .image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'menu-backdrop')
@@ -106,6 +109,10 @@ export class MenuScene extends Phaser.Scene {
       .setDepth(8)
       .setShadow(0, 0, '#21e6ff', 8, true, true);
     backdrop.setInteractive();
+  }
+
+  update(time: number) {
+    this.audio?.updateMusic(time, 'menu');
   }
 
   private createAtmosphere() {

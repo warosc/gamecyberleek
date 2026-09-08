@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { AUDIO_EVENTS, type AudioEventId } from '../audio/AudioEvents';
+import { musicCue, musicStepDuration, type MusicState } from '../audio/MusicScore';
 
 /**
  * One AudioContext for the whole game, created on the first user gesture that reaches any
@@ -12,12 +13,15 @@ import { AUDIO_EVENTS, type AudioEventId } from '../audio/AudioEvents';
 let context: AudioContext | undefined;
 let masterGain: GainNode | undefined;
 let masterVolume = 0.8;
-const categoryVolumes: Record<AudioCategory, number> = { sfx: 1, ui: 1, ambience: 1 };
+const categoryVolumes: Record<AudioCategory, number> = { sfx: 1, ui: 1, ambience: 0.55 };
 
 export type AudioCategory = 'sfx' | 'ui' | 'ambience';
 
 function unlock() {
-  if (context) return;
+  if (context) {
+    void context.resume().catch(() => undefined);
+    return;
+  }
   try {
     context = new AudioContext();
     masterGain = context.createGain();
@@ -33,10 +37,13 @@ function unlock() {
 
 export class AudioManager {
   private lastPlayed = new Map<AudioEventId, number>();
+  private musicState?: MusicState;
+  private musicStep = 0;
+  private nextMusicAt = 0;
   constructor(scene: Phaser.Scene) {
     // Re-arm per scene only while no context exists: a run where the player never taps
     // leaves nothing behind, and the next run gets another chance to unlock.
-    if (!context) scene.input.once('pointerdown', unlock);
+    scene.input.once('pointerdown', unlock);
   }
 
   setMasterVolume(volume: number) {
@@ -91,5 +98,18 @@ export class AudioManager {
         tone.type ?? 'square',
         (tone.delayMs ?? 0) / 1000,
       );
+  }
+
+  updateMusic(gameTime: number, state: MusicState) {
+    if (this.musicState !== state) {
+      this.musicState = state;
+      this.musicStep = 0;
+      this.nextMusicAt = gameTime;
+    }
+    if (gameTime < this.nextMusicAt) return;
+    for (const note of musicCue(state, this.musicStep))
+      this.tone(note.frequency, note.durationS, note.volume, 'ambience', note.type, (note.delayMs ?? 0) / 1000);
+    this.musicStep++;
+    this.nextMusicAt = gameTime + musicStepDuration(state);
   }
 }

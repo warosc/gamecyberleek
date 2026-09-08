@@ -80,6 +80,8 @@ export class GameScene extends Phaser.Scene {
     }
   };
   private readonly handleEnemyWarning = (kind: string) => this.audio.play(kind === 'charge' ? 'charge_warning' : 'shot_warning');
+  private readonly handleEnemyAttack = (kind: string) =>
+    this.audio.play(kind === 'boss' ? 'boss_attack' : kind === 'charge' ? 'enemy_charge' : kind === 'shot' ? 'enemy_shot' : 'enemy_melee');
   private readonly handlePlayerDashed = () => this.audio.play('dash');
   private readonly handleWeaponFired = (x: number, y: number, angle: number) => {
     this.telemetry.shotFired();
@@ -210,6 +212,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on(Events.BOSS_SPAWNED, this.handleBossSpawned);
     this.events.on('weapon-fired', this.handleWeaponFired);
     this.events.on('enemy-warning', this.handleEnemyWarning);
+    this.events.on('enemy-attack', this.handleEnemyAttack);
     this.events.on(Events.PLAYER_DASHED, this.handlePlayerDashed);
     this.input.keyboard!.on('keydown-ESC', this.handleEscape);
     this.game.events.on(Phaser.Core.Events.BLUR, this.handleFocusLost);
@@ -231,6 +234,7 @@ export class GameScene extends Phaser.Scene {
       this.events.off(Events.BOSS_SPAWNED, this.handleBossSpawned);
       this.events.off('weapon-fired', this.handleWeaponFired);
       this.events.off('enemy-warning', this.handleEnemyWarning);
+      this.events.off('enemy-attack', this.handleEnemyAttack);
       this.events.off(Events.PLAYER_DASHED, this.handlePlayerDashed);
       this.input.keyboard?.off('keydown-ESC', this.handleEscape);
       this.game.events.off(Phaser.Core.Events.BLUR, this.handleFocusLost);
@@ -245,6 +249,10 @@ export class GameScene extends Phaser.Scene {
     if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
     this.survivalMs += delta;
     this.encounters.update(this.survivalMs);
+    this.audio.updateMusic(
+      this.survivalMs,
+      this.encounters.hasBossSpawned ? 'boss' : this.survivalMs >= 135000 ? 'danger' : 'combat',
+    );
     const milestone = UPGRADE_MILESTONES[this.milestoneIndex];
     if (milestone !== undefined && this.survivalMs >= milestone && !this.encounters.hasBossSpawned) {
       this.milestoneIndex++;

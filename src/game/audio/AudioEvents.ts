@@ -10,6 +10,10 @@ import type { AudioCategory } from '../managers/AudioManager';
 export type AudioEventId =
   | 'charge_warning'
   | 'shot_warning'
+  | 'enemy_melee'
+  | 'enemy_charge'
+  | 'enemy_shot'
+  | 'boss_attack'
   | 'player_hit'
   | 'weapon_fire'
   | 'enemy_hit'
@@ -49,6 +53,16 @@ export interface AudioEventDefinition {
 export const AUDIO_EVENTS: Record<AudioEventId, AudioEventDefinition> = {
   charge_warning: { category: 'sfx', tones: [{ frequency: 330, durationS: 0.14, volume: 0.025, type: 'sawtooth' }] },
   shot_warning: { category: 'sfx', tones: [{ frequency: 860, durationS: 0.09, volume: 0.02, type: 'triangle' }] },
+  enemy_melee: { category: 'sfx', tones: [{ frequency: 115, durationS: 0.08, volume: 0.035, type: 'square' }] },
+  enemy_charge: { category: 'sfx', tones: [{ frequency: 185, durationS: 0.16, volume: 0.032, type: 'sawtooth' }] },
+  enemy_shot: { category: 'sfx', tones: [{ frequency: 510, durationS: 0.07, volume: 0.027, type: 'square' }] },
+  boss_attack: {
+    category: 'sfx',
+    tones: [
+      { frequency: 62, durationS: 0.22, volume: 0.045, type: 'sawtooth' },
+      { frequency: 124, durationS: 0.16, volume: 0.025, delayMs: 55, type: 'square' },
+    ],
+  },
   player_hit: { category: 'sfx', tones: [{ frequency: 80, durationS: 0.12, volume: 0.04, type: 'triangle' }] },
   weapon_fire: { category: 'sfx', tones: [{ frequency: 240, durationS: 0.025, volume: 0.015, type: 'square' }] },
   enemy_hit: { category: 'sfx', tones: [{ frequency: 135, durationS: 0.035, volume: 0.025, type: 'square' }] },

@@ -14,7 +14,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
   readonly health;
   lastContact = 0;
   private lastAttack = -9999;
-  private melee?: { strike: number; end: number };
+  private melee?: { strike: number; end: number; released: boolean };
   get isPreparingAttack() { return !!this.pendingAttack || !!this.charge || !!this.melee; }
   get canContact() {
     if (this.enemyType === EnemyType.SHOOTER) return false;
@@ -23,7 +23,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
     return this.enemyType !== EnemyType.GRUNT && this.enemyType !== EnemyType.TANK ||
       Boolean(this.melee && this.visualTime >= this.melee.strike && this.visualTime < this.melee.strike + 180);
   }
-  private charge?: { angle: number; start: number; end: number; recover: number };
+  private charge?: { angle: number; start: number; end: number; recover: number; launched: boolean };
   private warning?: Phaser.GameObjects.Graphics;
   private readonly telegraphs = new Set<Phaser.GameObjects.GameObject>();
   private knockbackUntil = 0;
@@ -128,6 +128,10 @@ export class Enemy extends Phaser.GameObjects.Arc {
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (this.melee) {
       body.setVelocity(0);
+      if (!this.melee.released && time >= this.melee.strike) {
+        this.melee.released = true;
+        this.scene.events.emit('enemy-attack', 'melee');
+      }
       if (time >= this.melee.strike && time < this.melee.strike + 180)
         this.scene.physics.moveToObject(this, target, 240);
       if (time >= this.melee.end) this.melee = undefined;
@@ -135,7 +139,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       return;
     }
     if (allowAttack && (this.enemyType === EnemyType.GRUNT || this.enemyType === EnemyType.TANK) && distance < this.def.size + 55) {
-      this.melee = { strike: time + 500, end: time + 1000 };
+      this.melee = { strike: time + 500, end: time + 1000, released: false };
       body.setVelocity(0);
       this.showAttackTelegraph(0xff476f, this.def.size + 24, 500);
       this.syncVisual(target);
@@ -145,6 +149,10 @@ export class Enemy extends Phaser.GameObjects.Arc {
       const charge = this.charge;
       if (time < charge.start) body.setVelocity(0);
       else if (time < charge.end) {
+        if (!charge.launched) {
+          charge.launched = true;
+          this.scene.events.emit('enemy-attack', 'charge');
+        }
         this.warning?.destroy(); this.warning = undefined;
         body.setVelocity(Math.cos(charge.angle) * 520, Math.sin(charge.angle) * 520);
       } else body.setVelocity(0);
@@ -160,7 +168,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
     if (allowAttack && this.enemyType === EnemyType.RUNNER && distance < 430 && time - this.lastAttack > 2300) {
       this.lastAttack = time;
       const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
-      this.charge = { angle, start: time + 700, end: time + 1250, recover: time + 1900 };
+      this.charge = { angle, start: time + 700, end: time + 1250, recover: time + 1900, launched: false };
       this.showLane(angle, 286, this.def.size * 2 + 14, 0xffc857);
       this.scene.events.emit('enemy-warning', 'charge');
       body.setVelocity(0);
@@ -187,14 +195,16 @@ export class Enemy extends Phaser.GameObjects.Arc {
         // Lock the indicated line: stepping away during the warning reliably avoids the shot.
         this.pendingAttack = {
           at: time + GAMEPLAY.telegraphLeadMs.shooter,
-          release: () =>
+          release: () => {
+            this.scene.events.emit('enemy-attack', 'shot');
             fire(
               this.x,
               this.y,
               angle,
               280,
               10,
-            ),
+            );
+          },
         };
       }
       this.syncVisual(target);
@@ -220,6 +230,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       this.pendingAttack = {
         at: time + GAMEPLAY.telegraphLeadMs.boss,
         release: () => {
+          this.scene.events.emit('enemy-attack', 'boss');
           const base = lockedAim;
           if (radialPhaseTwo) {
             for (let index = 0; index < 8; index++)
