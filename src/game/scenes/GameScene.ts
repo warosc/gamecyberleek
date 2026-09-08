@@ -9,7 +9,7 @@ import { Enemy } from '../entities/enemies/Enemy';
 import { EnemyType } from '../entities/enemies/EnemyTypes';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { ExperienceSystem } from '../systems/ExperienceSystem';
-import { chooseAbilities, getAbilityById } from '../abilities/AbilityRegistry';
+import { chooseAbilities, getAbilityById, isSignatureAbility, signatureAbilityId } from '../abilities/AbilityRegistry';
 import { ExperienceOrb } from '../entities/experience/ExperienceOrb';
 import { AudioManager } from '../managers/AudioManager';
 import { ARENA_THEMES } from '../config/ArenaDefinitions';
@@ -417,7 +417,7 @@ export class GameScene extends Phaser.Scene {
   }
   private openLevelUp(milestone = false) {
     if (this.victoryPending) return;
-    const options = milestone ? ['breach', 'fan', 'phase_dash'].map(id => getAbilityById(id)!)
+    const options = milestone ? [signatureAbilityId(this.selectedWeaponId), 'fan', 'phase_dash'].map(id => getAbilityById(id)!)
       .filter(ability => (this.abilityLevels.get(ability.id) ?? 0) < ability.maxLevel) : chooseAbilities(this.abilityLevels);
     this.offeredAbilities = options.map(ability => ability.id);
     if (options.length === 0) {
@@ -440,6 +440,12 @@ export class GameScene extends Phaser.Scene {
     this.abilityLevels.set(id, level);
     this.telemetry.choseUpgrade(id);
     ability.apply(this.player.stats, level);
+    if (isSignatureAbility(id) && level === ability.maxLevel) {
+      this.equippedWeapon = this.player.stats.weaponName;
+      this.audio.play('weapon_evolve');
+      this.events.emit(Events.EQUIPMENT_CHANGED, this.equippedWeapon, this.equippedArmor);
+      this.events.emit(Events.WEAPON_EVOLVED, this.equippedWeapon, this.player.stats.projectileColor);
+    }
     if (id === 'core') {
       this.player.health.max = this.player.stats.maxHp;
       this.player.health.heal(25);

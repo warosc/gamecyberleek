@@ -86,18 +86,19 @@ test('three milestone choices resume safely and the finale starts once at four m
     for (const t of [60000,120000,180000]) {
       s.survivalMs=t-1; s.update(0,1);
       if (s.state !== 'LEVEL_UP') throw Error('Missing milestone');
-      s.selectAbility('breach');
+      s.selectAbility('pulse_protocol');
       s.selectAbility('fan'); // A double click must not grant a second upgrade.
     }
     s.survivalMs=209999; s.update(0,1);
     s.survivalMs=239999; s.update(0,1); s.update(0,1);
-    return {offered, callouts, piercing:s.player.stats.bonusPiercing, count:s.player.stats.projectileCount,
+    return {offered, callouts, piercing:s.player.stats.projectilePiercing, protocolLevel:s.abilityLevels.get('pulse_protocol'), weapon:s.player.stats.weaponName, count:s.player.stats.projectileCount,
       bosses:s.enemies.getChildren().filter(e=>(e as Enemy).enemyType==='BOSS').length,state:s.state};
   });
   expect(r.offered).toHaveLength(3);
   expect(r.callouts).toEqual(['EMBESTIDA DETECTADA','FUEGO A DISTANCIA','BRECHA ABIERTA','ULTIMA OLEADA']);
-  expect(r.offered.every(o=>o.join(',')==='breach,fan,phase_dash')).toBe(true);
-  expect(r.piercing).toBe(3); expect(r.count).toBe(1); expect(r.bosses).toBe(1); expect(r.state).toBe('BOSS');
+  expect(r.offered.every(o=>o.join(',')==='pulse_protocol,fan,phase_dash')).toBe(true);
+  expect(r.protocolLevel).toBe(3); expect(r.weapon).toBe('RAIL SPROUT');
+  expect(r.piercing).toBe(2); expect(r.count).toBe(1); expect(r.bosses).toBe(1); expect(r.state).toBe('BOSS');
 });
 
 test('melee has a warning window and dead enemies remove their attack indicators', async ({page}) => {

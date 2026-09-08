@@ -99,6 +99,7 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.LOOT_COLLECTED, this.showLootBanner, this);
     this.gameScene.events.on(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
     this.gameScene.events.on(Events.RUN_PHASE_CHANGED, this.onRunPhaseChanged, this);
+    this.gameScene.events.on(Events.WEAPON_EVOLVED, this.onWeaponEvolved, this);
     this.events.once('shutdown', () => {
       this.closeModal();
       this.mobileControls?.destroy();
@@ -115,6 +116,7 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.LOOT_COLLECTED, this.showLootBanner, this);
       this.gameScene.events.off(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
       this.gameScene.events.off(Events.RUN_PHASE_CHANGED, this.onRunPhaseChanged, this);
+      this.gameScene.events.off(Events.WEAPON_EVOLVED, this.onWeaponEvolved, this);
       this.phaseBanner.destroy();
     });
   }
@@ -287,6 +289,22 @@ export class UIScene extends Phaser.Scene {
   }
   private onRunPhaseChanged(phase: RunPhaseCallout) {
     this.phaseBanner.show(phase);
+  }
+  private onWeaponEvolved(name: string, color: number) {
+    const tint = `#${color.toString(16).padStart(6, '0')}`;
+    const back = this.add.rectangle(GAME_WIDTH / 2, 260, 620, 118, 0x06101d, 0.97)
+      .setStrokeStyle(4, color, 1);
+    const kicker = this.add.text(GAME_WIDTH / 2, 232, 'WEAPON EVOLUTION', {
+      fontFamily: 'monospace', fontSize: '13px', color: tint, letterSpacing: 4,
+    }).setOrigin(0.5);
+    const title = this.add.text(GAME_WIDTH / 2, 270, name, {
+      fontFamily: 'Arial Black', fontSize: '30px', color: '#ffffff', letterSpacing: 2,
+    }).setOrigin(0.5);
+    const banner = this.add.container(0, -30, [back, kicker, title]).setDepth(140).setAlpha(0);
+    this.tweens.add({
+      targets: banner, y: 0, alpha: 1, duration: 240, hold: 1900, yoyo: true,
+      onComplete: () => banner.destroy(true),
+    });
   }
   private onState(state: GameState) {
     if (state === GameState.PAUSED && !this.modal.active) {
