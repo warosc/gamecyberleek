@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { UPGRADE_MILESTONES } from '../config/RunPacing';
+import { currentViewportShape, mobileWorldZoom } from '../config/ViewportLayout';
 import { ARENA, COLORS, Events, GAMEPLAY, GameState } from '../config/Constants';
 import { Player } from '../entities/player/Player';
 import { ProjectileManager } from '../entities/projectiles/ProjectileManager';
@@ -181,6 +182,7 @@ export class GameScene extends Phaser.Scene {
     };
     this.cameras.main
       .setBounds(0, 0, ARENA.width, ARENA.height)
+      .setZoom(mobileWorldZoom(currentViewportShape().coarsePointer))
       .startFollow(this.player, true, 0.1, 0.1);
     this.physics.add.overlap(this.projectiles.group, this.enemies, (a, b) =>
       this.projectileHit(a as Phaser.GameObjects.GameObject, b as Phaser.GameObjects.GameObject),

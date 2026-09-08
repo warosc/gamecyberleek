@@ -42,6 +42,11 @@ Run results are saved locally as best level, victories, and bio-credits. Mobile 
 
 On touch devices, LEEK OPS displays a left movement joystick, a right aim/fire joystick, a dash button, and touch-enabled special ability buttons. The production build includes a web app manifest and service worker so supported browsers can install it as a landscape PWA.
 
+Landscape phones use their full aspect ratio instead of shrinking a 16:9 canvas between side bars.
+The gameplay camera is closer on touch devices so combatants remain legible, while the UI camera
+stays at its original scale. Touch controls anchor to the device's logical edges and use compact,
+translucent artwork to preserve visibility around the player.
+
 ## Architecture
 
 ### Animated presentation

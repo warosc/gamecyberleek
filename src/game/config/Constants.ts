@@ -1,5 +1,7 @@
-export const GAME_WIDTH = 1280;
-export const GAME_HEIGHT = 720;
+import { currentViewportShape, DESIGN_HEIGHT, logicalWidthForViewport } from './ViewportLayout';
+
+export const GAME_HEIGHT = DESIGN_HEIGHT;
+export const GAME_WIDTH = logicalWidthForViewport(currentViewportShape());
 export const ARENA = { width: 2000, height: 1200 } as const;
 export const RUN_DURATION_MS = 5 * 60 * 1000;
 export const GAMEPLAY = {

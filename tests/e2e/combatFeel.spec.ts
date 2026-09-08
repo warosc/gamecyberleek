@@ -137,3 +137,31 @@ test('crowds cannot prepare more than three attacks at once', async ({page}) => 
   });
   expect(count).toBe(3);
 });
+
+test('the canvas fills phone landscape and mobile zoom enlarges only the world', async ({ page }) => {
+  await deploy(page);
+  const layout = await page.evaluate(() => {
+    const canvas = document.querySelector('canvas')!;
+    const rect = canvas.getBoundingClientRect();
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const ui = window.combatGame.scene.getScene('UI');
+    return {
+      coverageX: rect.width / window.innerWidth,
+      coverageY: rect.height / window.innerHeight,
+      logicalWidth: window.combatGame.scale.gameSize.width,
+      touch: scene.mobileInput.active,
+      worldZoom: scene.cameras.main.zoom,
+      uiZoom: ui.cameras.main.zoom,
+    };
+  });
+  expect(layout.coverageX).toBeGreaterThan(0.995);
+  expect(layout.coverageY).toBeGreaterThan(0.995);
+  if (layout.touch) {
+    expect(layout.logicalWidth).toBeGreaterThanOrEqual(1280);
+    expect(layout.worldZoom).toBe(1.35);
+    expect(layout.uiZoom).toBe(1);
+  } else {
+    expect(layout.logicalWidth).toBe(1280);
+    expect(layout.worldZoom).toBe(1);
+  }
+});
