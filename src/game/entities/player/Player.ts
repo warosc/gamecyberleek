@@ -108,7 +108,10 @@ export class Player extends Phaser.GameObjects.Container {
     }
     const speed = time < this.dashingUntil ? this.stats.dashSpeed : this.stats.moveSpeed;
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(v.x * speed, v.y * speed);
-    if (virtual?.active && virtual.aim.lengthSq() > 0.04) this.aim = virtual.aim.angle();
+    const mouseFiring = !pointer.wasTouch && pointer.leftButtonDown();
+    const virtualAiming = virtual?.active &&
+      (virtual.firing || virtual.autoFire || pointer.wasTouch) && !mouseFiring;
+    if (virtualAiming && virtual.aim.lengthSq() > 0.04) this.aim = virtual.aim.angle();
     else {
       const world = pointer.positionToCamera(this.scene.cameras.main) as Phaser.Math.Vector2;
       this.aim = Phaser.Math.Angle.Between(this.x, this.y, world.x, world.y);
@@ -117,6 +120,7 @@ export class Player extends Phaser.GameObjects.Container {
     const dashing = time < this.dashingUntil;
     // Mirror the rig first: it converts world velocity into its own local axis using facing.
     this.layeredRig?.setFlipX(facing < 0);
+    this.layeredRig?.setAim(this.aim);
     this.layeredRig?.setMotion(v.x * speed, v.y * speed, dashing, this.stats.moveSpeed);
     this.animator.update(time, v, dashing, facing);
     // Ground contact: the shadow tightens as the character rises into a dash.
@@ -166,10 +170,11 @@ export class Player extends Phaser.GameObjects.Container {
     // itself, not only on the aura around it.
     this.layeredRig?.setPowerGlow(overdrive ? 0.55 : 0);
     if (
-      (virtual?.active ? virtual.firing || virtual.autoFire : pointer.isDown) &&
+      (mouseFiring || (virtual?.active && (virtual.firing || virtual.autoFire))) &&
       time - this.lastShot >= this.stats.attackCooldown * (overdrive ? 0.5 : 1)
     ) {
       this.lastShot = time;
+      this.layeredRig?.recoil(time);
       this.animator.attack(time);
       const spread = 0.12;
       for (let i = 0; i < this.stats.projectileCount; i++)

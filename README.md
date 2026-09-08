@@ -18,7 +18,7 @@ For a local Node 22 workflow: `npm install`, then `npm run dev`. Available check
 
 ## Controls
 
-- WASD: move
+- WASD or arrow keys: move
 - Mouse: aim
 - Left mouse: fire the LEEK BLASTER
 - Space: dash
@@ -27,7 +27,10 @@ For a local Node 22 workflow: `npm install`, then `npm run dev`. Available check
 - R: OVERDRIVE damage and fire-rate boost
 - Escape: pause
 
-Supply chests begin appearing during the run. Survive five minutes to summon the Broccoli Commander and defeat it to complete the mission. With `VITE_DEBUG_GAME=true`, press `C` to test a chest or `B` to summon the boss immediately.
+Switching windows or hiding the tab automatically pauses combat. Resume explicitly with Escape
+or CONTINUAR. Gameplay timers and world animations also freeze during pause and reward selection.
+
+Supply chests begin appearing during the run. Survive five minutes to summon BRÓK-9, the Broccoli Commander of the Breach, and defeat it to complete the mission. With `VITE_DEBUG_GAME=true`, press `C` to test a chest or `B` to summon the boss immediately.
 
 Every third level drops a collectible equipment capsule. Weapons include pulse pistols, ARC blasters, ion lasers, and plasma cannons; armor provides HP, mitigation, movement, or dash upgrades. Equipment can roll Common, Rare, Epic, or Legendary rarity and remains active for the current run.
 
@@ -40,6 +43,26 @@ Run results are saved locally as best level, victories, and bio-credits. Mobile 
 On touch devices, LEEK OPS displays a left movement joystick, a right aim/fire joystick, a dash button, and touch-enabled special ability buttons. The production build includes a web app manifest and service worker so supported browsers can install it as a landscape PWA.
 
 ## Architecture
+
+### Animated presentation
+
+The four common enemy roles now have original vegetable character art: RÁB-01 the radish soldier,
+ZAN-7 the carrot runner, BER-8 the armored eggplant, and TOM-4 the tomato gunner. Open **ENEMIGOS**
+from the main menu to inspect the roster and read its combat cues. Their existing hitboxes, damage,
+spawn weights and attack timings are preserved. Each shared cutout texture is animated with body
+sway/recoil and role-specific lighting; these are not separate-limb rigs. Decorative movement is
+reduced on the low-quality profile, while attack warnings remain visible.
+
+The layered player keeps a speed-driven walking cycle beneath sustained fire, with per-shot
+arm/body recoil and subtle aim tracking. Enemies have articulated feet or fins, runner exhaust,
+hovering shooters, charge/recoil cues, and a distinct broccoli commander with a rotating crown.
+The arena includes specimen chambers, a segmented reactor, conduit pulses and drifting motes.
+Ambient object counts are fixed; low-quality/reduced-motion profiles disable ambient movement.
+BRÓK-9 uses original Cyberleek-style production artwork, an upright animated body and reactor/cannon
+lighting across Contención, Sobrecarga and Ruptura. Defeating him freezes combat for the death effect
+before the victory screen, preventing an XP reward modal from interrupting completion.
+`tests/e2e/animation.spec.ts` checks moving while firing, pause, reduced motion and scene restart
+in desktop and mobile browsers, and saves a screenshot of the animated arena.
 
 Scenes own lifecycle and presentation. `Player`, `Enemy`, and projectile classes own entity behavior; systems handle spawning, combat math, and XP; abilities are data-driven. Gameplay/UI communicate via scene events. Fast-spawned projectiles use an Arcade Physics pool.
 

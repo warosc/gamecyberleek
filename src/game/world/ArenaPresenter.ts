@@ -1,15 +1,17 @@
 import Phaser from 'phaser';
 import { ARENA } from '../config/Constants';
 import type { ArenaTheme } from '../config/ArenaDefinitions';
+import { detectQualityProfile } from '../config/QualityProfile';
 
 /**
- * Static arena decoration: floor, grid, landmarks and ambient scan lines. Presentation only —
+ * Arena decoration: floor, grid, landmarks and ambient machinery. Presentation only —
  * it owns no gameplay state and nothing here is read back by the simulation. Every object and
  * tween is scene-owned, so Phaser disposes of them at scene shutdown.
  *
  * Layout is seeded from the theme name, so a given arena always decorates identically.
  */
 export class ArenaPresenter {
+  private readonly quality = detectQualityProfile();
   constructor(private readonly scene: Phaser.Scene) {}
 
   draw(theme: ArenaTheme) {
@@ -50,6 +52,63 @@ export class ArenaPresenter {
       .setAlpha(0.35)
       .setDepth(-4);
     this.drawScanLines(theme);
+    this.drawLivingLab(theme, random);
+  }
+
+  /** Fixed decoration budget: no emitters, timers spawning objects, or per-frame allocations. */
+  private drawLivingLab(theme: ArenaTheme, random: Phaser.Math.RandomDataGenerator) {
+    const animated = this.quality.tier !== 'low';
+    const centerX = ARENA.width / 2;
+    const centerY = ARENA.height / 2;
+    const rotor = this.scene.add.graphics().setPosition(centerX, centerY).setDepth(-6);
+    rotor.name = 'arena-reactor-rotor';
+    rotor.lineStyle(5, theme.accent, 0.32);
+    for (let index = 0; index < 6; index++) {
+      const angle = index * Math.PI / 3;
+      rotor.beginPath().arc(0, 0, 116, angle, angle + 0.48).strokePath();
+      rotor.fillStyle(theme.secondary, 0.5).fillCircle(Math.cos(angle) * 140, Math.sin(angle) * 140, 3);
+    }
+    if (animated) this.scene.tweens.add({ targets: rotor, angle: 360, duration: 24000, repeat: -1 });
+
+    // Four specimen chambers frame the starting area without obscuring combat silhouettes.
+    for (const side of [-1, 1]) for (const row of [-1, 1]) {
+      const x = centerX + side * 430;
+      const y = centerY + row * 210;
+      const chamber = this.scene.add.graphics().setPosition(x, y).setDepth(-5);
+      chamber.fillStyle(0x020810, 0.85).fillRoundedRect(-48, -75, 96, 150, 16);
+      chamber.fillStyle(theme.accent, 0.08).fillRoundedRect(-36, -61, 72, 116, 20);
+      chamber.lineStyle(2, theme.accent, 0.35).strokeRoundedRect(-36, -61, 72, 116, 20);
+      chamber.fillStyle(0x193142).fillRoundedRect(-48, -75, 96, 14, 4).fillRoundedRect(-48, 55, 96, 20, 4);
+      chamber.fillStyle(theme.secondary, 0.8).fillRect(-27, 63, 16, 3).fillRect(-4, 63, 6, 3);
+      const specimen = this.scene.add.graphics().setPosition(x, y).setDepth(-4);
+      specimen.fillStyle(theme.secondary, 0.25).fillEllipse(0, 4, 24, 42);
+      specimen.fillStyle(theme.secondary, 0.4).fillTriangle(0, -10, -21, -30, -4, -23)
+        .fillTriangle(0, -10, 18, -35, 8, -15);
+      if (animated) this.scene.tweens.add({ targets: specimen, y: y - 8, angle: 5 * side,
+        duration: 2300 + row * 250, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+      const count = animated ? 3 : 1;
+      for (let bubble = 0; bubble < count; bubble++) {
+        const mote = this.scene.add.circle(x - 23 + bubble * 21, y + 40, 2 + bubble % 2, theme.accent, 0.35).setDepth(-4);
+        if (animated) this.scene.tweens.add({ targets: mote, y: y - 48, alpha: 0,
+          duration: 2400 + bubble * 700, delay: bubble * 550, repeat: -1 });
+      }
+    }
+    if (!animated) return;
+    // Energy packets travel along the existing central conduit.
+    for (let index = 0; index < 6; index++) {
+      const packet = this.scene.add.rectangle(120, centerY, 22, 3, theme.accent, 0.7)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(-5);
+      this.scene.tweens.add({ targets: packet, x: ARENA.width - 120,
+        duration: 7000, delay: index * 1150, repeat: -1 });
+    }
+    const moteCount = this.quality.tier === 'high' ? 24 : 12;
+    for (let index = 0; index < moteCount; index++) {
+      const x = random.between(100, ARENA.width - 100);
+      const y = random.between(120, ARENA.height - 100);
+      const mote = this.scene.add.circle(x, y, random.between(1, 3), theme.secondary, 0.18).setDepth(-2);
+      this.scene.tweens.add({ targets: mote, x: x + random.between(-35, 35), y: y - 65,
+        alpha: 0.04, duration: random.between(4000, 7000), yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+    }
   }
 
   private drawDebris(theme: ArenaTheme, random: Phaser.Math.RandomDataGenerator) {
@@ -69,6 +128,7 @@ export class ArenaPresenter {
       const scan = this.scene.add
         .rectangle(ARENA.width / 2, 220 + index * 260, ARENA.width - 100, 2, theme.accent, 0.08)
         .setDepth(-3);
+      if (this.quality.tier === 'low') continue;
       this.scene.tweens.add({
         targets: scan,
         alpha: { from: 0.03, to: 0.16 },
@@ -97,6 +157,7 @@ export class ArenaPresenter {
         graphics.lineBetween(x - 84 + stripe * 24, y + 96, x - 62 + stripe * 24, y + 74);
       const light = this.scene.add.circle(x, y, 8, theme.accent, 0.55).setDepth(-6);
       light.setBlendMode(Phaser.BlendModes.ADD);
+      if (this.quality.tier === 'low') return;
       this.scene.tweens.add({
         targets: light,
         alpha: { from: 0.2, to: 0.85 },
@@ -123,6 +184,6 @@ export class ArenaPresenter {
       .circle(ARENA.width / 2, ARENA.height / 2, 92)
       .setStrokeStyle(2, theme.secondary, 0.24)
       .setDepth(-6);
-    this.scene.tweens.add({ targets: core, angle: 360, duration: 10000, repeat: -1 });
+    core.setAlpha(0.8);
   }
 }

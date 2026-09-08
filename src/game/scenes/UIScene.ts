@@ -2,15 +2,17 @@ import Phaser from 'phaser';
 import { Events, GAME_HEIGHT, GAME_WIDTH, GameState } from '../config/Constants';
 import type { Ability } from '../abilities/AbilityRegistry';
 import type { GameScene } from './GameScene';
-import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
 import type { Equipment } from '../loot/Equipment';
-import { loadProfile, updateProfile } from '../systems/ProfileStore';
+import { loadProfile } from '../systems/ProfileStore';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import { ModalOverlay } from '../ui/ModalOverlay';
 import { MobileControls } from '../ui/MobileControls';
 import { RewardChooser } from '../ui/RewardChooser';
 import { OnboardingHints } from '../ui/OnboardingHints';
 import { StatusHud } from '../ui/StatusHud';
+import { BossBanner } from '../ui/BossBanner';
+import { AbilityBar } from '../ui/AbilityBar';
+import { PauseMenu } from '../ui/PauseMenu';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -36,13 +38,9 @@ export class UIScene extends Phaser.Scene {
   private mobileControls?: MobileControls;
   private chooser?: RewardChooser;
   private hints?: OnboardingHints;
-  private specialFills = new Map<SpecialAbilityId, Phaser.GameObjects.Rectangle>();
-  private specialTexts = new Map<SpecialAbilityId, Phaser.GameObjects.Text>();
-  private bossPanel!: Phaser.GameObjects.Container;
-  private bossFill!: Phaser.GameObjects.Rectangle;
-  private bossPhaseText!: Phaser.GameObjects.Text;
-  private bossTargetWidth = 510;
-  private bossPhaseShown = 1;
+  private bossBanner!: BossBanner;
+  private abilityBar!: AbilityBar;
+  private pauseMenu!: PauseMenu;
   constructor() {
     super('UI');
   }
@@ -58,77 +56,14 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.player.stats.weaponName,
       () => this.gameScene.togglePause(),
     );
-    // Sits below the run clock and the weapon readout rather than across them: at y=88 the
-    // boss bar covered both the moment the encounter that most needs a clock began.
-    const bossBack = this.add
-      .rectangle(GAME_WIDTH / 2, 126, 540, 48, 0x100817, 0.95)
-      .setStrokeStyle(3, 0xd566ff, 0.85);
-    this.bossFill = this.add
-      .rectangle(GAME_WIDTH / 2 - 255, 136, 510, 15, 0x9d36d6)
-      .setOrigin(0, 0.5);
-    const bossName = this.add
-      .text(GAME_WIDTH / 2, 114, 'BROCCOLI COMMANDER', {
-        fontFamily: 'Arial Black',
-        fontSize: '15px',
-        color: '#f4d7ff',
-      })
-      .setOrigin(0.5);
-    this.bossPhaseText = this.add.text(GAME_WIDTH / 2 + 246, 114, 'PHASE 1', {
-      fontFamily: 'monospace', fontSize: '11px', color: '#d566ff', letterSpacing: 1,
-    }).setOrigin(1, 0.5);
-    this.bossPanel = this.add
-      .container(0, 0, [bossBack, this.bossFill, bossName, this.bossPhaseText])
-      .setVisible(false);
-    const mobileHud = this.gameScene.mobileInput.active;
-    if (mobileHud)
-      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 84, 430, 96, 0x04101c, 0.7)
-        .setStrokeStyle(2, 0x21e6ff, 0.22).setDepth(1);
-    SPECIAL_ABILITIES.forEach((ability, index) => {
-      const x = mobileHud ? GAME_WIDTH / 2 + (index - 1) * 120 : GAME_WIDTH - 300 + index * 104;
-      const y = mobileHud ? GAME_HEIGHT - 86 : GAME_HEIGHT - 78;
-      const button = this.add
-        .rectangle(x, y, mobileHud ? 108 : 94, mobileHud ? 82 : 72, 0x081522, 0.96)
-        .setStrokeStyle(3, ability.color, 0.8)
-        .setInteractive({ useHandCursor: true });
-      const fill = this.add
-        .rectangle(x - 43, y + 27, 86, 7, ability.color, 0.9)
-        .setOrigin(0, 0.5);
-      const keyRadius = mobileHud ? 18 : 15;
-      this.add.circle(x - 31, y - 19, keyRadius, 0x06101d).setStrokeStyle(2, ability.color);
-      this.add
-        .text(x - 31, y - 19, ability.key, {
-          fontFamily: 'Arial Black',
-          fontSize: '15px',
-          color: '#ffffff',
-        })
-        .setOrigin(0.5);
-      // Fit the name to the gap between the key badge and the button edge instead of a fixed
-      // wrap width: word wrap cannot split a single long word, so "OVERDRIVE" ran over the
-      // badge and past the button.
-      const labelLeft = x - 31 + keyRadius + 4;
-      const labelRight = x + (mobileHud ? 108 : 94) / 2 - 6;
-      const labelWidth = labelRight - labelLeft;
-      const label = this.add
-        .text(labelLeft + labelWidth / 2, y - 19, ability.name, {
-          fontFamily: 'Arial Black',
-          fontSize: '10px',
-          color: '#eaffff',
-          align: 'center',
-          wordWrap: { width: labelWidth },
-        })
-        .setOrigin(0.5);
-      if (label.width > labelWidth) label.setScale(labelWidth / label.width);
-      const cooldownText = this.add
-        .text(x, y + 8, 'READY', {
-          fontFamily: 'Arial Black',
-          fontSize: '10px',
-          color: '#ffffff',
-        })
-        .setOrigin(0.5);
-      button.on('pointerdown', () => this.gameScene.activateSpecial(ability.id));
-      this.specialFills.set(ability.id, fill);
-      this.specialTexts.set(ability.id, cooldownText);
-    });
+    this.bossBanner = new BossBanner(this);
+    this.abilityBar = new AbilityBar(
+      this,
+      this.gameScene.mobileInput.active,
+      (id) => this.gameScene.getSpecialCharge(id),
+      (id) => this.gameScene.activateSpecial(id),
+    );
+    this.pauseMenu = new PauseMenu(this, this.gameScene);
     if (this.gameScene.mobileInput.active) {
       this.mobileControls = new MobileControls(this, this.gameScene);
       this.mobileControls.create();
@@ -176,21 +111,13 @@ export class UIScene extends Phaser.Scene {
     });
   }
   update(_time: number, delta: number) {
-    const ease = 1 - Math.exp(-delta / 90);
-    if (this.bossPanel.visible)
-      this.bossFill.width += (this.bossTargetWidth - this.bossFill.width) * ease;
+    this.bossBanner.update(delta);
     const body = this.gameScene.player.body as Phaser.Physics.Arcade.Body | null;
     if (body && body.velocity.lengthSq() > 100) this.hints?.satisfy('move');
     this.hints?.update(delta);
     const dashCharge = this.gameScene.player.getDashCharge();
     this.statusHud.update(delta, this.gameScene.survivalMs, dashCharge);
-    for (const ability of SPECIAL_ABILITIES) {
-      const charge = this.gameScene.getSpecialCharge(ability.id);
-      this.specialFills.get(ability.id)!.width = 86 * charge;
-      this.specialTexts
-        .get(ability.id)!
-        .setText(charge >= 1 ? 'READY' : `${Math.ceil((ability.cooldown * (1 - charge)) / 1000)}s`);
-    }
+    this.abilityBar.update();
     this.debugOverlay?.update(delta);
   }
   private onWeaponFired() {
@@ -266,70 +193,10 @@ export class UIScene extends Phaser.Scene {
   }
 
   private onBossSpawned() {
-    this.bossPanel.setVisible(true);
-    this.bossPanel.setScale(1, 0.2);
-    this.bossTargetWidth = 510;
-    this.bossFill.width = 510;
-    this.bossPhaseShown = 1;
-    this.tweens.add({ targets: this.bossPanel, scaleY: 1, duration: 320, ease: 'Back.Out' });
-    this.cameras.main.flash(280, 95, 15, 120);
-    // The arrival of the only boss in the run should not be a health bar quietly appearing.
-    const banner = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40).setDepth(120);
-    const plate = this.add.rectangle(0, 0, 720, 96, 0x100817, 0.94).setStrokeStyle(3, 0xd566ff, 0.9);
-    const title = this.add
-      .text(0, -14, 'BROCCOLI COMMANDER', {
-        fontFamily: 'Arial Black', fontSize: '38px', color: '#f4d7ff',
-        stroke: '#1a0326', strokeThickness: 6,
-      })
-      .setOrigin(0.5);
-    const subtitle = this.add
-      .text(0, 26, 'SECTOR THREAT DETECTED', {
-        fontFamily: 'Arial Black', fontSize: '13px', color: '#d566ff', letterSpacing: 5,
-      })
-      .setOrigin(0.5);
-    banner.add([plate, title, subtitle]);
-    banner.setAlpha(0).setScale(0.85);
-    this.tweens.add({
-      targets: banner,
-      alpha: 1,
-      scale: 1,
-      duration: 300,
-      ease: 'Back.Out',
-      hold: 1400,
-      yoyo: true,
-      onComplete: () => banner.destroy(),
-    });
+    this.bossBanner.show();
   }
   private onBossHealth(current: number, max: number) {
-    const ratio = Phaser.Math.Clamp(current / max, 0, 1);
-    this.bossTargetWidth = 510 * ratio;
-    const phase = ratio <= 0.33 ? 3 : ratio <= 0.66 ? 2 : 1;
-    this.bossPhaseText.setText(`PHASE ${phase}`)
-      .setColor(phase === 3 ? '#ff476f' : phase === 2 ? '#ffb52e' : '#d566ff');
-    if (phase === this.bossPhaseShown) return;
-    // A phase change alters how the boss attacks, so it has to be impossible to miss.
-    this.bossPhaseShown = phase;
-    this.bossPhaseText.setScale(1);
-    this.tweens.add({ targets: this.bossPhaseText, scale: 1.9, duration: 180, yoyo: true });
-    this.tweens.add({ targets: this.bossPanel, scaleX: 1.04, duration: 140, yoyo: true });
-    const flash = this.add
-      .text(GAME_WIDTH / 2, 208, `PHASE ${phase}`, {
-        fontFamily: 'Arial Black', fontSize: '44px',
-        color: phase === 3 ? '#ff476f' : '#ffb52e',
-        stroke: '#1a0326', strokeThickness: 7,
-      })
-      .setOrigin(0.5)
-      .setDepth(120)
-      .setAlpha(0);
-    this.tweens.add({
-      targets: flash,
-      alpha: 1,
-      y: 188,
-      duration: 220,
-      hold: 700,
-      yoyo: true,
-      onComplete: () => flash.destroy(),
-    });
+    this.bossBanner.setHealth(current, max);
   }
   private showChestRewards() {
     const rewards = [
@@ -412,172 +279,9 @@ export class UIScene extends Phaser.Scene {
   }
   private onState(state: GameState) {
     if (state === GameState.PAUSED && !this.modal.active) {
-      const parts: Phaser.GameObjects.GameObject[] = [];
-      parts.push(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020710, 0.82));
-      parts.push(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 650, 560, 0x071522, 0.98)
-        .setStrokeStyle(3, 0x21e6ff, 0.8));
-      parts.push(this.add.circle(GAME_WIDTH / 2, 166, 58, 0x0b2130, 1).setStrokeStyle(4, 0x73ef62, 0.8));
-      parts.push(this.add.image(GAME_WIDTH / 2, 166, 'leek-avatar').setDisplaySize(104, 104));
-      parts.push(this.add.text(GAME_WIDTH / 2, 240, 'OPERACIÓN EN PAUSA', {
-        fontFamily: 'Arial Black', fontSize: '34px', color: '#eaffff',
-      }).setOrigin(0.5));
-      parts.push(this.add.text(GAME_WIDTH / 2, 286,
-        `NIVEL ${this.gameScene.xp.level}   ·   ${this.gameScene.player.stats.weaponName}   ·   ARMOR ${Math.round(this.gameScene.player.stats.damageReduction * 100)}%`, {
-          fontFamily: 'Arial Black', fontSize: '12px', color: '#73ef62', letterSpacing: 1,
-        }).setOrigin(0.5));
-      const resume = this.pauseMenuButton(GAME_WIDTH / 2, 360, 'CONTINUAR', 0x73ef62, () => this.gameScene.resumeGame());
-      const menu = this.pauseMenuButton(GAME_WIDTH / 2, 440, 'MENÚ PRINCIPAL', 0x21e6ff, () => this.gameScene.returnToMenu());
-      parts.push(...resume, ...menu);
-      const volumeLabel = this.add.text(GAME_WIDTH / 2, 505, '', {
-        fontFamily: 'monospace', fontSize: '13px', color: '#eaffff', letterSpacing: 2,
-      }).setOrigin(0.5);
-      const refreshVolume = () => {
-        const percent = Math.round(this.gameScene.audioVolume * 100);
-        volumeLabel.setText(`VOLUME ${percent}%`);
-      };
-      const volumeDown = this.pauseMenuButton(GAME_WIDTH / 2 - 145, 505, '−', 0xd566ff, () => {
-        this.gameScene.adjustAudioVolume(-0.1); refreshVolume();
-      }, 70);
-      const volumeUp = this.pauseMenuButton(GAME_WIDTH / 2 + 145, 505, '+', 0xd566ff, () => {
-        this.gameScene.adjustAudioVolume(0.1); refreshVolume();
-      }, 70);
-      refreshVolume();
-      parts.push(volumeLabel, ...volumeDown, ...volumeUp);
-      parts.push(this.add.text(GAME_WIDTH / 2, 570, 'ESC  ·  VOLVER AL COMBATE', {
-        fontFamily: 'monospace', fontSize: '12px', color: '#7594a8', letterSpacing: 2,
-      }).setOrigin(0.5));
-      this.modal.replace(parts, 100);
+      this.modal.replace(this.pauseMenu.build(), 100);
     } else if ((state === GameState.PLAYING || state === GameState.BOSS) && this.modal.active) {
       this.closeModal();
     }
-  }
-  private pauseMenuButton(x: number, y: number, label: string, color: number, action: () => void, width = 330) {
-    const button = this.add.rectangle(x, y, width, 58, 0x0b1b2b, 1)
-      .setStrokeStyle(3, color, 0.85).setInteractive({ useHandCursor: true });
-    const text = this.add.text(x, y, label, {
-      fontFamily: 'Arial Black', fontSize: '17px', color: '#eaffff', letterSpacing: 2,
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    const activate = () => action();
-    button.on('pointerup', activate);
-    text.on('pointerup', activate);
-    button.on('pointerover', () => button.setFillStyle(color, 0.25));
-    button.on('pointerout', () => button.setFillStyle(0x0b1b2b, 1));
-    return [button, text];
-  }
-  /** @deprecated Kept temporarily as a reference while MobileControls owns the runtime path. */
-  createMobileControlsLegacy() {
-    const moveCenter = new Phaser.Math.Vector2(135, GAME_HEIGHT - 165);
-    const aimCenter = new Phaser.Math.Vector2(GAME_WIDTH - 135, GAME_HEIGHT - 170);
-    const moveBase = this.add
-      .circle(moveCenter.x, moveCenter.y, 86, 0x07111f, 0.52)
-      .setStrokeStyle(3, 0x21e6ff, 0.55)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(60);
-    const moveKnob = this.add.circle(moveCenter.x, moveCenter.y, 35, 0x21e6ff, 0.48).setDepth(61);
-    const aimBase = this.add
-      .circle(aimCenter.x, aimCenter.y, 88, 0x07111f, 0.52)
-      .setStrokeStyle(3, 0xff476f, 0.65)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(60);
-    const aimKnob = this.add.circle(aimCenter.x, aimCenter.y, 35, 0xff476f, 0.48).setDepth(61);
-    this.add
-      .text(moveCenter.x, moveCenter.y + 105, 'MOVE', {
-        fontFamily: 'Arial Black',
-        fontSize: '11px',
-        color: '#8fcbd6',
-      })
-      .setOrigin(0.5)
-      .setDepth(61);
-    this.add
-      .text(aimCenter.x, aimCenter.y + 107, 'AIM / FIRE', {
-        fontFamily: 'Arial Black',
-        fontSize: '11px',
-        color: '#ff9caf',
-      })
-      .setOrigin(0.5)
-      .setDepth(61);
-    const dash = this.add
-      .circle(GAME_WIDTH - 285, GAME_HEIGHT - 285, 54, 0x21e6ff, 0.42)
-      .setStrokeStyle(3, 0x73ef62, 0.8)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(61);
-    this.add
-      .text(dash.x, dash.y, 'DASH', {
-        fontFamily: 'Arial Black',
-        fontSize: '13px',
-        color: '#eaffff',
-      })
-      .setOrigin(0.5)
-      .setDepth(62);
-    const profile = loadProfile();
-    const autoButton = this.add.rectangle(GAME_WIDTH - 285, GAME_HEIGHT - 365, 108, 42, 0x07111f, 0.82)
-      .setStrokeStyle(3, profile.autoFire ? 0x73ef62 : 0x7594a8, 0.9)
-      .setInteractive({ useHandCursor: true }).setDepth(61);
-    const autoLabel = this.add.text(autoButton.x, autoButton.y, profile.autoFire ? 'AUTO ON' : 'AUTO OFF', {
-      fontFamily: 'Arial Black', fontSize: '12px', color: '#eaffff',
-    }).setOrigin(0.5).setDepth(62);
-    autoButton.on('pointerup', () => {
-      this.gameScene.mobileInput.autoFire = !this.gameScene.mobileInput.autoFire;
-      updateProfile({ autoFire: this.gameScene.mobileInput.autoFire });
-      autoLabel.setText(this.gameScene.mobileInput.autoFire ? 'AUTO ON' : 'AUTO OFF');
-      autoButton.setStrokeStyle(3, this.gameScene.mobileInput.autoFire ? 0x73ef62 : 0x7594a8, 0.9);
-    });
-
-    let movePointer = -1;
-    let aimPointer = -1;
-    const updateStick = (
-      pointer: Phaser.Input.Pointer,
-      center: Phaser.Math.Vector2,
-      knob: Phaser.GameObjects.Arc,
-      output: Phaser.Math.Vector2,
-    ) => {
-      output.set(pointer.x - center.x, pointer.y - center.y);
-      if (output.length() > 86) output.setLength(86);
-      knob.setPosition(center.x + output.x, center.y + output.y);
-      output.scale(1 / 86);
-    };
-    moveBase.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      movePointer = pointer.id;
-      updateStick(pointer, moveCenter, moveKnob, this.gameScene.mobileInput.movement);
-    });
-    aimBase.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      aimPointer = pointer.id;
-      this.gameScene.mobileInput.firing = true;
-      updateStick(pointer, aimCenter, aimKnob, this.gameScene.mobileInput.aim);
-    });
-    dash.on('pointerdown', () => {
-      this.gameScene.mobileInput.dash = true;
-    });
-    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.id === movePointer)
-        updateStick(pointer, moveCenter, moveKnob, this.gameScene.mobileInput.movement);
-      if (pointer.id === aimPointer)
-        updateStick(pointer, aimCenter, aimKnob, this.gameScene.mobileInput.aim);
-    });
-    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.id === movePointer) {
-        movePointer = -1;
-        this.gameScene.mobileInput.movement.set(0, 0);
-        moveKnob.setPosition(moveCenter.x, moveCenter.y);
-      }
-      if (pointer.id === aimPointer) {
-        aimPointer = -1;
-        this.gameScene.mobileInput.firing = false;
-        aimKnob.setPosition(aimCenter.x, aimCenter.y);
-      }
-    });
-    const resetSticks = () => {
-      movePointer = -1;
-      aimPointer = -1;
-      this.gameScene.mobileInput.movement.set(0, 0);
-      this.gameScene.mobileInput.firing = false;
-      moveKnob.setPosition(moveCenter.x, moveCenter.y);
-      aimKnob.setPosition(aimCenter.x, aimCenter.y);
-    };
-    // Browsers emit pointercancel when a gesture is interrupted by rotation, a system
-    // gesture, or loss of focus. Treat it like pointerup so mobile input cannot stick.
-    this.input.on('pointercancel', resetSticks);
-    this.input.on('gameout', resetSticks);
-    this.events.once('shutdown', resetSticks);
   }
 }

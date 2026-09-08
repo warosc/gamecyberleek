@@ -98,7 +98,7 @@ export class OnboardingHints {
 }
 
 const DESKTOP_HINTS: HintSpec[] = [
-  { action: 'move', label: 'W A S D   MOVE', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 120, delayMs: 500 },
+  { action: 'move', label: 'W A S D / ARROWS   MOVE', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 120, delayMs: 500 },
   { action: 'aim', label: 'MOUSE   AIM', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 160, delayMs: 1100 },
   { action: 'fire', label: 'CLICK   FIRE', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 200, delayMs: 1700 },
   { action: 'dash', label: 'SPACE   DASH', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 240, delayMs: 2600 },

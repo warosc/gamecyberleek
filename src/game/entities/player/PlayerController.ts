@@ -11,9 +11,11 @@ export interface VirtualPlayerInput {
 
 export class PlayerController {
   private readonly movement = new Phaser.Math.Vector2();
+  private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys;
   private readonly keys: Record<'up' | 'down' | 'left' | 'right' | 'dash', Phaser.Input.Keyboard.Key>;
 
   constructor(keyboard: Phaser.Input.Keyboard.KeyboardPlugin) {
+    this.cursors = keyboard.createCursorKeys();
     this.keys = {
       up: keyboard.addKey('W'),
       down: keyboard.addKey('S'),
@@ -24,13 +26,17 @@ export class PlayerController {
   }
 
   getMovement(virtual?: VirtualPlayerInput) {
-    if (virtual?.active) return this.movement.copy(virtual.movement).normalize();
-    return this.movement
+    this.movement
       .set(
-        Number(this.keys.right.isDown) - Number(this.keys.left.isDown),
-        Number(this.keys.down.isDown) - Number(this.keys.up.isDown),
+        Number(this.keys.right.isDown || this.cursors.right.isDown) -
+          Number(this.keys.left.isDown || this.cursors.left.isDown),
+        Number(this.keys.down.isDown || this.cursors.down.isDown) -
+          Number(this.keys.up.isDown || this.cursors.up.isDown),
       )
       .normalize();
+    // Touch capability controls the HUD; it must never disable a connected keyboard.
+    if (this.movement.lengthSq() > 0 || !virtual?.active) return this.movement;
+    return this.movement.copy(virtual.movement).normalize();
   }
 
   wantsDash(virtual?: VirtualPlayerInput) {

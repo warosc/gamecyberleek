@@ -47,10 +47,10 @@ export class GameScene extends Phaser.Scene {
   arenaIndex = 0;
   arenaName = ARENA_THEMES[0].name;
   private spawn!: SpawnSystem;
-  private pausedByEsc = false;
   private audio!: AudioManager;
   private nextChestAt = GAMEPLAY.chestFirstMs;
   private pendingEquipmentDrop = false;
+  private victoryPending = false;
   private deaths = new EnemyDeathResolver();
   equippedWeapon = 'PULSEGUN-01';
   equippedArmor = 'SIN ARMADURA';
@@ -81,7 +81,23 @@ export class GameScene extends Phaser.Scene {
     this.audio.play('weapon_fire');
     this.effects.muzzle(x, y, angle);
   };
-  private readonly handleEscape = () => this.togglePause();
+  private readonly handleEscape = (event: KeyboardEvent) => {
+    if (!event.repeat) this.togglePause();
+  };
+  private readonly handleFocusLost = () => {
+    if (this.state === GameState.PLAYING || this.state === GameState.BOSS) this.togglePause();
+  };
+  private readonly syncGameplayPause = () => {
+    const paused = this.state === GameState.PAUSED || this.state === GameState.LEVEL_UP;
+    this.time.paused = paused;
+    if (paused) {
+      this.tweens.pauseAll();
+      this.input.keyboard?.resetKeys();
+      this.mobileInput.movement.set(0, 0);
+      this.mobileInput.firing = false;
+      this.mobileInput.dash = false;
+    } else this.tweens.resumeAll();
+  };
   private specialLastUsed: Record<SpecialAbilityId, number> = {
     nova: -99999,
     shield: -99999,
@@ -97,10 +113,10 @@ export class GameScene extends Phaser.Scene {
     this.xp = new ExperienceSystem();
     this.abilityLevels = new Map<string, number>();
     this.survivalMs = 0;
-    this.pausedByEsc = false;
     this.specialLastUsed = { nova: -99999, shield: -99999, overdrive: -99999 };
     this.nextChestAt = GAMEPLAY.chestFirstMs;
     this.pendingEquipmentDrop = false;
+    this.victoryPending = false;
     this.lastBossPhase = 1;
     this.deaths = new EnemyDeathResolver();
     this.telemetry = new RunTelemetry();
@@ -113,6 +129,8 @@ export class GameScene extends Phaser.Scene {
     this.equippedArmor = 'SIN ARMADURA';
   }
   create() {
+    this.time.paused = false;
+    this.tweens.resumeAll();
     this.physics.world.setBounds(0, 0, ARENA.width, ARENA.height);
     new ArenaPresenter(this).draw(ARENA_THEMES[this.arenaIndex]);
     this.player = new Player(this, ARENA.width / 2, ARENA.height / 2);
@@ -185,6 +203,9 @@ export class GameScene extends Phaser.Scene {
     this.events.on('weapon-fired', this.handleWeaponFired);
     this.events.on(Events.PLAYER_DASHED, this.handlePlayerDashed);
     this.input.keyboard!.on('keydown-ESC', this.handleEscape);
+    this.game.events.on(Phaser.Core.Events.BLUR, this.handleFocusLost);
+    this.game.events.on(Phaser.Core.Events.HIDDEN, this.handleFocusLost);
+    this.events.on(Events.STATE_CHANGED, this.syncGameplayPause);
     if (import.meta.env.VITE_DEBUG_GAME === 'true') {
       keyboard.on('keydown-B', () => this.encounters.spawnBoss());
       keyboard.on('keydown-C', () => this.loot.spawnChest());
@@ -202,11 +223,15 @@ export class GameScene extends Phaser.Scene {
       this.events.off('weapon-fired', this.handleWeaponFired);
       this.events.off(Events.PLAYER_DASHED, this.handlePlayerDashed);
       this.input.keyboard?.off('keydown-ESC', this.handleEscape);
+      this.game.events.off(Phaser.Core.Events.BLUR, this.handleFocusLost);
+      this.game.events.off(Phaser.Core.Events.HIDDEN, this.handleFocusLost);
+      this.events.off(Events.STATE_CHANGED, this.syncGameplayPause);
     });
     this.scene.launch('UI', { game: this });
     this.events.emit(Events.STATE_CHANGED, this.state);
   }
   update(_time: number, delta: number) {
+    if (this.victoryPending) return;
     if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
     this.survivalMs += delta;
     this.encounters.update(this.survivalMs);
@@ -284,7 +309,6 @@ export class GameScene extends Phaser.Scene {
       });
     }
     if (p.mode === 'plasma' && p.splashRadius > 0) this.plasmaExplosion(e.x, e.y, p.damage * 0.55, p.splashRadius, e);
-    if (boss) this.events.emit(Events.BOSS_HEALTH, e.health.current, e.health.max);
   }
   private enemyContact(object: Phaser.GameObjects.GameObject) {
     const e = object as Enemy;
@@ -313,6 +337,7 @@ export class GameScene extends Phaser.Scene {
     return stalest;
   }
   private collectOrb(object: Phaser.GameObjects.GameObject) {
+    if (this.victoryPending) return;
     const orb = object as ExperienceOrb;
     if (!orb.active) return;
     const amount = orb.value * this.player.stats.xpMultiplier;
@@ -331,6 +356,7 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(Events.XP_COLLECTED, this.xp.xp, this.xp.level);
   }
   private openLevelUp() {
+    if (this.victoryPending) return;
     const options = chooseAbilities(this.abilityLevels);
     if (options.length === 0) {
       this.player.health.heal(20);
@@ -397,6 +423,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
   activateSpecial(id: SpecialAbilityId, time = this.survivalMs) {
+    if (this.victoryPending) return;
     if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
     const ability = SPECIAL_ABILITIES.find((definition) => definition.id === id)!;
     if (time - this.specialLastUsed[id] < ability.cooldown) return;
@@ -455,12 +482,13 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.shake(180, 0.006);
   }
   togglePause() {
-    if (this.state === GameState.LEVEL_UP || this.state === GameState.GAME_OVER) return;
-    this.pausedByEsc = !this.pausedByEsc;
-    this.state = this.pausedByEsc
+    if (this.victoryPending) return;
+    if (![GameState.PLAYING, GameState.BOSS, GameState.PAUSED].includes(this.state)) return;
+    const paused = this.state !== GameState.PAUSED;
+    this.state = paused
       ? GameState.PAUSED
       : this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
-    if (this.pausedByEsc) this.physics.pause();
+    if (paused) this.physics.pause();
     else this.physics.resume();
     this.events.emit(Events.STATE_CHANGED, this.state);
   }
@@ -479,6 +507,7 @@ export class GameScene extends Phaser.Scene {
     this.scene.start('Menu');
   }
   private openChest(object: Phaser.GameObjects.GameObject) {
+    if (this.victoryPending) return;
     if (!this.loot.openChest(object)) return;
     this.state = GameState.LEVEL_UP;
     this.physics.pause();
@@ -486,6 +515,7 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(Events.STATE_CHANGED, this.state);
   }
   private gameOver(victory: boolean) {
+    if (this.victoryPending && !victory) return;
     if (this.state === GameState.GAME_OVER || this.state === GameState.VICTORY) return;
     this.state = victory ? GameState.VICTORY : GameState.GAME_OVER;
     this.telemetry.finish(this.survivalMs, this.xp.level, victory ? 'victory' : 'death');
@@ -521,11 +551,15 @@ export class GameScene extends Phaser.Scene {
     this.impacts.death(
       defeat.x,
       defeat.y,
-      defeat.boss ? 0xd566ff : elite ? eliteColor : 0x21e6ff,
+      defeat.boss ? 0xd566ff : eliteColor,
       { critical: false, boss: defeat.boss, elite, fatal: true },
     );
     this.spawnOrb(defeat.x, defeat.y, defeat.xp);
     if (defeat.boss) {
+      // Freeze combat during the death effect. XP must not open a modal and pause the
+      // victory timer before the result screen is reached.
+      this.victoryPending = true;
+      this.physics.pause();
       this.events.emit(Events.BOSS_HEALTH, 0, defeat.maxHealth);
       this.time.delayedCall(500, () => this.gameOver(true));
     }

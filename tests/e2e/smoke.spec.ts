@@ -57,6 +57,33 @@ async function canvasMapper(page: Page) {
   });
 }
 
+test('focus loss pauses combat until explicitly resumed', async ({ page }) => {
+  const telemetry = watch(page);
+  await page.goto('/');
+  const at = await canvasMapper(page);
+  const deploy = at(DEPLOY_BUTTON.x, DEPLOY_BUTTON.y);
+  await page.mouse.click(deploy.x, deploy.y);
+  await expect.poll(() => telemetry.runSeconds.at(-1) ?? 0).toBeGreaterThan(0);
+
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForTimeout(1200);
+  const pausedAt = telemetry.runSeconds.at(-1)!;
+  const reports = telemetry.runSeconds.length;
+  // A second focus-loss event must never toggle the game back into combat.
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('blur'));
+    window.dispatchEvent(new Event('focus'));
+  });
+  await page.waitForTimeout(2200);
+  expect(telemetry.runSeconds.length).toBeGreaterThan(reports);
+  expect(telemetry.runSeconds.at(-1)).toBe(pausedAt);
+
+  const resume = at(640, 360);
+  await page.mouse.click(resume.x, resume.y);
+  await expect.poll(() => telemetry.runSeconds.at(-1) ?? 0).toBeGreaterThan(pausedAt);
+  expect(telemetry.failures).toEqual([]);
+});
+
 test('boots, survives a run, and redeploys without killing the game loop', async ({ page }) => {
   const telemetry = watch(page);
   await page.goto('/');

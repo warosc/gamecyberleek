@@ -1,10 +1,15 @@
 import Phaser from 'phaser';
 import { PLAYER_RIG_LAYERS, PLAYER_RIG_STATES } from '../entities/player/PlayerRigManifest';
+import { BOSS_IDENTITY } from '../entities/enemies/BossVisual';
+import { VEGETABLE_ROSTER, vegetableAsset, vegetableTexture, type VegetableType } from '../entities/enemies/VegetableRoster';
 export class PreloadScene extends Phaser.Scene {
   constructor() {
     super('Preload');
   }
   preload() {
+    this.load.image(BOSS_IDENTITY.texture, BOSS_IDENTITY.asset);
+    for (const type of Object.keys(VEGETABLE_ROSTER) as VegetableType[])
+      this.load.image(vegetableTexture(type), vegetableAsset(type));
     this.load.image(
       'leek-placeholder-front',
       'assets/character/leek/placeholder-front-reference.png',

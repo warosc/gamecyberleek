@@ -1,7 +1,11 @@
 import Phaser from 'phaser';
 import { HealthComponent } from '../../components/HealthComponent';
 import { ELITE_AFFIX_DEFS, ENEMY_DEFS, EnemyType, type EliteAffix } from './EnemyTypes';
-import { GAMEPLAY } from '../../config/Constants';
+import { GAMEPLAY, Events } from '../../config/Constants';
+import { detectQualityProfile } from '../../config/QualityProfile';
+import { BossVisual, BOSS_IDENTITY } from './BossVisual';
+import { VegetableVisual } from './VegetableVisual';
+import { isVegetableType, vegetableTexture, VEGETABLE_ROSTER } from './VegetableRoster';
 
 /** Preserves the original feel: 0.075 rad per frame at 60fps. */
 const PULSE_RADIANS_PER_MS = 0.075 * 0.06;
@@ -18,6 +22,20 @@ export class Enemy extends Phaser.GameObjects.Arc {
    */
   private pendingAttack?: { at: number; release: () => void };
   private visual: Phaser.GameObjects.Container;
+  private bossVisual?: BossVisual;
+  private vegetableVisual?: VegetableVisual;
+  private chassis!: Phaser.GameObjects.Container;
+  private shadow!: Phaser.GameObjects.Ellipse;
+  private feet: Phaser.GameObjects.Ellipse[] = [];
+  private engineGlow?: Phaser.GameObjects.Ellipse;
+  private chargeGlow?: Phaser.GameObjects.Arc;
+  private crownRotor?: Phaser.GameObjects.Graphics;
+  private fins: Phaser.GameObjects.Graphics[] = [];
+  private readonly animateDetails = detectQualityProfile().tier !== 'low';
+  private visualTime = 0;
+  private hitAt = -1000;
+  private hitStrength = 0;
+  private firedAt = -1000;
   private healthBack: Phaser.GameObjects.Rectangle;
   private healthFill: Phaser.GameObjects.Rectangle;
   private eliteLabel?: Phaser.GameObjects.Text;
@@ -64,9 +82,11 @@ export class Enemy extends Phaser.GameObjects.Arc {
     // Derived from gameplay time, not incremented per frame: a fixed step made the pulse
     // run at the display refresh rate, so a 165Hz screen animated ~2.75x faster than 60Hz.
     this.visualPhase = this.visualOffset + time * PULSE_RADIANS_PER_MS;
+    this.visualTime = time;
     if (this.pendingAttack && time >= this.pendingAttack.at) {
       const release = this.pendingAttack.release;
       this.pendingAttack = undefined;
+      this.firedAt = time;
       release();
     }
     const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y);
@@ -131,11 +151,13 @@ export class Enemy extends Phaser.GameObjects.Arc {
   }
   hit(amount: number, critical = false) {
     this.health.damage(amount);
-    this.healthBack.setVisible(true);
+    this.healthBack.setVisible(!this.bossVisual);
     this.healthFill
-      .setVisible(true)
+      .setVisible(!this.bossVisual)
       .setDisplaySize(this.def.size * 2 * (this.health.current / this.health.max), 3);
     this.flashHit(critical);
+    if (this.enemyType === EnemyType.BOSS)
+      this.scene.events.emit(Events.BOSS_HEALTH, this.health.current, this.health.max);
     return this.health.dead;
   }
 
@@ -146,15 +168,9 @@ export class Enemy extends Phaser.GameObjects.Arc {
    */
   flashHit(critical = false) {
     if (!this.active) return;
-    this.visual.setAlpha(0.35);
-    this.scene.time.delayedCall(60, () => this.active && this.visual.setAlpha(1));
-    this.scene.tweens.add({
-      targets: this.visual,
-      scale: critical ? 1.28 : 1.12,
-      duration: critical ? 90 : 60,
-      yoyo: true,
-      ease: 'Quad.Out',
-    });
+    // Evaluated with locomotion instead of fighting a scale tween on the same object.
+    this.hitAt = this.visualTime;
+    this.hitStrength = critical ? 0.24 : 0.12;
     if (!critical) return;
     const ring = this.scene.add
       .circle(this.x, this.y, this.def.size + 6, 0xfff27a, 0)
@@ -172,7 +188,8 @@ export class Enemy extends Phaser.GameObjects.Arc {
 
   /** Affix colour when elite, base colour otherwise. Used so a death burst keeps its identity. */
   get eliteColor() {
-    return this.elite ? ELITE_AFFIX_DEFS[this.eliteAffix].color : this.def.color;
+    return this.elite ? ELITE_AFFIX_DEFS[this.eliteAffix].color :
+      isVegetableType(this.enemyType) ? VEGETABLE_ROSTER[this.enemyType].color : this.def.color;
   }
   makeElite() {
     if (this.enemyType === EnemyType.BOSS || this.elite) return this;
@@ -213,7 +230,16 @@ export class Enemy extends Phaser.GameObjects.Arc {
   }
 
   private createVisual(scene: Phaser.Scene, size: number, color: number) {
+    if (this.enemyType === EnemyType.BOSS && scene.textures.exists(BOSS_IDENTITY.texture)) {
+      this.bossVisual = new BossVisual(scene);
+      return scene.add.container(this.x, this.y, [this.bossVisual]).setDepth(6);
+    }
+    if (isVegetableType(this.enemyType) && scene.textures.exists(vegetableTexture(this.enemyType))) {
+      this.vegetableVisual = new VegetableVisual(scene, this.enemyType);
+      return scene.add.container(this.x, this.y, [this.vegetableVisual]).setDepth(6);
+    }
     const shadow = scene.add.ellipse(0, size * 0.45, size * 1.9, size * 0.75, 0x000000, 0.4);
+    this.shadow = shadow;
     const body = scene.add.graphics();
     const halo = scene.add.graphics();
     halo.lineStyle(2, color, 0.28).strokeCircle(0, 0, size + 8);
@@ -295,15 +321,112 @@ export class Enemy extends Phaser.GameObjects.Arc {
       }
     }
 
-    return scene.add.container(this.x, this.y, [shadow, halo, body]).setDepth(6);
+    if (this.enemyType === EnemyType.BOSS) {
+      // A broccoli canopy distinguishes the commander from an enlarged tank.
+      for (let index = -2; index <= 2; index++) {
+        const x = index * size * 0.3;
+        const y = -size * (0.67 + (2 - Math.abs(index)) * 0.12);
+        body.fillStyle(0x113c30).fillCircle(x, y, size * 0.3)
+          .fillStyle(0x49ac63).fillCircle(x, y - 3, size * 0.23)
+          .fillStyle(0x9af58a, 0.65).fillCircle(x - 3, y - 8, size * 0.09);
+      }
+    }
+    const attachments: Phaser.GameObjects.GameObject[] = [];
+    if (this.enemyType === EnemyType.GRUNT || this.enemyType === EnemyType.SHOOTER) {
+      for (const side of [-1, 1]) {
+        const fin = scene.add.graphics().setPosition(side * size * 0.8, 0);
+        fin.fillStyle(this.enemyType === EnemyType.GRUNT ? 0x2d8055 : 0x51283a)
+          .fillTriangle(0, -8, side * 18, -14, side * 12, 14)
+          .lineStyle(2, color, 0.85).lineBetween(0, 0, side * 14, -7);
+        this.fins.push(fin);
+        attachments.push(fin);
+      }
+    }
+    if (this.enemyType === EnemyType.RUNNER) {
+      this.engineGlow = scene.add.ellipse(0, size + 8, 10, 25, 0xffc857, 0.8)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      attachments.push(this.engineGlow);
+    } else if (this.enemyType !== EnemyType.SHOOTER) {
+      for (const side of [-1, 1]) {
+        const foot = scene.add.ellipse(side * size * 0.65, size * 0.7, size * 0.58, size * 0.8, 0x15283a)
+          .setStrokeStyle(2, color, 0.75);
+        this.feet.push(foot);
+        attachments.push(foot);
+      }
+    }
+    if (this.enemyType === EnemyType.SHOOTER || this.enemyType === EnemyType.BOSS) {
+      this.chargeGlow = scene.add.circle(0, -size * 0.45, size * 0.35, 0xffb979, 0.15)
+        .setStrokeStyle(2, 0xffe5bf, 0.6).setBlendMode(Phaser.BlendModes.ADD);
+    }
+    this.chassis = scene.add.container(0, 0, [...attachments, halo, body]);
+    this.chassis.name = `enemy-chassis-${this.enemyType.toLowerCase()}`;
+    if (this.chargeGlow) this.chassis.add(this.chargeGlow);
+    if (this.enemyType === EnemyType.BOSS) {
+      this.crownRotor = scene.add.graphics();
+      this.crownRotor.lineStyle(3, 0xd566ff, 0.8);
+      for (let index = 0; index < 4; index++) {
+        const a = index * Math.PI / 2;
+        this.crownRotor.beginPath().arc(0, 0, size + 18, a, a + 0.7).strokePath();
+        this.crownRotor.fillStyle(0xffc857).fillCircle(Math.cos(a) * (size + 18), Math.sin(a) * (size + 18), 4);
+      }
+      this.chassis.add(this.crownRotor);
+    }
+    // The shadow stays on the floor while the chassis turns, recoils and hovers.
+    return scene.add.container(this.x, this.y, [shadow, this.chassis]).setDepth(6);
   }
 
   private syncVisual(target: { x: number; y: number }) {
     this.visual.setPosition(this.x, this.y);
-    const pulse = 1 + Math.sin(this.visualPhase) * (this.enemyType === EnemyType.RUNNER ? 0.07 : 0.025);
-    this.visual.setScale(pulse, 2 - pulse);
-    this.visual.rotation =
-      Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y) + Math.PI / 2;
+    const phase = this.visualPhase;
+    const moving = (this.body as Phaser.Physics.Arcade.Body).velocity.lengthSq() > 1;
+    const detail = this.animateDetails ? 1 : 0;
+    const gait = Math.sin(phase * (this.enemyType === EnemyType.TANK ? 0.75 : 1.8));
+    const hit = Math.max(0, 1 - (this.visualTime - this.hitAt) / 160);
+    const recoil = Math.max(0, 1 - (this.visualTime - this.firedAt) / 220);
+    if (this.vegetableVisual) {
+      this.vegetableVisual.updatePose(this.visualTime, this.visualOffset, moving, target.x < this.x,
+        !!this.pendingAttack, recoil, hit);
+      const top = this.y - this.vegetableVisual.artHeight * 0.7 - 5;
+      this.healthBack.setPosition(this.x, top);
+      this.healthFill.setPosition(this.x - this.def.size, top);
+      this.eliteLabel?.setPosition(this.x, top - 13);
+      return;
+    }
+    if (this.bossVisual) {
+      this.bossVisual.updatePose(this.visualTime, this.bossPhase, !!this.pendingAttack,
+        recoil, hit, moving, target.x < this.x);
+      // The global boss panel carries its health; a miniature bar would cut through the face.
+      this.healthBack.setVisible(false);
+      this.healthFill.setVisible(false);
+      return;
+    }
+    const pulse = 1 + Math.sin(phase) * 0.025 * detail;
+    this.chassis.setScale(pulse + hit * this.hitStrength, 2 - pulse - hit * this.hitStrength * 0.45);
+    this.chassis.setAlpha(hit > 0.65 ? 0.5 : 1);
+    this.chassis.rotation = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y) + Math.PI / 2;
+    this.chassis.y = 0;
+    if (this.enemyType === EnemyType.GRUNT || this.enemyType === EnemyType.TANK) {
+      this.chassis.rotation += gait * 0.075 * detail * Number(moving);
+      this.chassis.y = -Math.abs(gait) * 2.5 * detail * Number(moving);
+    } else if (this.enemyType === EnemyType.SHOOTER) {
+      this.chassis.y = (-4 + Math.sin(phase) * 3) * detail;
+    }
+    // Recoil is translated backwards along the firing direction in world coordinates.
+    this.chassis.x = -Math.sin(this.chassis.rotation) * recoil * 5 * detail;
+    this.chassis.y += Math.cos(this.chassis.rotation) * recoil * 5 * detail;
+    for (let index = 0; index < this.feet.length; index++) {
+      this.feet[index].y = this.def.size * 0.7 + gait * (index ? -1 : 1) * 5 * detail * Number(moving);
+    }
+    for (let index = 0; index < this.fins.length; index++) {
+      this.fins[index].rotation = (index ? -1 : 1) *
+        (Math.sin(phase * 1.8) * 0.2 * detail + (this.pendingAttack ? 0.35 : 0));
+    }
+    this.shadow.setScale(1 - Math.abs(Math.sin(phase)) * 0.08 * detail, 1);
+    this.engineGlow?.setScale(1 + Math.sin(phase * 3) * 0.16 * detail,
+      moving ? 1.1 + Math.sin(phase * 4) * 0.3 * detail : 0.35);
+    this.chargeGlow?.setScale(this.pendingAttack ? 1.6 : 0.65 + recoil)
+      .setAlpha(this.pendingAttack ? 0.9 : 0.2 + recoil * 0.6);
+    this.crownRotor?.setRotation(this.animateDetails ? this.visualTime * 0.0005 * this.bossPhase : 0);
     this.healthBack.setPosition(this.x, this.y - this.def.size - 10);
     this.healthFill.setPosition(this.x - this.def.size, this.y - this.def.size - 10);
     if (this.eliteLabel) this.eliteLabel.setPosition(this.x, this.y - this.def.size - 24);

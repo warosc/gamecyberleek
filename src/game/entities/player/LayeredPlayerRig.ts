@@ -67,6 +67,17 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
   private speed = 0;
   private dashing = false;
   private powerGlow = 0;
+  private gaitTime = 0;
+  private aimPitch = 0;
+  private recoilAt = -1000;
+
+  setAim(angle: number) {
+    this.aimPitch = Math.sin(angle) * 0.12 * this.facing;
+  }
+
+  recoil(time: number) {
+    this.recoilAt = time;
+  }
 
   static create(scene: Phaser.Scene) {
     if (!PLAYER_RIG_LAYERS.every((layer) => scene.textures.exists(`rig-${layer}`))) return undefined;
@@ -164,9 +175,11 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
     this.stateStartedAt = time - this.clock.elapsed(state, time);
     const step = Phaser.Math.Clamp(time - this.lastTime, 0, MAX_STEP_MS);
     this.lastTime = time;
+    this.gaitTime += step * Math.min(this.speed, 1.6);
 
     this.resetPose();
     this.sampleAnimation(state, time);
+    this.blendLocomotion(state);
     this.applySecondaryMotion(state, time, step);
     this.solve();
     this.updateShine(state, time);
@@ -179,6 +192,17 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
       entry.y = 0;
       entry.rotation = 0;
       entry.alpha = 1;
+    }
+  }
+
+  /** Legs keep walking under the firing pose, even during sustained automatic fire. */
+  private blendLocomotion(state: PlayerAnimationState) {
+    if ((state !== 'walk' && state !== 'attack') || this.speed < 0.01) return;
+    const walk = this.animations.get('walk');
+    if (!walk) return;
+    for (const [layer, transform] of sampleRigAnimation(walk, this.gaitTime)) {
+      const leg = layer.startsWith('thigh-') || layer.startsWith('leg-') || layer.startsWith('boot-');
+      if (state === 'walk' || leg) Object.assign(this.pose.get(layer)!, transform);
     }
   }
 
@@ -212,6 +236,15 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
       const depth = state === 'idle' ? 1 : 0.35;
       torso.y += breath * 0.55 * depth;
       head.y += breath * 0.25 * depth;
+      if (!this.reducedMotion) {
+        head.rotation += this.aimPitch;
+        const recoil = Math.max(0, 1 - (time - this.recoilAt) / 150) ** 2;
+        torso.x -= recoil * 2.2;
+        torso.rotation -= recoil * 0.045;
+        this.pose.get('arm-right-upper')!.rotation -= recoil * 0.18;
+        this.pose.get('arm-right-fore')!.rotation += recoil * 0.12;
+        leaves.rotation += recoil * 0.08;
+      }
     }
 
     // Leaves trail the body: the spring is driven by horizontal speed and by the lean, with a

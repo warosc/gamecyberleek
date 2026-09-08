@@ -74,6 +74,7 @@ export class MenuScene extends Phaser.Scene {
     this.createButton(80, 474, 220, 48, 'HOW TO PLAY', 0x21e6ff, () =>
       controls.setVisible(!controls.visible),
     );
+    this.createButton(320, 474, 220, 48, 'ENEMIGOS', 0xffb52e, () => this.scene.start('Bestiary'));
     const controls = this.add
       .text(80, 540, 'WASD  MOVE        MOUSE  AIM / FIRE\nSPACE  DASH       Q / E / R  POWERS', {
         fontFamily: 'Arial Black',
