@@ -16,6 +16,7 @@ export type AudioEventId =
   | 'boss_attack'
   | 'phase_change'
   | 'weapon_evolve'
+  | 'combo_rise'
   | 'player_hit'
   | 'weapon_fire'
   | 'spore_fire'
@@ -80,6 +81,13 @@ export const AUDIO_EVENTS: Record<AudioEventId, AudioEventDefinition> = {
       { frequency: 330, durationS: 0.16, volume: 0.035, type: 'triangle' },
       { frequency: 495, durationS: 0.18, volume: 0.034, delayMs: 120, type: 'triangle' },
       { frequency: 740, durationS: 0.3, volume: 0.032, delayMs: 250, type: 'sawtooth' },
+    ],
+  },
+  combo_rise: {
+    category: 'ui',
+    tones: [
+      { frequency: 540, durationS: 0.08, volume: 0.022, type: 'triangle' },
+      { frequency: 680, durationS: 0.1, volume: 0.02, delayMs: 55, type: 'triangle' },
     ],
   },
   player_hit: { category: 'sfx', tones: [{ frequency: 80, durationS: 0.12, volume: 0.04, type: 'triangle' }] },

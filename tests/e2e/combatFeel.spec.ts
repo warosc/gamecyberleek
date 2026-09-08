@@ -219,3 +219,25 @@ test('loadout selection changes combat and Arc Leek chains between nearby enemie
   expect(result.health[1]).toBeLessThan(50);
   expect(result.health[2]).toBeLessThan(50);
 });
+
+test('three rapid eliminations activate momentum and increase XP', async ({ page }) => {
+  await deploy(page);
+  const result = await page.evaluate(async () => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    scene.togglePause();
+    scene.orbs.clear(true, true);
+    const enemyModulePath = '/src/game/entities/enemies/Enemy.ts';
+    const { Enemy } = await import(enemyModulePath);
+    for (let index = 0; index < 3; index++) {
+      const enemy = new Enemy(scene, 600 + index * 70, 500, 'GRUNT') as Enemy;
+      scene.survivalMs = 1000 + index * 300;
+      (scene as unknown as { resolveEnemyDeath: (enemy: Enemy) => void }).resolveEnemyDeath(enemy);
+    }
+    const values = scene.orbs.getChildren().map(orb => (orb as unknown as { value: number }).value);
+    const ui = window.combatGame.scene.getScene('UI');
+    return { values, momentumVisible: (ui.children.getByName('momentum-hud') as unknown as { visible?: boolean })?.visible };
+  });
+  expect(result.values).toHaveLength(3);
+  expect(result.values[2]).toBeGreaterThan(result.values[0]);
+  expect(result.momentumVisible).toBe(true);
+});

@@ -26,6 +26,7 @@ import { RunEndSystem } from '../systems/RunEndSystem';
 import { ImpactPresenter } from '../presentation/ImpactPresenter';
 import { RunTelemetry } from '../systems/RunTelemetry';
 import { starterWeapon, type StarterWeaponId } from '../weapons/WeaponRegistry';
+import { CombatMomentum } from '../systems/CombatMomentum';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -58,6 +59,7 @@ export class GameScene extends Phaser.Scene {
   private offeredAbilities: string[] = [];
   private victoryPending = false;
   private deaths = new EnemyDeathResolver();
+  private momentum = new CombatMomentum();
   equippedWeapon = 'PULSEGUN-01';
   selectedWeaponId: StarterWeaponId = 'pulse';
   equippedArmor = 'SIN ARMADURA';
@@ -72,7 +74,11 @@ export class GameScene extends Phaser.Scene {
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
   private readonly handlePlayerDamaged = (_current: number, _max: number, applied?: number) => {
-    if (applied) { this.telemetry.tookDamage(applied); this.audio.play('player_hit'); }
+    if (applied) {
+      this.telemetry.tookDamage(applied); this.audio.play('player_hit');
+      const reset = this.momentum.break();
+      if (reset) this.events.emit(Events.MOMENTUM_CHANGED, reset);
+    }
   };
   private readonly handleBossSpawned = () => {
     this.telemetry.bossSpawned();
@@ -133,6 +139,7 @@ export class GameScene extends Phaser.Scene {
     this.victoryPending = false;
     this.lastBossPhase = 1;
     this.deaths = new EnemyDeathResolver();
+    this.momentum = new CombatMomentum();
     this.telemetry = new RunTelemetry();
     this.mobileInput.movement.set(0, 0);
     this.mobileInput.aim.set(1, 0);
@@ -255,6 +262,8 @@ export class GameScene extends Phaser.Scene {
     if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
     this.survivalMs += delta;
     this.encounters.update(this.survivalMs);
+    const expiredMomentum = this.momentum.update(this.survivalMs);
+    if (expiredMomentum) this.events.emit(Events.MOMENTUM_CHANGED, expiredMomentum);
     const phase = runPhase(this.survivalMs);
     if (phase.at !== this.lastRunPhaseAt) {
       this.lastRunPhaseAt = phase.at;
@@ -618,6 +627,9 @@ export class GameScene extends Phaser.Scene {
     if (!defeat) return;
     this.events.emit(Events.ENEMY_DIED);
     this.telemetry.killed();
+    const momentum = this.momentum.kill(this.survivalMs);
+    if (momentum.tier > 0 && momentum.chain % 3 === 0) this.audio.play('combo_rise');
+    this.events.emit(Events.MOMENTUM_CHANGED, momentum);
     if (defeat.boss) this.telemetry.bossKilled();
     this.impacts.death(
       defeat.x,
@@ -625,7 +637,7 @@ export class GameScene extends Phaser.Scene {
       defeat.boss ? 0xd566ff : eliteColor,
       { critical: false, boss: defeat.boss, elite, fatal: true },
     );
-    this.spawnOrb(defeat.x, defeat.y, defeat.xp);
+    this.spawnOrb(defeat.x, defeat.y, Math.round(defeat.xp * momentum.xpMultiplier));
     if (defeat.boss) {
       // Freeze combat during the death effect. XP must not open a modal and pause the
       // victory timer before the result screen is reached.
