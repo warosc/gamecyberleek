@@ -61,4 +61,5 @@ export const Events = {
   RUN_PHASE_CHANGED: 'run-phase-changed',
   WEAPON_EVOLVED: 'weapon-evolved',
   MOMENTUM_CHANGED: 'momentum-changed',
+  CONTRACT_COMPLETED: 'contract-completed',
 } as const;

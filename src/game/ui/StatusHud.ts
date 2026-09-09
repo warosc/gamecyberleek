@@ -29,7 +29,7 @@ export class StatusHud {
     mobile = false,
   ) {
     this.frame = scene.add.rectangle(16, 14, 370, 112, 0x06101d, 0.94)
-      .setOrigin(0, 0).setStrokeStyle(3, 0x21e6ff, 0.7);
+      .setOrigin(0, 0).setStrokeStyle(3, 0x21e6ff, 0.7).setName('hud-hp-panel');
     scene.add.rectangle(24, 22, 88, 88, 0x0b1e30, 1)
       .setOrigin(0, 0).setStrokeStyle(4, 0x73ef62, 0.8);
     scene.add.image(68, 66, 'leek-avatar').setDisplaySize(80, 80);

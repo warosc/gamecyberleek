@@ -26,8 +26,9 @@ import { RunEndSystem } from '../systems/RunEndSystem';
 import { ImpactPresenter } from '../presentation/ImpactPresenter';
 import { RunTelemetry } from '../systems/RunTelemetry';
 import { starterWeapon, type StarterWeaponId } from '../weapons/WeaponRegistry';
-import { CombatMomentum } from '../systems/CombatMomentum';
+import { CombatMomentum, type MomentumState } from '../systems/CombatMomentum';
 import { applyWeaponMastery } from '../weapons/WeaponMastery';
+import { ContractSystem } from '../systems/ContractSystem';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -61,6 +62,8 @@ export class GameScene extends Phaser.Scene {
   private victoryPending = false;
   private deaths = new EnemyDeathResolver();
   private momentum = new CombatMomentum();
+  /** Public: UIScene reads this every frame to drive the contract HUD, same as `xp`/`telemetry`. */
+  contracts = new ContractSystem();
   equippedWeapon = 'PULSEGUN-01';
   selectedWeaponId: StarterWeaponId = 'pulse';
   equippedArmor = 'SIN ARMADURA';
@@ -77,8 +80,9 @@ export class GameScene extends Phaser.Scene {
   private readonly handlePlayerDamaged = (_current: number, _max: number, applied?: number) => {
     if (applied) {
       this.telemetry.tookDamage(applied); this.audio.play('player_hit');
+      this.contracts.onPlayerDamaged(this.survivalMs);
       const reset = this.momentum.break();
-      if (reset) this.events.emit(Events.MOMENTUM_CHANGED, reset);
+      if (reset) this.applyMomentum(reset);
     }
   };
   private readonly handleBossSpawned = () => {
@@ -141,6 +145,7 @@ export class GameScene extends Phaser.Scene {
     this.lastBossPhase = 1;
     this.deaths = new EnemyDeathResolver();
     this.momentum = new CombatMomentum();
+    this.contracts = new ContractSystem();
     this.telemetry = new RunTelemetry();
     this.mobileInput.movement.set(0, 0);
     this.mobileInput.aim.set(1, 0);
@@ -187,7 +192,7 @@ export class GameScene extends Phaser.Scene {
     this.encounters = new EncounterSystem(this, this.enemies, this.player);
     this.runEnd = new RunEndSystem(this, () => this.scene.stop('UI'));
     this.worldProps = new ExplosiveBarrelSystem(this, (x, y, damage, radius) =>
-      this.plasmaExplosion(x, y, damage, radius),
+      this.plasmaExplosion(x, y, damage, radius, undefined, 'environment'),
     );
     this.worldProps.bindProjectiles(this.projectiles.group);
     this.mobileInput.active =
@@ -266,7 +271,10 @@ export class GameScene extends Phaser.Scene {
     this.survivalMs += delta;
     this.encounters.update(this.survivalMs);
     const expiredMomentum = this.momentum.update(this.survivalMs);
-    if (expiredMomentum) this.events.emit(Events.MOMENTUM_CHANGED, expiredMomentum);
+    if (expiredMomentum) this.applyMomentum(expiredMomentum);
+    // O(1) against a 3-entry contract list; only the UNSCATHED clock needs a per-frame check.
+    const unscathedCompleted = this.contracts.update(this.survivalMs);
+    if (unscathedCompleted) this.events.emit(Events.CONTRACT_COMPLETED, unscathedCompleted);
     const phase = runPhase(this.survivalMs);
     if (phase.at !== this.lastRunPhaseAt) {
       this.lastRunPhaseAt = phase.at;
@@ -609,30 +617,53 @@ export class GameScene extends Phaser.Scene {
       victory,
       arenaIndex: this.arenaIndex,
       weaponId: this.selectedWeaponId,
+      contracts: this.contracts.summary(),
     });
   }
-  private plasmaExplosion(x: number, y: number, damage: number, radius: number, ignored?: Enemy) {
+  /** Single fan-out point for momentum state: keeps `MOMENTUM_CHANGED` and the kill-streak
+   * contract in lockstep instead of duplicating this pair at every call site. */
+  private applyMomentum(state: MomentumState) {
+    this.events.emit(Events.MOMENTUM_CHANGED, state);
+    const streakCompleted = this.contracts.onMomentumChanged(state);
+    if (streakCompleted) this.events.emit(Events.CONTRACT_COMPLETED, streakCompleted);
+  }
+  private plasmaExplosion(
+    x: number,
+    y: number,
+    damage: number,
+    radius: number,
+    ignored?: Enemy,
+    cause: 'weapon' | 'environment' = 'weapon',
+  ) {
     this.effects.explosion(x, y, radius);
     this.enemies.getChildren().forEach((object) => {
       const enemy = object as Enemy;
       if (!enemy.active || enemy === ignored || Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y) > radius) return;
       this.telemetry.dealtDamage(damage);
       if (enemy.hit(Math.round(damage))) {
-        this.resolveEnemyDeath(enemy);
+        this.resolveEnemyDeath(enemy, cause);
       }
     });
     this.audio.tone(65, 0.2, 0.05);
   }
-  private resolveEnemyDeath(enemy: Enemy) {
+  /** Every kill path (projectile, arc chain, nova, splash) converges here, so it is the one
+   * place contract progress needs to hook into combat. */
+  private resolveEnemyDeath(enemy: Enemy, cause: 'weapon' | 'environment' = 'weapon') {
     const elite = enemy.elite;
     const eliteColor = enemy.eliteColor;
     const defeat = this.deaths.resolve(enemy);
     if (!defeat) return;
     this.events.emit(Events.ENEMY_DIED);
     this.telemetry.killed();
+    const contractCompleted = this.contracts.onEnemyDefeated({
+      elite,
+      boss: defeat.boss,
+      environment: cause === 'environment',
+    });
+    if (contractCompleted) this.events.emit(Events.CONTRACT_COMPLETED, contractCompleted);
     const momentum = this.momentum.kill(this.survivalMs);
     if (momentum.tier > 0 && momentum.chain % 3 === 0) this.audio.play('combo_rise');
-    this.events.emit(Events.MOMENTUM_CHANGED, momentum);
+    this.applyMomentum(momentum);
     if (defeat.boss) this.telemetry.bossKilled();
     this.impacts.death(
       defeat.x,

@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { isSectorUnlocked } from '../systems/UnlockRegistry';
 import { loadProfile } from '../systems/ProfileStore';
 import { recordRestart } from '../systems/RunTelemetry';
+import type { ContractOutcome } from '../systems/ContractSystem';
 
 const BUTTON_WIDTH = 270;
 const BUTTON_GAP = 20;
@@ -14,7 +15,15 @@ export class GameOverScene extends Phaser.Scene {
     super('GameOver');
   }
 
-  create(data: { time: number; level: number; victory: boolean; arenaIndex: number; weaponId: string; masteryEarned?: number }) {
+  create(data: {
+    time: number;
+    level: number;
+    victory: boolean;
+    arenaIndex: number;
+    weaponId: string;
+    masteryEarned?: number;
+    contracts?: ContractOutcome;
+  }) {
     this.input.enabled = true;
     this.navigating = false;
     this.add
@@ -55,9 +64,13 @@ export class GameOverScene extends Phaser.Scene {
     this.statCard(360, 300, 'SURVIVAL', `${minutes}:${String(remainingSeconds).padStart(2, '0')}`);
     this.statCard(640, 300, 'LEVEL REACHED', String(data.level));
     this.statCard(920, 300, 'SECTOR', String(data.arenaIndex + 1));
-    this.add.text(GAME_WIDTH / 2, 392, `WEAPON MASTERY  +${data.masteryEarned ?? 0}`, {
-      fontFamily: 'Arial Black', fontSize: '15px', color: '#ffc857', letterSpacing: 2,
-    }).setOrigin(0.5);
+    this.add.text(GAME_WIDTH / 2 - 8, 392, `WEAPON MASTERY  +${data.masteryEarned ?? 0}`, {
+      fontFamily: 'Arial Black', fontSize: '14px', color: '#ffc857', letterSpacing: 1,
+    }).setOrigin(1, 0.5);
+    const completedContracts = data.contracts?.completedCount ?? 0;
+    this.add.text(GAME_WIDTH / 2 + 8, 392, `CONTRATOS ${completedContracts}/3  ·  +${data.contracts?.creditsEarned ?? 0} CR`, {
+      fontFamily: 'Arial Black', fontSize: '14px', color: '#73ef62', letterSpacing: 1,
+    }).setOrigin(0, 0.5);
 
     // A clear run earns the next sector; dying retries the one that beat you.
     const nextArenaIndex = data.victory ? data.arenaIndex + 1 : data.arenaIndex;

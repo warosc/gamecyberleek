@@ -242,6 +242,74 @@ test('three rapid eliminations activate momentum and increase XP', async ({ page
   expect(result.momentumVisible).toBe(true);
 });
 
+test('contracts roll three distinct objectives, track progress from combat events, and pay out at game over', async ({ page }) => {
+  await deploy(page);
+  const result = await page.evaluate(async () => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const rolled = scene.contracts.list.map((c) => c.kind);
+    scene.togglePause();
+    const contractSystemPath = '/src/game/systems/ContractSystem.ts';
+    const { ContractSystem } = await import(contractSystemPath);
+    // Replace the random roll with a fixed set so this test does not depend on which three
+    // of the five kinds a real run happens to draw.
+    scene.contracts = new ContractSystem([
+      { kind: 'ELIMINATIONS', title: 'ELIMINACIONES', target: 2, progress: 0, completed: false, reward: 45 },
+      { kind: 'DEVICE_KILLS', title: 'SABOTAJE', target: 1, progress: 0, completed: false, reward: 60 },
+      { kind: 'ELITE_HUNT', title: 'CAZA MAYOR', target: 1, progress: 0, completed: false, reward: 70 },
+    ]);
+    const completions: string[] = [];
+    scene.events.on('contract-completed', (contract: { kind: string }) => completions.push(contract.kind));
+    const path = '/src/game/entities/enemies/Enemy.ts';
+    const { Enemy } = await import(path);
+    const internals = scene as unknown as {
+      resolveEnemyDeath: (enemy: unknown, cause?: 'weapon' | 'environment') => void;
+      gameOver: (victory: boolean) => void;
+    };
+    // Two plain kills complete ELIMINATIONS (target 2).
+    internals.resolveEnemyDeath(new Enemy(scene, 600, 500, 'GRUNT'));
+    internals.resolveEnemyDeath(new Enemy(scene, 660, 500, 'GRUNT'));
+    // One barrel-caused kill completes DEVICE_KILLS (target 1).
+    internals.resolveEnemyDeath(new Enemy(scene, 700, 500, 'GRUNT'), 'environment');
+    // One elite kill completes ELITE_HUNT (target 1).
+    internals.resolveEnemyDeath(new Enemy(scene, 750, 500, 'GRUNT').makeElite());
+    // Row existence/visibility is a structural HUD check independent of which three kinds a
+    // real run happened to draw (the contracts instance above was swapped for determinism).
+    // Rows live inside the 'contract-hud' container, so a plain top-level `getByName` cannot
+    // see them: Phaser reparents a child off the scene's own display list once it joins a
+    // container. Walk the tree instead.
+    const findByName = (list: unknown, targetName: string): { visible?: boolean } | null => {
+      for (const child of list as { name?: string; visible?: boolean; list?: unknown }[]) {
+        if (child.name === targetName) return child;
+        if (child.list) {
+          const found = findByName(child.list, targetName);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    const ui = window.combatGame.scene.getScene('UI');
+    const rowsVisible = [0, 1, 2].every(
+      (index) => findByName(ui.children.list, `contract-row-${index}`)?.visible === true,
+    );
+    const summary = scene.contracts.summary();
+    internals.gameOver(false);
+    return { rolled, completions, rowsVisible, summary };
+  });
+  expect(new Set(result.rolled).size).toBe(3);
+  expect(result.completions.sort()).toEqual(['DEVICE_KILLS', 'ELIMINATIONS', 'ELITE_HUNT']);
+  expect(result.rowsVisible).toBe(true);
+  expect(result.summary.completedCount).toBe(3);
+  expect(result.summary.perfect).toBe(true);
+  expect(result.summary.creditsEarned).toBe(45 + 60 + 70 + 120);
+  await page.waitForFunction(() => window.combatGame.scene.isActive('GameOver'));
+  const credited = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('leek-ops-profile-v4')!) as { bioCredits: number; contractsCompleted: number; perfectContracts: number },
+  );
+  expect(credited.contractsCompleted).toBe(3);
+  expect(credited.perfectContracts).toBe(1);
+  expect(credited.bioCredits).toBeGreaterThanOrEqual(45 + 60 + 70 + 120);
+});
+
 test('weapon mastery migrates safely and applies permanent rank bonuses', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('leek-ops-profile-v3', JSON.stringify({
     schemaVersion: 3, runs: 4, bestLevel: 7, victories: 1, bioCredits: 140,

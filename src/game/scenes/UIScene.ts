@@ -17,6 +17,8 @@ import { PhaseBanner } from '../ui/PhaseBanner';
 import type { RunPhaseCallout } from '../config/RunPacing';
 import { MomentumHud } from '../ui/MomentumHud';
 import type { MomentumState } from '../systems/CombatMomentum';
+import { ContractHud } from '../ui/ContractHud';
+import type { ContractProgress } from '../systems/ContractSystem';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -47,6 +49,7 @@ export class UIScene extends Phaser.Scene {
   private pauseMenu!: PauseMenu;
   private phaseBanner!: PhaseBanner;
   private momentumHud!: MomentumHud;
+  private contractHud!: ContractHud;
   constructor() {
     super('UI');
   }
@@ -73,6 +76,7 @@ export class UIScene extends Phaser.Scene {
     this.pauseMenu = new PauseMenu(this, this.gameScene);
     this.phaseBanner = new PhaseBanner(this, this.gameScene.mobileInput.active);
     this.momentumHud = new MomentumHud(this, this.gameScene.mobileInput.active);
+    this.contractHud = new ContractHud(this, this.gameScene.contracts.list);
     if (this.gameScene.mobileInput.active) {
       this.mobileControls = new MobileControls(this, this.gameScene);
       this.mobileControls.create();
@@ -105,10 +109,12 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.RUN_PHASE_CHANGED, this.onRunPhaseChanged, this);
     this.gameScene.events.on(Events.WEAPON_EVOLVED, this.onWeaponEvolved, this);
     this.gameScene.events.on(Events.MOMENTUM_CHANGED, this.onMomentumChanged, this);
+    this.gameScene.events.on(Events.CONTRACT_COMPLETED, this.onContractCompleted, this);
     this.events.once('shutdown', () => {
       this.closeModal();
       this.mobileControls?.destroy();
       this.hints?.destroy();
+      this.contractHud.destroy();
       this.gameScene.events.off('weapon-fired', this.onWeaponFired, this);
       this.gameScene.events.off(Events.PLAYER_DASHED, this.onDashed, this);
       this.gameScene.events.off(Events.PLAYER_DAMAGED, this.onHealth, this);
@@ -123,6 +129,7 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.RUN_PHASE_CHANGED, this.onRunPhaseChanged, this);
       this.gameScene.events.off(Events.WEAPON_EVOLVED, this.onWeaponEvolved, this);
       this.gameScene.events.off(Events.MOMENTUM_CHANGED, this.onMomentumChanged, this);
+      this.gameScene.events.off(Events.CONTRACT_COMPLETED, this.onContractCompleted, this);
       this.phaseBanner.destroy();
     });
   }
@@ -135,6 +142,7 @@ export class UIScene extends Phaser.Scene {
     this.statusHud.update(delta, this.gameScene.survivalMs, dashCharge);
     this.abilityBar.update();
     this.momentumHud.update(this.gameScene.survivalMs);
+    this.contractHud.update(this.gameScene.contracts.list);
     this.debugOverlay?.update(delta);
   }
   private onWeaponFired() {
@@ -315,6 +323,10 @@ export class UIScene extends Phaser.Scene {
   }
   private onMomentumChanged(state: MomentumState) {
     this.momentumHud.set(state);
+  }
+  private onContractCompleted(contract: ContractProgress) {
+    this.contractHud.celebrate(contract.kind);
+    if (loadProfile().vibration) pulseHaptics(20);
   }
   private onState(state: GameState) {
     if (state === GameState.PAUSED && !this.modal.active) {

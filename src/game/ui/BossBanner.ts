@@ -15,7 +15,8 @@ export class BossBanner {
     // boss bar covered both the moment the encounter that most needs a clock began.
     const back = scene.add
       .rectangle(GAME_WIDTH / 2, 126, 540, 48, 0x100817, 0.95)
-      .setStrokeStyle(3, 0xd566ff, 0.85);
+      .setStrokeStyle(3, 0xd566ff, 0.85)
+      .setName('boss-banner-panel');
     this.fill = scene.add
       .rectangle(GAME_WIDTH / 2 - 255, 136, 510, 15, 0x9d36d6)
       .setOrigin(0, 0.5);
@@ -34,7 +35,7 @@ export class BossBanner {
         letterSpacing: 1,
       })
       .setOrigin(1, 0.5);
-    this.panel = scene.add.container(0, 0, [back, this.fill, name, this.phaseText]).setVisible(false);
+    this.panel = scene.add.container(0, 0, [back, this.fill, name, this.phaseText]).setVisible(false).setName('boss-banner');
   }
 
   /** Frame-rate-independent drain, matching the rest of the HUD. */

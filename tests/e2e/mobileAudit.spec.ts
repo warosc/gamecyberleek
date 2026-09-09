@@ -49,11 +49,23 @@ async function deploy(page: Page) {
   await page.waitForFunction(() => window.combatGame?.scene.isActive('Game'));
 }
 
-/** Reads a named UI game object's on-screen (CSS px) footprint and logical-space bounds. */
+/** Reads a named UI game object's on-screen (CSS px) footprint and logical-space bounds. Searches
+ * into containers too: Phaser reparents a child off the scene's own display list once it joins
+ * one (e.g. BossBanner's and ContractHud's named rectangles live inside their own container). */
 async function measureUiElement(page: Page, name: string) {
   return page.evaluate((objectName) => {
+    const findByName = (list: unknown, targetName: string): unknown => {
+      for (const child of list as { name?: string; list?: unknown }[]) {
+        if (child.name === targetName) return child;
+        if (child.list) {
+          const found = findByName(child.list, targetName);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
     const ui = window.combatGame.scene.getScene('UI');
-    const object = ui.children.getByName(objectName) as (Phaser.GameObjects.Components.ComputedSize &
+    const object = findByName(ui.children.list, objectName) as (Phaser.GameObjects.Components.ComputedSize &
       Phaser.GameObjects.Components.Transform &
       Phaser.GameObjects.Components.Visible) | null;
     if (!object) return null;
@@ -141,8 +153,57 @@ for (const resolution of MOBILE_RESOLUTIONS) {
       const overlapY = Math.max(0, Math.min(pause.bottom, momentum!.bottom) - Math.max(pause.top, momentum!.top));
       expect(overlapX * overlapY, 'pause button and momentum HUD must not overlap').toBe(0);
     });
+
+    test('the compact contract tracker never overlaps the HP panel, boss/miniboss banner, pause button or touch controls', async ({ page }) => {
+      await deploy(page);
+
+      const rows = await Promise.all([0, 1, 2].map((index) => measureUiElement(page, `contract-row-${index}`)));
+      for (const row of rows) expect(row, 'every contract row must exist and be visible').not.toBeNull();
+      for (const row of rows) expect(row!.visible).toBe(true);
+
+      // Geometry is fixed at creation regardless of current visibility (the boss banner and
+      // momentum HUD only reveal themselves later in a run), so this also guards the layout
+      // for the moment they do appear.
+      const guardNames = ['hud-hp-panel', 'boss-banner-panel', 'hud-pause', 'mobilecontrols-dash', 'mobilecontrols-auto-zone'];
+      const guarded = await Promise.all(guardNames.map((name) => measureUiElement(page, name)));
+      for (const [index, guard] of guarded.entries())
+        expect(guard, `${guardNames[index]} must exist on this layout`).not.toBeNull();
+
+      for (const row of rows) {
+        for (const guard of guarded) {
+          const overlapX = Math.max(0, Math.min(row!.right, guard!.right) - Math.max(row!.left, guard!.left));
+          const overlapY = Math.max(0, Math.min(row!.bottom, guard!.bottom) - Math.max(row!.top, guard!.top));
+          expect(overlapX * overlapY, 'contract row must not overlap a protected HUD element').toBe(0);
+        }
+      }
+    });
   });
 }
+
+test.describe('contract HUD on PC', () => {
+  test.use({ viewport: { width: 1280, height: 720 } });
+
+  test('the compact contract tracker never overlaps the HP panel, boss/miniboss banner, or the secondary HUD panels', async ({ page }) => {
+    await deploy(page);
+
+    const rows = await Promise.all([0, 1, 2].map((index) => measureUiElement(page, `contract-row-${index}`)));
+    for (const row of rows) expect(row, 'every contract row must exist and be visible').not.toBeNull();
+    for (const row of rows) expect(row!.visible).toBe(true);
+
+    const guardNames = ['hud-hp-panel', 'boss-banner-panel', 'hud-pause', 'hud-weapon-slot', 'hud-armor-slot', 'hud-operation-panel'];
+    const guarded = await Promise.all(guardNames.map((name) => measureUiElement(page, name)));
+    for (const [index, guard] of guarded.entries())
+      expect(guard, `${guardNames[index]} must exist on this layout`).not.toBeNull();
+
+    for (const row of rows) {
+      for (const guard of guarded) {
+        const overlapX = Math.max(0, Math.min(row!.right, guard!.right) - Math.max(row!.left, guard!.left));
+        const overlapY = Math.max(0, Math.min(row!.bottom, guard!.bottom) - Math.max(row!.top, guard!.top));
+        expect(overlapX * overlapY, 'contract row must not overlap a protected HUD element').toBe(0);
+      }
+    }
+  });
+});
 
 test.describe('combat clarity', () => {
   test('a run-phase callout never renders on top of the level-up modal', async ({ page }) => {
