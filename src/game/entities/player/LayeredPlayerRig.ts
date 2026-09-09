@@ -69,10 +69,23 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
   private powerGlow = 0;
   private gaitTime = 0;
   private aimPitch = 0;
+  private aimAngle = 0;
   private recoilAt = -1000;
 
   setAim(angle: number) {
+    this.aimAngle = angle;
     this.aimPitch = Math.sin(angle) * 0.12 * this.facing;
+  }
+
+  /** Player-local socket resolved from the animated right wrist after forward kinematics. */
+  getWeaponSocket() {
+    const hand = this.worldPosition.get('hand-right')!;
+    const stretch = this.squash * 0.16;
+    return {
+      x: hand.x * this.facing * this.externalScale * (1 + stretch),
+      y: hand.y * this.externalScale * (1 - stretch * 0.75),
+      angle: this.aimAngle,
+    };
   }
 
   recoil(time: number) {
@@ -245,6 +258,19 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
         this.pose.get('arm-right-fore')!.rotation += recoil * 0.12;
         leaves.rotation += recoil * 0.08;
       }
+      // Turn the complete right-arm chain toward the cursor. The angles account for the
+      // downward rest vectors in the exported artwork; mirroring converts world aim back into
+      // the rig's local space before forward kinematics is solved.
+      const localAim = this.facing < 0 ? Math.PI - this.aimAngle : this.aimAngle;
+      const upperRestAngle = Math.atan2(66, 31);
+      const foreRestAngle = Math.atan2(49, 6);
+      const bend = 0.16;
+      const upper = this.pose.get('arm-right-upper')!;
+      const fore = this.pose.get('arm-right-fore')!;
+      const torsoAngle = torso.rotation;
+      const upperWorld = localAim - upperRestAngle + bend;
+      upper.rotation += upperWorld - torsoAngle;
+      fore.rotation += localAim - foreRestAngle - bend - upperWorld;
     }
 
     // Leaves trail the body: the spring is driven by horizontal speed and by the lean, with a

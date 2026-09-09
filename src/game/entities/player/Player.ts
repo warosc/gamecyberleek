@@ -7,13 +7,14 @@ import { PlayerController, type VirtualPlayerInput } from './PlayerController';
 import { resolveDamage } from '../../systems/CombatSystem';
 import { LayeredPlayerRig } from './LayeredPlayerRig';
 import { applyStarterWeapon, type StarterWeaponId } from '../../weapons/WeaponRegistry';
+import { WeaponVisual } from './WeaponVisual';
 
 export class Player extends Phaser.GameObjects.Container {
   readonly stats = createPlayerStats();
   readonly health = new HealthComponent(this.stats.maxHp);
   private controller: PlayerController;
   private lastShot = 0;
-  private readonly weapon: Phaser.GameObjects.Container;
+  private readonly weapon: WeaponVisual;
   private lastDash = -9999;
   private readonly dashDirection = new Phaser.Math.Vector2();
   private hurtUntil = 0;
@@ -81,15 +82,8 @@ export class Player extends Phaser.GameObjects.Container {
       reference,
     ]);
     if (rig) this.add(rig);
-    const gun = scene.add.graphics();
-    const weaponColor = this.stats.projectileColor;
-    const weaponLength = this.stats.weaponMode === 'plasma' ? 41 : 35;
-    gun.fillStyle(0x07111f).fillRoundedRect(-7, -8, weaponLength, 16, 3)
-      .lineStyle(2, 0x5b8191).strokeRoundedRect(-7, -8, weaponLength, 16, 3)
-      .fillStyle(weaponColor).fillRect(2, -3, weaponLength - 7, 6)
-      .fillStyle(0x73ef62).fillRect(-4, -5, 5, 10);
-    this.weapon = scene.add.container(22, 0, [gun]);
-    this.weapon.name = 'player-aimed-weapon';
+    this.weapon = new WeaponVisual(scene);
+    this.weapon.setWeapon(this.stats.weaponMode, this.stats.projectileColor);
     this.add(this.weapon);
     this.animator = new PlayerAnimator(scene, reference, rig?.setAnimationState.bind(rig));
     this.setSize(46, 75);
@@ -134,8 +128,6 @@ export class Player extends Phaser.GameObjects.Container {
       this.aim = Phaser.Math.Angle.Between(this.x, this.y, world.x, world.y);
     }
     const recoil = Math.max(0, 1 - (time - this.lastShot) / 120) * 5;
-    this.weapon.setPosition(Math.cos(this.aim) * (22 - recoil), Math.sin(this.aim) * (22 - recoil))
-      .setRotation(this.aim).setAlpha(time < this.dashingUntil ? 0.5 : 1);
     const facingAngle = time < this.dashingUntil ? this.dashDirection.angle() : this.aim;
     const facing = Math.cos(facingAngle) < 0 ? -1 : 1;
     const dashing = time < this.dashingUntil;
@@ -144,6 +136,14 @@ export class Player extends Phaser.GameObjects.Container {
     this.layeredRig?.setAim(this.aim);
     this.layeredRig?.setMotion(v.x * speed, v.y * speed, dashing, this.stats.moveSpeed);
     this.animator.update(time, v, dashing, facing);
+    const socket = this.layeredRig?.getWeaponSocket() ?? {
+      x: Math.cos(this.aim) * 22,
+      y: Math.sin(this.aim) * 22,
+      angle: this.aim,
+    };
+    this.weapon.setWeapon(this.stats.weaponMode, this.stats.projectileColor);
+    this.weapon.setPosition(socket.x, socket.y).setRotation(socket.angle)
+      .setRecoil(recoil).setAlpha(dashing ? 0.5 : 1);
     // Ground contact: the shadow tightens as the character rises into a dash.
     this.shadow.setScale(dashing ? 0.78 : 1, dashing ? 0.72 : 1).setAlpha(dashing ? 0.3 : 0.48);
     if (dashing && time - this.lastTrail > 45) {
@@ -198,8 +198,10 @@ export class Player extends Phaser.GameObjects.Container {
       this.layeredRig?.recoil(time);
       this.animator.attack(time);
       const spread = 0.12;
+      const muzzleX = this.x + socket.x + Math.cos(this.aim) * this.weapon.muzzleDistance;
+      const muzzleY = this.y + socket.y + Math.sin(this.aim) * this.weapon.muzzleDistance;
       for (let i = 0; i < this.stats.projectileCount; i++)
-        shoot(this.x + Math.cos(this.aim) * 46, this.y + Math.sin(this.aim) * 46, this.aim + (i - (this.stats.projectileCount - 1) / 2) * spread);
+        shoot(muzzleX, muzzleY, this.aim + (i - (this.stats.projectileCount - 1) / 2) * spread);
     }
   }
   activateOverdrive(durationMs: number) {

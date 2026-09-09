@@ -60,6 +60,41 @@ test('keyboard and mouse remain usable when the PC reports a touch screen', asyn
   await page.evaluate(() => window.animationTestScene.mobileInput.movement.set(0, 0));
 });
 
+test('the weapon grip follows the animated hand while aiming both directions', async ({ page }) => {
+  await deploy(page);
+  const sample = () => page.evaluate(() => {
+    const player = window.animationTestScene.player;
+    const rig = player.list.find(child => 'getWeaponSocket' in child) as unknown as {
+      getWeaponSocket: () => { x: number; y: number; angle: number };
+    };
+    const weapon = player.getByName('player-aimed-weapon') as Phaser.GameObjects.Container;
+    const socket = rig.getWeaponSocket();
+    const art = weapon.list.find(child => (child as Phaser.GameObjects.Container).list?.some(
+      part => (part as Phaser.GameObjects.Graphics).name.startsWith('weapon-'),
+    )) as Phaser.GameObjects.Container;
+    const body = art?.list.find(part => (part as Phaser.GameObjects.Graphics).name.startsWith('weapon-')) as Phaser.GameObjects.Graphics;
+    return {
+      gap: Math.hypot(weapon.x - socket.x, weapon.y - socket.y),
+      angleGap: Math.abs(Math.atan2(Math.sin(weapon.rotation - player.aim), Math.cos(weapon.rotation - player.aim))),
+      weaponX: weapon.x,
+      mode: body?.name,
+    };
+  });
+  const box = (await page.locator('canvas').boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.82, box.y + box.height * 0.42);
+  await page.waitForTimeout(150);
+  const right = await sample();
+  expect(right.gap).toBeLessThan(0.1);
+  expect(right.angleGap).toBeLessThan(0.01);
+  expect(right.mode).toBe('weapon-pulse');
+  await page.mouse.move(box.x + box.width * 0.18, box.y + box.height * 0.42);
+  await page.waitForTimeout(150);
+  const left = await sample();
+  expect(left.gap).toBeLessThan(0.1);
+  expect(left.angleGap).toBeLessThan(0.01);
+  expect(left.weaponX).toBeLessThan(right.weaponX);
+});
+
 test('animates a live arena and keeps legs moving while firing, then freezes on pause', async ({ page }, testInfo) => {
   const failures: string[] = [];
   page.on('pageerror', error => failures.push(error.message));
@@ -70,6 +105,7 @@ test('animates a live arena and keeps legs moving while firing, then freezes on 
     scene.mobileInput.active = true;
     scene.mobileInput.movement.set(1, 0);
     scene.mobileInput.firing = true;
+    scene.mobileInput.autoFire = true;
     scene.player.stats.attackCooldown = 100;
   });
   await page.waitForTimeout(500);
