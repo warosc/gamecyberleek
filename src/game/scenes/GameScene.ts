@@ -29,6 +29,7 @@ import { starterWeapon, type StarterWeaponId } from '../weapons/WeaponRegistry';
 import { CombatMomentum } from '../systems/CombatMomentum';
 import { applyWeaponMastery } from '../weapons/WeaponMastery';
 import { SectorHazardSystem } from '../systems/SectorHazardSystem';
+import { SectorDeviceSystem, type SectorDeviceActivation } from '../systems/SectorDeviceSystem';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -74,6 +75,7 @@ export class GameScene extends Phaser.Scene {
   private runEnd!: RunEndSystem;
   private lastBossPhase = 1;
   private sectorHazards!: SectorHazardSystem;
+  private sectorDevices!: SectorDeviceSystem;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
   private readonly handlePlayerDamaged = (_current: number, _max: number, applied?: number) => {
@@ -193,7 +195,9 @@ export class GameScene extends Phaser.Scene {
       this.plasmaExplosion(x, y, damage, radius),
     );
     this.sectorHazards = new SectorHazardSystem(this, this.player, this.arenaIndex);
+    this.sectorDevices = new SectorDeviceSystem(this, this.arenaIndex, activation => this.activateSectorDevice(activation));
     this.worldProps.bindProjectiles(this.projectiles.group);
+    this.sectorDevices.bindProjectiles(this.projectiles.group);
     this.mobileInput.active =
       navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
     const keyboard = this.input.keyboard!;
@@ -627,6 +631,24 @@ export class GameScene extends Phaser.Scene {
       }
     });
     this.audio.tone(65, 0.2, 0.05);
+  }
+  private activateSectorDevice(activation: SectorDeviceActivation) {
+    const { x, y, radius, damage, heal, effect, color, name } = activation;
+    this.effects.explosion(x, y, radius);
+    this.effects.floatingText(x, y - 70, name, `#${color.toString(16).padStart(6, '0')}`, 16);
+    this.enemies.getChildren().forEach(object => {
+      const enemy = object as Enemy;
+      if (!enemy.active || Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y) > radius) return;
+      this.telemetry.dealtDamage(damage);
+      if (enemy.hit(damage)) this.resolveEnemyDeath(enemy);
+    });
+    if (heal > 0 && Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y) <= radius) {
+      this.player.health.heal(heal);
+      this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
+    }
+    if (effect === 'cryo') this.enemyProjectiles.group.clear(true, true);
+    this.audio.tone(effect === 'emp' ? 180 : effect === 'renewal' ? 740 : 320, 0.3, 0.05);
+    this.cameras.main.shake(180, 0.006);
   }
   private resolveEnemyDeath(enemy: Enemy) {
     const elite = enemy.elite;

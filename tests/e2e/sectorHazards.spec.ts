@@ -60,3 +60,25 @@ test('greenhouse and frozen reactor load their unique scenery', async ({ page })
   expect(reactor.arena).toBe(2);
   expect(reactor.pieces).toBeGreaterThanOrEqual(21);
 });
+
+test('shooting a sector device consumes it and damages nearby enemies', async ({ page }) => {
+  await deploy(page);
+  await page.evaluate(async () => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const enemyModulePath = '/src/game/entities/enemies/Enemy.ts';
+    const { Enemy } = await import(enemyModulePath);
+    scene.enemies.clear(true, true);
+    const devices = (scene as unknown as { sectorDevices: { group: Phaser.Physics.Arcade.StaticGroup } }).sectorDevices.group;
+    const device = devices.getChildren()[0] as Phaser.GameObjects.Arc;
+    const target = new Enemy(scene, device.x + 30, device.y, 'GRUNT');
+    target.setName('device-test-target');
+    scene.enemies.add(target);
+    scene.projectiles.fire(device.x, device.y, 0, scene.player.stats, scene.survivalMs);
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const devices = (scene as unknown as { sectorDevices: { group: Phaser.Physics.Arcade.StaticGroup } }).sectorDevices.group;
+    return devices.countActive(true);
+  })).toBe(2);
+  expect(await page.evaluate(() => !window.combatGame.scene.getScene('Game').children.getByName('device-test-target'))).toBe(true);
+});
