@@ -28,7 +28,7 @@ import { RunTelemetry } from '../systems/RunTelemetry';
 import { starterWeapon, type StarterWeaponId } from '../weapons/WeaponRegistry';
 import { CombatMomentum, type MomentumState } from '../systems/CombatMomentum';
 import { applyWeaponMastery } from '../weapons/WeaponMastery';
-import { ContractSystem } from '../systems/ContractSystem';
+import { ContractSystem, type ContractProgress } from '../systems/ContractSystem';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -274,7 +274,7 @@ export class GameScene extends Phaser.Scene {
     if (expiredMomentum) this.applyMomentum(expiredMomentum);
     // O(1) against a 3-entry contract list; only the UNSCATHED clock needs a per-frame check.
     const unscathedCompleted = this.contracts.update(this.survivalMs);
-    if (unscathedCompleted) this.events.emit(Events.CONTRACT_COMPLETED, unscathedCompleted);
+    if (unscathedCompleted) this.announceContractCompleted(unscathedCompleted);
     const phase = runPhase(this.survivalMs);
     if (phase.at !== this.lastRunPhaseAt) {
       this.lastRunPhaseAt = phase.at;
@@ -625,7 +625,13 @@ export class GameScene extends Phaser.Scene {
   private applyMomentum(state: MomentumState) {
     this.events.emit(Events.MOMENTUM_CHANGED, state);
     const streakCompleted = this.contracts.onMomentumChanged(state);
-    if (streakCompleted) this.events.emit(Events.CONTRACT_COMPLETED, streakCompleted);
+    if (streakCompleted) this.announceContractCompleted(streakCompleted);
+  }
+  /** Single fan-out point for a completed contract: the audio cue and the HUD/haptics event
+   * must never drift apart, so every completion path goes through here. */
+  private announceContractCompleted(contract: ContractProgress) {
+    this.audio.play('contract_complete');
+    this.events.emit(Events.CONTRACT_COMPLETED, contract);
   }
   private plasmaExplosion(
     x: number,
@@ -660,7 +666,7 @@ export class GameScene extends Phaser.Scene {
       boss: defeat.boss,
       environment: cause === 'environment',
     });
-    if (contractCompleted) this.events.emit(Events.CONTRACT_COMPLETED, contractCompleted);
+    if (contractCompleted) this.announceContractCompleted(contractCompleted);
     const momentum = this.momentum.kill(this.survivalMs);
     if (momentum.tier > 0 && momentum.chain % 3 === 0) this.audio.play('combo_rise');
     this.applyMomentum(momentum);

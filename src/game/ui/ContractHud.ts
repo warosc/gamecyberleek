@@ -7,8 +7,6 @@ const PANEL_X = 16;
 // left side, well above the mobile move stick (~y=440 and below). See StatusHud/BossBanner/
 // MobileControls for the regions this was measured against.
 const PANEL_Y = 138;
-const PANEL_WIDTH = 250;
-const ROW_HEIGHT = 30;
 const ROW_GAP = 4;
 
 const ACCENT = 0x21e6ff;
@@ -33,31 +31,41 @@ interface Row {
 export class ContractHud {
   private readonly container: Phaser.GameObjects.Container;
   private readonly rows: Row[] = [];
+  private readonly panelWidth: number;
+  private readonly rowHeight: number;
 
-  constructor(scene: Phaser.Scene, contracts: readonly ContractProgress[]) {
+  constructor(scene: Phaser.Scene, contracts: readonly ContractProgress[], mobile: boolean) {
+    // The mobile canvas renders at roughly half its logical size in real CSS pixels (the
+    // logical width grows to match the phone's aspect ratio while the physical canvas stays
+    // pinned to the viewport — see ViewportLayout.ts), so a size tuned for desktop reads as
+    // barely legible on a phone. Bump the row and font size on mobile instead of scaling the
+    // whole panel, which would eat into the arena view.
+    this.panelWidth = mobile ? 280 : 250;
+    this.rowHeight = mobile ? 36 : 30;
+    const fontSize = mobile ? '13px' : '10px';
     const parts: Phaser.GameObjects.GameObject[] = [];
     contracts.forEach((contract, index) => {
-      const y = PANEL_Y + index * (ROW_HEIGHT + ROW_GAP);
+      const y = PANEL_Y + index * (this.rowHeight + ROW_GAP);
       const back = scene.add
-        .rectangle(PANEL_X, y, PANEL_WIDTH, ROW_HEIGHT, 0x06101d, 0.86)
+        .rectangle(PANEL_X, y, this.panelWidth, this.rowHeight, 0x06101d, 0.86)
         .setOrigin(0, 0)
         .setStrokeStyle(1, ACCENT, 0.4)
         .setName(`contract-row-${index}`);
-      const marker = scene.add.rectangle(PANEL_X + 3, y + 4, 4, ROW_HEIGHT - 8, ACCENT, 0.9).setOrigin(0, 0);
+      const marker = scene.add.rectangle(PANEL_X + 3, y + 4, 4, this.rowHeight - 8, ACCENT, 0.9).setOrigin(0, 0);
       const title = scene.add
         .text(PANEL_X + 12, y + 4, contract.title, {
-          fontFamily: 'Arial Black', fontSize: '10px', color: '#eaffff', letterSpacing: 1,
+          fontFamily: 'Arial Black', fontSize, color: '#eaffff', letterSpacing: 1,
         })
         .setOrigin(0, 0);
       const progress = scene.add
-        .text(PANEL_X + PANEL_WIDTH - 8, y + 4, '', {
-          fontFamily: 'Arial Black', fontSize: '10px', color: '#8ba5b8',
+        .text(PANEL_X + this.panelWidth - 8, y + 4, '', {
+          fontFamily: 'Arial Black', fontSize, color: '#8ba5b8',
         })
         .setOrigin(1, 0);
       const barBack = scene.add
-        .rectangle(PANEL_X + 12, y + ROW_HEIGHT - 8, PANEL_WIDTH - 24, 4, 0x0b1e30, 1)
+        .rectangle(PANEL_X + 12, y + this.rowHeight - 8, this.panelWidth - 24, 4, 0x0b1e30, 1)
         .setOrigin(0, 0);
-      const barFill = scene.add.rectangle(PANEL_X + 12, y + ROW_HEIGHT - 8, 0, 4, ACCENT, 1).setOrigin(0, 0);
+      const barFill = scene.add.rectangle(PANEL_X + 12, y + this.rowHeight - 8, 0, 4, ACCENT, 1).setOrigin(0, 0);
       parts.push(back, marker, title, progress, barBack, barFill);
       this.rows.push({ kind: contract.kind, back, marker, title, progress, barFill, lastTitle: '', lastProgress: '' });
     });
@@ -69,7 +77,7 @@ export class ContractHud {
       const row = this.rows.find((candidate) => candidate.kind === contract.kind);
       if (!row) return;
       const ratio = Phaser.Math.Clamp(contract.progress / contract.target, 0, 1);
-      row.barFill.width = (PANEL_WIDTH - 24) * ratio;
+      row.barFill.width = (this.panelWidth - 24) * ratio;
       const titleText = contract.completed ? `✓ ${contract.title}` : contract.title;
       if (row.lastTitle !== titleText) {
         row.title.setText(titleText).setColor(contract.completed ? '#73ef62' : '#eaffff');
@@ -86,13 +94,31 @@ export class ContractHud {
     });
   }
 
-  /** Brief pop + border flash on the row that just completed; the confirmation the spec asks for. */
+  /**
+   * Confirmation on completion: a bigger pop on the row itself plus a brief outward flash, so
+   * the moment reads even without staring straight at a small corner panel. Paired with an audio
+   * cue from GameScene (`announceContractCompleted`) — the visual alone tested as too subtle
+   * during an actual playtest.
+   */
   celebrate(kind: ContractKind) {
     const row = this.rows.find((candidate) => candidate.kind === kind);
     if (!row) return;
-    row.back.setStrokeStyle(2, COMPLETE_COLOR, 1);
-    row.back.scene.tweens.add({ targets: row.back, scaleY: 1.28, duration: 100, yoyo: true, ease: 'Quad.Out' });
-    row.back.scene.tweens.add({ targets: [row.title, row.progress], scale: 1.18, duration: 100, yoyo: true });
+    const scene = row.back.scene;
+    row.back.setStrokeStyle(3, COMPLETE_COLOR, 1);
+    scene.tweens.add({ targets: row.back, scaleY: 1.45, duration: 140, yoyo: true, ease: 'Back.Out' });
+    scene.tweens.add({ targets: [row.title, row.progress], scale: 1.35, duration: 140, yoyo: true, ease: 'Back.Out' });
+    const glow = scene.add
+      .rectangle(row.back.x + this.panelWidth / 2, row.back.y + this.rowHeight / 2, this.panelWidth, this.rowHeight, COMPLETE_COLOR, 0.4)
+      .setDepth(71);
+    scene.tweens.add({
+      targets: glow,
+      scaleX: 1.18,
+      scaleY: 1.7,
+      alpha: 0,
+      duration: 340,
+      ease: 'Quad.Out',
+      onComplete: () => glow.destroy(),
+    });
   }
 
   destroy() {

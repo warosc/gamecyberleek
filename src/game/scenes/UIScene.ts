@@ -18,7 +18,7 @@ import type { RunPhaseCallout } from '../config/RunPacing';
 import { MomentumHud } from '../ui/MomentumHud';
 import type { MomentumState } from '../systems/CombatMomentum';
 import { ContractHud } from '../ui/ContractHud';
-import type { ContractProgress } from '../systems/ContractSystem';
+import { contractDescription, type ContractProgress } from '../systems/ContractSystem';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -76,7 +76,8 @@ export class UIScene extends Phaser.Scene {
     this.pauseMenu = new PauseMenu(this, this.gameScene);
     this.phaseBanner = new PhaseBanner(this, this.gameScene.mobileInput.active);
     this.momentumHud = new MomentumHud(this, this.gameScene.mobileInput.active);
-    this.contractHud = new ContractHud(this, this.gameScene.contracts.list);
+    this.contractHud = new ContractHud(this, this.gameScene.contracts.list, this.gameScene.mobileInput.active);
+    this.showContractBriefing();
     if (this.gameScene.mobileInput.active) {
       this.mobileControls = new MobileControls(this, this.gameScene);
       this.mobileControls.create();
@@ -327,6 +328,48 @@ export class UIScene extends Phaser.Scene {
   private onContractCompleted(contract: ContractProgress) {
     this.contractHud.celebrate(contract.kind);
     if (loadProfile().vibration) pulseHaptics(20);
+  }
+  /**
+   * One-off intro banner spelling out what the three rolled contracts actually ask for.
+   * The compact HUD only has room for a short title (e.g. "SABOTAJE"), which reads fine once
+   * a player already knows the system but not on a first look — this is the one place the
+   * full `contractDescription()` text (already written, previously unused anywhere) is shown.
+   * Purely decorative: it never pauses gameplay, same as PhaseBanner.
+   */
+  private showContractBriefing() {
+    const contracts = this.gameScene.contracts.list;
+    const lines = contracts.map((contract) => `${contract.title} — ${contractDescription(contract)}`);
+    const width = this.gameScene.mobileInput.active ? 640 : 720;
+    const height = 74 + lines.length * 28;
+    const parts: Phaser.GameObjects.GameObject[] = [
+      this.add.rectangle(0, 0, width, height, 0x06101d, 0.95).setStrokeStyle(3, 0x21e6ff, 0.75),
+      this.add
+        .text(0, -height / 2 + 24, 'CONTRATOS ASIGNADOS', {
+          fontFamily: 'Arial Black', fontSize: '16px', color: '#21e6ff', letterSpacing: 3,
+        })
+        .setOrigin(0.5),
+    ];
+    lines.forEach((line, index) => {
+      parts.push(
+        this.add
+          .text(0, -height / 2 + 54 + index * 28, line, {
+            fontFamily: 'monospace', fontSize: '13px', color: '#c7d9e2',
+          })
+          .setOrigin(0.5),
+      );
+    });
+    // Depth 95: above the phase banner (90) so it isn't lost under one at the same instant,
+    // below every modal (100+) so a level-up or chest reward still takes priority.
+    const banner = this.add
+      .container(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 30, parts)
+      .setDepth(95)
+      .setAlpha(0)
+      .setScale(0.9)
+      .setName('contract-briefing');
+    this.tweens.add({
+      targets: banner, alpha: 1, scale: 1, duration: 260, ease: 'Back.Out', hold: 3400, yoyo: true,
+      onComplete: () => banner.destroy(true),
+    });
   }
   private onState(state: GameState) {
     if (state === GameState.PAUSED && !this.modal.active) {

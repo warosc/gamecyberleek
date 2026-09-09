@@ -17,6 +17,7 @@ export type AudioEventId =
   | 'phase_change'
   | 'weapon_evolve'
   | 'combo_rise'
+  | 'contract_complete'
   | 'player_hit'
   | 'weapon_fire'
   | 'spore_fire'
@@ -88,6 +89,16 @@ export const AUDIO_EVENTS: Record<AudioEventId, AudioEventDefinition> = {
     tones: [
       { frequency: 540, durationS: 0.08, volume: 0.022, type: 'triangle' },
       { frequency: 680, durationS: 0.1, volume: 0.02, delayMs: 55, type: 'triangle' },
+    ],
+  },
+  // A three-note rising arpeggio, distinct from combo_rise's two-note chain-tier chime, so a
+  // completed contract reads as its own reward rather than another momentum tick.
+  contract_complete: {
+    category: 'ui',
+    tones: [
+      { frequency: 440, durationS: 0.09, volume: 0.032, type: 'triangle' },
+      { frequency: 660, durationS: 0.1, volume: 0.03, delayMs: 70, type: 'triangle' },
+      { frequency: 880, durationS: 0.15, volume: 0.03, delayMs: 150, type: 'triangle' },
     ],
   },
   player_hit: { category: 'sfx', tones: [{ frequency: 80, durationS: 0.12, volume: 0.04, type: 'triangle' }] },

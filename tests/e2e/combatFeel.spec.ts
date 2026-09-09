@@ -310,6 +310,32 @@ test('contracts roll three distinct objectives, track progress from combat event
   expect(credited.bioCredits).toBeGreaterThanOrEqual(45 + 60 + 70 + 120);
 });
 
+test('shows a one-time briefing naming each rolled contract\'s full objective', async ({ page }) => {
+  await deploy(page);
+  const result = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const ui = window.combatGame.scene.getScene('UI');
+    const findByName = (list: unknown, targetName: string): { list?: unknown } | null => {
+      for (const child of list as { name?: string; list?: unknown }[]) {
+        if (child.name === targetName) return child;
+        if (child.list) {
+          const found = findByName(child.list, targetName);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    const banner = findByName(ui.children.list, 'contract-briefing');
+    const lines = (banner?.list as { text?: string }[] | undefined)
+      ?.map((child) => child.text)
+      .filter((text): text is string => Boolean(text));
+    return { titles: scene.contracts.list.map((c) => c.title), lines };
+  });
+  expect(result.lines).toBeDefined();
+  expect(result.lines).toContain('CONTRATOS ASIGNADOS');
+  for (const title of result.titles) expect(result.lines!.some((line) => line.startsWith(title))).toBe(true);
+});
+
 test('weapon mastery migrates safely and applies permanent rank bonuses', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('leek-ops-profile-v3', JSON.stringify({
     schemaVersion: 3, runs: 4, bestLevel: 7, victories: 1, bioCredits: 140,
