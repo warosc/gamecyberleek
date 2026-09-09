@@ -323,7 +323,7 @@ export class UIScene extends Phaser.Scene {
       onComplete: () => banner.destroy(),
     });
   }
-  private showLootDecision(equipment: Equipment, count: number, full: boolean) {
+  private showLootDecision(equipment: Equipment, count: number, full: boolean, activeWeapon?: Equipment) {
     const color = `#${equipment.color.toString(16).padStart(6, '0')}`;
     const parts: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
@@ -345,15 +345,27 @@ export class UIScene extends Phaser.Scene {
         fontFamily: 'Arial Black', fontSize: '13px', color: full ? '#ff476f' : '#8ba5b8', letterSpacing: 2,
       }).setOrigin(0.5),
     ];
-    const choices = full ? [
+    if (equipment.kind === 'weapon') {
+      parts.push(this.add.text(
+        GAME_WIDTH / 2,
+        286,
+        activeWeapon ? `EQUIPADA: ${activeWeapon.name}\nNUEVA: ${equipment.name}` : 'RANURA DE ARMA DISPONIBLE',
+        { fontFamily: 'monospace', fontSize: '13px', color: '#9eb8c8', align: 'center', lineSpacing: 7 },
+      ).setOrigin(0.5));
+    }
+    const canInstall = !full || (equipment.kind === 'weapon' && activeWeapon !== undefined);
+    const choices = !canInstall ? [
       { accent: 0x73ef62, icon: '↻', name: 'RECICLAR', effect: 'Convierte la pieza en +12 HP', footer: 'MOCHILA LLENA' },
     ] : [
-      { accent: equipment.color, icon: equipment.kind === 'weapon' ? '⚡' : '◆', name: 'INSTALAR', effect: 'Añade sus estadísticas a tu build', footer: `ESPACIO ${count + 1}/6` },
+      { accent: equipment.color, icon: equipment.kind === 'weapon' ? '⚡' : '◆',
+        name: activeWeapon && equipment.kind === 'weapon' ? 'REEMPLAZAR' : 'INSTALAR',
+        effect: activeWeapon && equipment.kind === 'weapon' ? 'Cambia arma, estadísticas y disparo' : 'Añade sus estadísticas a tu build',
+        footer: activeWeapon && equipment.kind === 'weapon' ? 'RANURA DE ARMA' : `ESPACIO ${count + 1}/6` },
       { accent: 0x73ef62, icon: '↻', name: 'RECICLAR', effect: 'Convierte la pieza en +12 HP', footer: 'RECUPERACIÓN' },
     ];
     this.chooser = new RewardChooser(this, index => {
       this.closeModal();
-      this.gameScene.resolveLoot(!full && index === 0);
+      this.gameScene.resolveLoot(canInstall && index === 0);
     });
     parts.push(...this.chooser.build(choices, GAME_WIDTH / 2, 455));
     this.modal.replace(parts, 115);

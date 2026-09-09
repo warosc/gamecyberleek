@@ -12,4 +12,15 @@ describe('run inventory', () => {
     expect(inventory.install(rollEquipment(1, () => 0.1))).toBe(false);
     expect(inventory.contents).toHaveLength(6);
   });
+
+  it('replaces the active weapon without consuming another slot', () => {
+    const inventory = new RunInventory();
+    const first = rollEquipment(1, () => 0.1);
+    const second = rollEquipment(4, () => 0.1);
+    expect(inventory.equipWeapon(first)).toEqual({ accepted: true, replaced: undefined });
+    expect(inventory.equipWeapon(second)).toEqual({ accepted: true, replaced: first });
+    expect(inventory.count).toBe(1);
+    expect(inventory.equippedWeapon).toBe(second);
+    expect(inventory.contents).toEqual([second]);
+  });
 });

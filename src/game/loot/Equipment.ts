@@ -46,6 +46,21 @@ export function applyEquipmentModifiers(
   }
 }
 
+/** Removes additive and multiplicative bonuses when an equipped weapon is replaced. */
+export function removeEquipmentModifiers(
+  stats: PlayerStats,
+  modifiers: readonly EquipmentModifier[],
+) {
+  for (const modifier of [...modifiers].reverse()) {
+    const current = stats[modifier.key];
+    if (modifier.operation === 'set') continue;
+    if (typeof current !== 'number' || typeof modifier.value !== 'number') continue;
+    (stats[modifier.key] as unknown) = modifier.operation === 'add'
+      ? current - modifier.value
+      : current / modifier.value;
+  }
+}
+
 const NUMERIC_KEYS: readonly (keyof PlayerStats)[] = [
   'maxHp', 'moveSpeed', 'dashSpeed', 'dashDuration', 'dashCooldown', 'attackDamage',
   'attackCooldown', 'projectileSpeed', 'criticalChance', 'xpMultiplier', 'projectileCount',

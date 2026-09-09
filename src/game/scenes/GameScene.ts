@@ -32,7 +32,7 @@ import { SectorHazardSystem } from '../systems/SectorHazardSystem';
 import { SectorDeviceSystem, type SectorDeviceActivation } from '../systems/SectorDeviceSystem';
 import { BossPhaseDirector } from '../systems/BossPhaseDirector';
 import { RunInventory } from '../systems/RunInventory';
-import { applyEquipmentModifiers, type Equipment } from '../loot/Equipment';
+import { applyEquipmentModifiers, removeEquipmentModifiers, type Equipment } from '../loot/Equipment';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -502,14 +502,22 @@ export class GameScene extends Phaser.Scene {
     this.state = GameState.INVENTORY;
     this.physics.pause();
     this.events.emit(Events.STATE_CHANGED, this.state);
-    this.events.emit(Events.LOOT_FOUND, equipment, this.inventory.count, this.inventory.full);
+    this.events.emit(Events.LOOT_FOUND, equipment, this.inventory.count, this.inventory.full,
+      this.inventory.equippedWeapon);
   }
   resolveLoot(install: boolean) {
     if (this.state !== GameState.INVENTORY || !this.pendingLoot) return;
     const equipment = this.pendingLoot;
     this.pendingLoot = undefined;
-    if (install && this.inventory.install(equipment)) {
+    const weaponSwap = equipment.kind === 'weapon' && install
+      ? this.inventory.equipWeapon(equipment)
+      : undefined;
+    const installed = install && (weaponSwap?.accepted ||
+      (equipment.kind === 'armor' && this.inventory.install(equipment)));
+    if (installed) {
       const oldMaxHp = this.player.stats.maxHp;
+      if (weaponSwap?.replaced)
+        removeEquipmentModifiers(this.player.stats, weaponSwap.replaced.modifiers);
       applyEquipmentModifiers(this.player.stats, equipment.modifiers);
       if (equipment.kind === 'weapon') this.equippedWeapon = equipment.name;
       else this.equippedArmor = equipment.name;

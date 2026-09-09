@@ -300,3 +300,44 @@ test('loot pauses for an inventory decision and installs into the backpack', asy
     return { state: scene.state, count: scene.inventory.count };
   })).toEqual({ state: 'PLAYING', count: 1 });
 });
+
+test('a new weapon replaces the active weapon, its stats and its visible model', async ({ page }) => {
+  await deploy(page);
+  await page.evaluate(async () => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const equipmentPath = '/src/game/loot/Equipment.ts';
+    const { rollEquipment } = await import(equipmentPath);
+    const roll = (values: number[]) => {
+      let index = 0;
+      return () => values[index++] ?? 0;
+    };
+    const internal = scene as unknown as { pendingLoot?: ReturnType<typeof rollEquipment> };
+    internal.pendingLoot = rollEquipment(1, roll([0.1, 0.1, 0.1]));
+    scene.state = 'INVENTORY' as typeof scene.state;
+    scene.resolveLoot(true);
+    internal.pendingLoot = rollEquipment(1, roll([0.1, 0.1, 0.99]));
+    scene.state = 'INVENTORY' as typeof scene.state;
+    scene.resolveLoot(true);
+  });
+  await page.waitForTimeout(100);
+  const equipped = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const weapon = scene.player.getByName('player-aimed-weapon') as Phaser.GameObjects.Container;
+    const slide = weapon.list.find(child => (child as Phaser.GameObjects.Container).list?.length) as Phaser.GameObjects.Container;
+    const body = slide?.list.find(child => (child as Phaser.GameObjects.Graphics).name.startsWith('weapon-')) as Phaser.GameObjects.Graphics;
+    return {
+      count: scene.inventory.count,
+      name: scene.equippedWeapon,
+      mode: scene.player.stats.weaponMode,
+      damage: scene.player.stats.attackDamage,
+      art: body?.name,
+    };
+  });
+  expect(equipped).toEqual({
+    count: 1,
+    name: 'CAÑÓN DE PLASMA MK-1',
+    mode: 'plasma',
+    damage: 29,
+    art: 'weapon-plasma',
+  });
+});
