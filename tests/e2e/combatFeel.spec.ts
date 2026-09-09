@@ -280,3 +280,23 @@ test('weapon mastery migrates safely and applies permanent rank bonuses', async 
   expect(stats.cooldown).toBeCloseTo(218.5);
   expect(stats.critical).toBeCloseTo(0.11);
 });
+
+test('loot pauses for an inventory decision and installs into the backpack', async ({ page }) => {
+  await deploy(page);
+  const found = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const internal = scene as unknown as {
+      loot: { spawnEquipmentDrop: () => void };
+      collectEquipment: (drop: Phaser.GameObjects.GameObject) => void;
+    };
+    internal.loot.spawnEquipmentDrop();
+    internal.collectEquipment(scene.lootDrops.getChildren()[0]);
+    return { state: scene.state, count: scene.inventory.count };
+  });
+  expect(found).toEqual({ state: 'INVENTORY', count: 0 });
+  await page.keyboard.press('1');
+  await expect.poll(() => page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    return { state: scene.state, count: scene.inventory.count };
+  })).toEqual({ state: 'PLAYING', count: 1 });
+});

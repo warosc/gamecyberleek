@@ -31,6 +31,8 @@ import { applyWeaponMastery } from '../weapons/WeaponMastery';
 import { SectorHazardSystem } from '../systems/SectorHazardSystem';
 import { SectorDeviceSystem, type SectorDeviceActivation } from '../systems/SectorDeviceSystem';
 import { BossPhaseDirector } from '../systems/BossPhaseDirector';
+import { RunInventory } from '../systems/RunInventory';
+import { applyEquipmentModifiers, type Equipment } from '../loot/Equipment';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -79,6 +81,8 @@ export class GameScene extends Phaser.Scene {
   private sectorHazards!: SectorHazardSystem;
   private sectorDevices!: SectorDeviceSystem;
   private bossPhases!: BossPhaseDirector;
+  inventory = new RunInventory();
+  private pendingLoot?: Equipment;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
   private readonly handlePlayerDamaged = (_current: number, _max: number, applied?: number) => {
@@ -113,7 +117,7 @@ export class GameScene extends Phaser.Scene {
     if (this.state === GameState.PLAYING || this.state === GameState.BOSS) this.togglePause();
   };
   private readonly syncGameplayPause = () => {
-    const paused = this.state === GameState.PAUSED || this.state === GameState.LEVEL_UP;
+    const paused = this.state === GameState.PAUSED || this.state === GameState.LEVEL_UP || this.state === GameState.INVENTORY;
     this.time.paused = paused;
     if (paused) {
       this.tweens.pauseAll();
@@ -148,6 +152,8 @@ export class GameScene extends Phaser.Scene {
     this.victoryPending = false;
     this.lastBossPhase = 1;
     this.xpIntroduced = false;
+    this.inventory = new RunInventory();
+    this.pendingLoot = undefined;
     this.deaths = new EnemyDeathResolver();
     this.momentum = new CombatMomentum();
     this.telemetry = new RunTelemetry();
@@ -185,11 +191,6 @@ export class GameScene extends Phaser.Scene {
       effects: this.effects,
       audio: this.audio,
       level: () => this.xp.level,
-      onEquipmentChanged: (weapon, armor) => {
-        this.equippedWeapon = weapon;
-        this.equippedArmor = armor;
-        this.telemetry.equipped(weapon);
-      },
     });
     this.chests = this.loot.chests;
     this.lootDrops = this.loot.drops;
@@ -495,7 +496,39 @@ export class GameScene extends Phaser.Scene {
   }
 
   private collectEquipment(object: Phaser.GameObjects.GameObject) {
-    this.loot.collectEquipment(object, this.equippedWeapon, this.equippedArmor);
+    const equipment = this.loot.collectEquipment(object);
+    if (!equipment) return;
+    this.pendingLoot = equipment;
+    this.state = GameState.INVENTORY;
+    this.physics.pause();
+    this.events.emit(Events.STATE_CHANGED, this.state);
+    this.events.emit(Events.LOOT_FOUND, equipment, this.inventory.count, this.inventory.full);
+  }
+  resolveLoot(install: boolean) {
+    if (this.state !== GameState.INVENTORY || !this.pendingLoot) return;
+    const equipment = this.pendingLoot;
+    this.pendingLoot = undefined;
+    if (install && this.inventory.install(equipment)) {
+      const oldMaxHp = this.player.stats.maxHp;
+      applyEquipmentModifiers(this.player.stats, equipment.modifiers);
+      if (equipment.kind === 'weapon') this.equippedWeapon = equipment.name;
+      else this.equippedArmor = equipment.name;
+      this.telemetry.equipped(this.equippedWeapon);
+      if (this.player.stats.maxHp > oldMaxHp) {
+        const gainedHp = this.player.stats.maxHp - oldMaxHp;
+        this.player.health.max = this.player.stats.maxHp;
+        this.player.health.heal(gainedHp);
+      }
+      this.events.emit(Events.LOOT_COLLECTED, equipment);
+      this.events.emit(Events.EQUIPMENT_CHANGED, this.equippedWeapon, this.equippedArmor);
+    } else {
+      this.player.health.heal(12);
+      this.effects.floatingText(this.player.x, this.player.y - 55, 'RECICLADO +12 HP', '#73ef62', 15);
+    }
+    this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
+    this.state = this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
+    this.physics.resume();
+    this.events.emit(Events.STATE_CHANGED, this.state);
   }
   selectChestReward(id: 'repair' | 'charge' | 'weapon') {
     if (id === 'repair') {

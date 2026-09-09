@@ -107,6 +107,7 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.MINIBOSS_HEALTH, this.onMinibossHealth, this);
     this.gameScene.events.on(Events.CHEST_OPENED, this.showChestRewards, this);
     this.gameScene.events.on(Events.LOOT_COLLECTED, this.showLootBanner, this);
+    this.gameScene.events.on(Events.LOOT_FOUND, this.showLootDecision, this);
     this.gameScene.events.on(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
     this.gameScene.events.on(Events.RUN_PHASE_CHANGED, this.onRunPhaseChanged, this);
     this.gameScene.events.on(Events.WEAPON_EVOLVED, this.onWeaponEvolved, this);
@@ -128,6 +129,7 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.MINIBOSS_HEALTH, this.onMinibossHealth, this);
       this.gameScene.events.off(Events.CHEST_OPENED, this.showChestRewards, this);
       this.gameScene.events.off(Events.LOOT_COLLECTED, this.showLootBanner, this);
+      this.gameScene.events.off(Events.LOOT_FOUND, this.showLootDecision, this);
       this.gameScene.events.off(Events.EQUIPMENT_CHANGED, this.onEquipmentChanged, this);
       this.gameScene.events.off(Events.RUN_PHASE_CHANGED, this.onRunPhaseChanged, this);
       this.gameScene.events.off(Events.WEAPON_EVOLVED, this.onWeaponEvolved, this);
@@ -320,6 +322,41 @@ export class UIScene extends Phaser.Scene {
       yoyo: true,
       onComplete: () => banner.destroy(),
     });
+  }
+  private showLootDecision(equipment: Equipment, count: number, full: boolean) {
+    const color = `#${equipment.color.toString(16).padStart(6, '0')}`;
+    const parts: Phaser.GameObjects.GameObject[] = [
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 760, 550, 0x061323, 0.98)
+        .setStrokeStyle(3, equipment.color, 0.75),
+      this.add.text(GAME_WIDTH / 2, 105, 'BOTÍN ENCONTRADO', {
+        fontFamily: 'Arial Black', fontSize: '34px', color: '#ffffff',
+      }).setOrigin(0.5),
+      this.add.text(GAME_WIDTH / 2, 148, `${equipment.rarity} // ${equipment.kind.toUpperCase()}`, {
+        fontFamily: 'monospace', fontSize: '14px', color, letterSpacing: 3,
+      }).setOrigin(0.5),
+      this.add.text(GAME_WIDTH / 2, 184, equipment.name, {
+        fontFamily: 'Arial Black', fontSize: '25px', color,
+      }).setOrigin(0.5),
+      this.add.text(GAME_WIDTH / 2, 220, equipment.description, {
+        fontSize: '16px', color: '#c7d9e2', align: 'center', wordWrap: { width: 620 },
+      }).setOrigin(0.5),
+      this.add.text(GAME_WIDTH / 2, 254, `MOCHILA ${count}/6`, {
+        fontFamily: 'Arial Black', fontSize: '13px', color: full ? '#ff476f' : '#8ba5b8', letterSpacing: 2,
+      }).setOrigin(0.5),
+    ];
+    const choices = full ? [
+      { accent: 0x73ef62, icon: '↻', name: 'RECICLAR', effect: 'Convierte la pieza en +12 HP', footer: 'MOCHILA LLENA' },
+    ] : [
+      { accent: equipment.color, icon: equipment.kind === 'weapon' ? '⚡' : '◆', name: 'INSTALAR', effect: 'Añade sus estadísticas a tu build', footer: `ESPACIO ${count + 1}/6` },
+      { accent: 0x73ef62, icon: '↻', name: 'RECICLAR', effect: 'Convierte la pieza en +12 HP', footer: 'RECUPERACIÓN' },
+    ];
+    this.chooser = new RewardChooser(this, index => {
+      this.closeModal();
+      this.gameScene.resolveLoot(!full && index === 0);
+    });
+    parts.push(...this.chooser.build(choices, GAME_WIDTH / 2, 455));
+    this.modal.replace(parts, 115);
   }
   private onEquipmentChanged(weapon: string, armor: string) {
     this.statusHud.setEquipment(weapon, armor);

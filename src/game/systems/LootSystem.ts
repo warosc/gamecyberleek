@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
-import { ARENA, COLORS, Events } from '../config/Constants';
+import { ARENA, COLORS } from '../config/Constants';
 import type { CombatEffects } from '../effects/CombatEffects';
 import type { Player } from '../entities/player/Player';
 import { EquipmentDrop } from '../loot/EquipmentDrop';
-import { applyEquipmentModifiers, rollEquipment } from '../loot/Equipment';
+import { rollEquipment } from '../loot/Equipment';
 import type { AudioManager } from '../managers/AudioManager';
 
 interface LootSystemOptions {
@@ -11,7 +11,6 @@ interface LootSystemOptions {
   effects: CombatEffects;
   audio: AudioManager;
   level: () => number;
-  onEquipmentChanged: (weapon: string, armor: string) => void;
 }
 
 export class LootSystem {
@@ -54,26 +53,14 @@ export class LootSystem {
     this.options.audio.tone(880, 0.18, 0.035);
   }
 
-  collectEquipment(object: Phaser.GameObjects.GameObject, weapon: string, armor: string) {
+  collectEquipment(object: Phaser.GameObjects.GameObject) {
     const drop = object as EquipmentDrop;
     if (!drop.active) return;
     const equipment = drop.equipment;
-    const oldMaxHp = this.options.player.stats.maxHp;
-    applyEquipmentModifiers(this.options.player.stats, equipment.modifiers);
-    if (equipment.kind === 'weapon') weapon = equipment.name;
-    else armor = equipment.name;
-    if (this.options.player.stats.maxHp > oldMaxHp) {
-      const gainedHp = this.options.player.stats.maxHp - oldMaxHp;
-      this.options.player.health.max = this.options.player.stats.maxHp;
-      this.options.player.health.heal(gainedHp);
-      this.scene.events.emit(Events.PLAYER_DAMAGED, this.options.player.health.current, this.options.player.health.max);
-    }
     const burst = this.scene.add.circle(drop.x, drop.y, 18, equipment.color, 0.45).setDepth(20);
     this.scene.tweens.add({ targets: burst, scale: 5, alpha: 0, duration: 420, onComplete: () => burst.destroy() });
     drop.destroy();
     this.options.audio.tone(equipment.rarity === 'LEGENDARY' ? 1040 : 720, 0.28, 0.045);
-    this.scene.events.emit(Events.LOOT_COLLECTED, equipment);
-    this.scene.events.emit(Events.EQUIPMENT_CHANGED, weapon, armor);
-    this.options.onEquipmentChanged(weapon, armor);
+    return equipment;
   }
 }
