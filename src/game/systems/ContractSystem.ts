@@ -134,14 +134,22 @@ export class ContractSystem {
     contract.progress = contract.target;
   }
 
-  /** Fed from `GameScene.resolveEnemyDeath`, the single choke point every kill already passes through. */
+  /**
+   * Fed from `GameScene.resolveEnemyDeath`, the single choke point every kill already passes
+   * through. Every still-open contract is evaluated against the same kill (an elite killed by a
+   * barrel, say, can count toward two contracts at once) — an early return here would silently
+   * drop that second contract's progress whenever it happened to complete on the very kill that
+   * also finished another one. Only one just-completed contract is reported back (GameScene
+   * fires a single `CONTRACT_COMPLETED` per kill), but no contract's counter is ever skipped.
+   */
   onEnemyDefeated(event: EnemyDefeatEvent): ContractProgress | undefined {
+    let justCompleted: ContractProgress | undefined;
     const eliminations = this.find('ELIMINATIONS');
     if (eliminations && !eliminations.completed) {
       eliminations.progress++;
       if (eliminations.progress >= eliminations.target) {
         this.complete(eliminations);
-        return eliminations;
+        justCompleted = eliminations;
       }
     }
     if (event.environment) {
@@ -150,7 +158,7 @@ export class ContractSystem {
         device.progress++;
         if (device.progress >= device.target) {
           this.complete(device);
-          return device;
+          justCompleted ??= device;
         }
       }
     }
@@ -160,17 +168,16 @@ export class ContractSystem {
       // outright rather than counting as one more elite.
       if (event.boss) {
         this.complete(eliteHunt);
-        return eliteHunt;
-      }
-      if (event.elite) {
+        justCompleted ??= eliteHunt;
+      } else if (event.elite) {
         eliteHunt.progress++;
         if (eliteHunt.progress >= eliteHunt.target) {
           this.complete(eliteHunt);
-          return eliteHunt;
+          justCompleted ??= eliteHunt;
         }
       }
     }
-    return undefined;
+    return justCompleted;
   }
 
   /** Fed from the existing `CombatMomentum` state; tracks the longest chain reached this run. */

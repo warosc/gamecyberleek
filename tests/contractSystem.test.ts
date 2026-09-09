@@ -80,6 +80,22 @@ describe('contract progress', () => {
     expect(completed?.kind).toBe('DEVICE_KILLS');
   });
 
+  it('still counts a kill toward every other open contract even when it also completes one', () => {
+    // Regression: an early `return` out of the ELIMINATIONS branch used to skip the
+    // environment/elite checks entirely whenever that same kill happened to be the one that
+    // finished ELIMINATIONS, silently dropping the other contract's progress for that kill.
+    const system = new ContractSystem([
+      contract('ELIMINATIONS', 1, 45),
+      contract('DEVICE_KILLS', 1, 60),
+      contract('ELITE_HUNT', 1, 70),
+    ]);
+    // One kill that is simultaneously the last elimination, an environment kill, and an elite.
+    const completed = system.onEnemyDefeated({ elite: true, boss: false, environment: true });
+    expect(completed).toBeDefined();
+    expect(system.list.every((c) => c.completed)).toBe(true);
+    expect(system.summary().completedCount).toBe(3);
+  });
+
   it('counts elites toward the hunt but a boss kill always finishes it outright', () => {
     const system = new ContractSystem([contract('ELITE_HUNT', 3, 70)]);
     system.onEnemyDefeated({ elite: true, boss: false, environment: false });
