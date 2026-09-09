@@ -205,12 +205,12 @@ export class CombatEffects {
    * Confirmation that an orb was banked. XP is the loop the whole run hangs off, and before
    * this the only sign a pickup happened was a number moving in the bar at the bottom edge.
    */
-  xpPickup(x: number, y: number) {
+  xpPickup(x: number, y: number, value = 1) {
     if (this.reducedMotion) return;
     const spark = this.track(
       this.scene.add
-        .circle(x, y, 5, COLORS.green, 0)
-        .setStrokeStyle(2, COLORS.green, 0.9)
+        .circle(x, y, value >= 50 ? 9 : value >= 25 ? 7 : 5, value >= 50 ? 0xffd166 : value >= 25 ? COLORS.cyan : COLORS.green, 0)
+        .setStrokeStyle(value >= 25 ? 3 : 2, value >= 50 ? 0xffd166 : value >= 25 ? COLORS.cyan : COLORS.green, 0.9)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(20),
     );
@@ -223,6 +223,7 @@ export class CombatEffects {
       ease: 'Quad.Out',
       onComplete: () => this.release(spark),
     });
+    if (value >= 25) this.floatingText(x, y - 10, `BIO-DATOS +${value}`, value >= 50 ? '#ffd166' : '#21e6ff', 12);
   }
 
   floatingText(x: number, y: number, text: string, color: string, size = 18) {

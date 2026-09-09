@@ -30,6 +30,7 @@ describe('run telemetry', () => {
     const telemetry = new RunTelemetry();
     telemetry.shotFired();
     telemetry.shotFired();
+    telemetry.hitLanded();
     telemetry.dealtDamage(30);
     telemetry.dealtDamage(12.4);
     telemetry.tookDamage(8);
@@ -42,6 +43,7 @@ describe('run telemetry', () => {
 
     const [record] = loadRunHistory();
     expect(record.shotsFired).toBe(2);
+    expect(record.hits).toBe(1);
     expect(record.damageDealt).toBe(42);
     expect(record.damageTaken).toBe(8);
     expect(record.kills).toBe(1);

@@ -34,6 +34,7 @@ import { BossPhaseDirector } from '../systems/BossPhaseDirector';
 import { RunInventory } from '../systems/RunInventory';
 import { applyEquipmentModifiers, removeEquipmentModifiers, type Equipment } from '../loot/Equipment';
 import { activeBuildSynergy, combatRating, type BuildSynergy } from '../systems/BuildProgression';
+import { SectorObjectiveSystem, type ObjectiveMetric } from '../systems/SectorObjectiveSystem';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -86,6 +87,7 @@ export class GameScene extends Phaser.Scene {
   private pendingLoot?: Equipment;
   activeSynergy?: BuildSynergy;
   private inventoryReturnState = GameState.PLAYING;
+  private objective!: SectorObjectiveSystem;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
   private readonly handlePlayerDamaged = (_current: number, _max: number, applied?: number) => {
@@ -200,6 +202,9 @@ export class GameScene extends Phaser.Scene {
     });
     this.chests = this.loot.chests;
     this.lootDrops = this.loot.drops;
+    this.objective = new SectorObjectiveSystem(this.arenaIndex,
+      state => this.events.emit(Events.OBJECTIVE_CHANGED, state),
+      state => this.completeObjective(state.metric));
     this.encounters = new EncounterSystem(this, this.enemies, this.player, this.arenaIndex);
     this.bossPhases = new BossPhaseDirector(this, this.enemies, this.arenaIndex);
     this.runEnd = new RunEndSystem(this, () => this.scene.stop('UI'));
@@ -281,12 +286,14 @@ export class GameScene extends Phaser.Scene {
     });
     this.scene.launch('UI', { game: this });
     this.events.emit(Events.STATE_CHANGED, this.state);
+    this.events.emit(Events.OBJECTIVE_CHANGED, this.objective.snapshot);
   }
   update(_time: number, delta: number) {
     if (this.victoryPending) return;
     if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
     this.survivalMs += delta;
     this.encounters.update(this.survivalMs);
+    this.objective.update(this.survivalMs);
     this.sectorHazards.update(this.survivalMs, !this.encounters.hasBossSpawned);
     const expiredMomentum = this.momentum.update(this.survivalMs);
     if (expiredMomentum) this.events.emit(Events.MOMENTUM_CHANGED, expiredMomentum);
@@ -368,6 +375,7 @@ export class GameScene extends Phaser.Scene {
     if (p.hitsRemaining > 0) p.hitsRemaining--;
     else p.disableBody(true, true);
     const boss = e.enemyType === EnemyType.BOSS;
+    this.telemetry.hitLanded();
     this.telemetry.dealtDamage(p.damage);
     const fatal = e.hit(p.damage, p.critical);
     // One tier drives spark, damage number, camera and audio together, so a critical on an
@@ -444,7 +452,8 @@ export class GameScene extends Phaser.Scene {
     const orbX = orb.x;
     const orbY = orb.y;
     orb.collect();
-    this.effects.xpPickup(orbX, orbY);
+    this.effects.xpPickup(orbX, orbY, orb.value);
+    this.objective.record('shards');
     this.audio.play('xp_collect');
     const previousLevel = this.xp.level;
     const gainedLevels = this.xp.add(amount);
@@ -481,6 +490,8 @@ export class GameScene extends Phaser.Scene {
     this.abilityLevels.set(id, level);
     this.telemetry.choseUpgrade(id);
     ability.apply(this.player.stats, level);
+    this.events.emit(Events.UPGRADE_APPLIED, ability.name, ability.description, level,
+      combatRating(this.player.stats));
     if (isSignatureAbility(id) && level === ability.maxLevel) {
       this.equippedWeapon = this.player.stats.weaponName;
       this.audio.play('weapon_evolve');
@@ -710,6 +721,7 @@ export class GameScene extends Phaser.Scene {
     return this.audio.getMasterVolume();
   }
   get audioVolume() { return this.audio.getMasterVolume(); }
+  get objectiveState() { return this.objective.snapshot; }
   resumeGame() {
     if (this.state === GameState.PAUSED) this.togglePause();
   }
@@ -730,7 +742,7 @@ export class GameScene extends Phaser.Scene {
     if (this.victoryPending && !victory) return;
     if (this.state === GameState.GAME_OVER || this.state === GameState.VICTORY) return;
     this.state = victory ? GameState.VICTORY : GameState.GAME_OVER;
-    this.telemetry.finish(this.survivalMs, this.xp.level, victory ? 'victory' : 'death');
+    const summary = this.telemetry.finish(this.survivalMs, this.xp.level, victory ? 'victory' : 'death');
     this.audio.play(victory ? 'victory' : 'game_over');
     this.physics.pause();
     this.runEnd.finish({
@@ -739,6 +751,9 @@ export class GameScene extends Phaser.Scene {
       victory,
       arenaIndex: this.arenaIndex,
       weaponId: this.selectedWeaponId,
+      summary,
+      equipment: this.inventory.contents.map(item => item.name),
+      synergy: this.activeSynergy?.name,
     });
   }
   private plasmaExplosion(x: number, y: number, damage: number, radius: number, ignored?: Enemy) {
@@ -770,6 +785,19 @@ export class GameScene extends Phaser.Scene {
     if (effect === 'cryo') this.enemyProjectiles.group.clear(true, true);
     this.audio.tone(effect === 'emp' ? 180 : effect === 'renewal' ? 740 : 320, 0.3, 0.05);
     this.cameras.main.shake(180, 0.006);
+    this.objective.record('devices');
+  }
+  private completeObjective(metric: ObjectiveMetric) {
+    if (metric === 'kills') this.player.stats.attackDamage += 6;
+    else if (metric === 'shards') this.player.stats.xpMultiplier += 0.2;
+    else {
+      this.player.stats.maxHp += 18;
+      this.player.health.max = this.player.stats.maxHp;
+      this.player.health.heal(18);
+      this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
+    }
+    this.loot.spawnEquipmentDrop();
+    this.audio.play('level_up');
   }
   private resolveEnemyDeath(enemy: Enemy) {
     const elite = enemy.elite;
@@ -778,6 +806,7 @@ export class GameScene extends Phaser.Scene {
     if (!defeat) return;
     this.events.emit(Events.ENEMY_DIED);
     this.telemetry.killed();
+    this.objective.record('kills');
     const momentum = this.momentum.kill(this.survivalMs);
     if (momentum.tier > 0 && momentum.chain % 3 === 0) this.audio.play('combo_rise');
     this.events.emit(Events.MOMENTUM_CHANGED, momentum);

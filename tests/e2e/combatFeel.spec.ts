@@ -266,6 +266,60 @@ test('mid-run miniboss spawns once, keeps the run active and guarantees equipmen
   expect(result).toEqual({ count: 1, stateAtSpawn: 'PLAYING', drops: 1 });
 });
 
+test('sector objective grants its advertised combat reward only once', async ({ page }) => {
+  await deploy(page);
+  const result = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const internal = scene as unknown as { objective: { record: (metric: 'kills') => boolean } };
+    const damageBefore = scene.player.stats.attackDamage;
+    for (let kill = 0; kill < 18; kill++) internal.objective.record('kills');
+    const damageAfter = scene.player.stats.attackDamage;
+    internal.objective.record('kills');
+    const ui = window.combatGame.scene.getScene('UI');
+    const panel = ui.children.getByName('objective-panel') as Phaser.GameObjects.Container;
+    const copy = panel.list.filter(item => item.type === 'Text').map(item => (item as Phaser.GameObjects.Text).text);
+    return { damageBefore, damageAfter, status: scene.objectiveState.status, copy };
+  });
+  expect(result.damageAfter - result.damageBefore).toBe(6);
+  expect(result.status).toBe('complete');
+  expect(result.copy.join(' ')).toContain('COMPLETADO');
+});
+
+test('results screen explains performance, build and permanent rewards', async ({ page }) => {
+  await deploy(page);
+  await page.evaluate(() => {
+    const game = window.combatGame;
+    game.scene.stop('UI');
+    game.scene.start('GameOver', {
+      time: 93_000, level: 6, victory: true, arenaIndex: 0, weaponId: 'pulse',
+      equipment: ['GUANTE CRIO', 'NÚCLEO ESPORA'], synergy: 'CIRCUITO VERDE',
+      masteryEarned: 11, creditsEarned: 130, newUnlocks: ['sector-2'],
+      summary: {
+        startedAt: '', durationMs: 93_000, level: 6, kills: 42, damageDealt: 1337,
+        damageTaken: 64, shotsFired: 100, hits: 73, abilityUses: { nova: 2, shield: 1, overdrive: 0 },
+        upgrades: ['power', 'rapid', 'fan'], weapon: 'PULSEGUN-01', bossReached: true,
+        bossDefeated: true, outcome: 'victory', restarted: false,
+      },
+    });
+  });
+  await page.waitForFunction(() => window.combatGame.scene.isActive('GameOver'));
+  const result = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('GameOver');
+    const text = (name: string) => (scene.children.getByName(name) as Phaser.GameObjects.Text)?.text;
+    return {
+      kills: text('results-kills'), damage: text('results-damage'), accuracy: text('results-accuracy'),
+      build: text('results-build'), equipment: text('results-equipment'), rewards: text('results-rewards'),
+      unlocks: text('results-unlocks'),
+    };
+  });
+  expect(result).toEqual(expect.objectContaining({
+    kills: '42', damage: '1337', accuracy: '73%', build: 'SINERGIA ACTIVA: CIRCUITO VERDE',
+  }));
+  expect(result.equipment).toContain('GUANTE CRIO');
+  expect(result.rewards).toContain('+130 BIO-CRÉDITOS');
+  expect(result.unlocks).toContain('sector-2');
+});
+
 test('weapon mastery migrates safely and applies permanent rank bonuses', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('leek-ops-profile-v3', JSON.stringify({
     schemaVersion: 3, runs: 4, bestLevel: 7, victories: 1, bioCredits: 140,

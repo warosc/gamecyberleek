@@ -14,6 +14,7 @@ export class StatusHud {
   private readonly timer: Phaser.GameObjects.Text;
   private readonly phase: Phaser.GameObjects.Text;
   private readonly xpFill: Phaser.GameObjects.Rectangle;
+  private readonly xpLabel: Phaser.GameObjects.Text;
   private readonly weaponText: Phaser.GameObjects.Text;
   private readonly weaponSlot: Phaser.GameObjects.Text;
   private readonly armorSlot: Phaser.GameObjects.Text;
@@ -95,7 +96,7 @@ export class StatusHud {
     scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 22, GAME_WIDTH - 64, 24, 0x07111f, 0.96)
       .setStrokeStyle(3, 0x21e6ff, 0.65);
     this.xpFill = scene.add.rectangle(35, GAME_HEIGHT - 22, 0, 16, 0x73ef62).setOrigin(0, 0.5);
-    scene.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 22, 'EXPERIENCE', {
+    this.xpLabel = scene.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 22, 'BIO-DATOS  0 / 40', {
       fontFamily: 'Arial Black', fontSize: '10px', color: '#eaffff',
     }).setOrigin(0.5);
     for (let index = 1; index < 10; index++)
@@ -139,6 +140,7 @@ export class StatusHud {
     }
     this.xpRatio = Phaser.Math.Clamp(xp / xpForLevel(level), 0, 1);
     this.xpTargetWidth = (GAME_WIDTH - 70) * this.xpRatio;
+    this.xpLabel.setText(`BIO-DATOS  ${Math.floor(xp)} / ${xpForLevel(level)}  ·  NIVEL ${level}`);
   }
 
   setEquipment(weapon: string, armor: string) {

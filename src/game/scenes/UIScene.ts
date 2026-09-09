@@ -19,6 +19,7 @@ import { MomentumHud } from '../ui/MomentumHud';
 import type { MomentumState } from '../systems/CombatMomentum';
 import { MinibossBanner } from '../ui/MinibossBanner';
 import type { BuildSynergy, combatRating } from '../systems/BuildProgression';
+import type { SectorObjectiveState } from '../systems/SectorObjectiveSystem';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -50,6 +51,9 @@ export class UIScene extends Phaser.Scene {
   private phaseBanner!: PhaseBanner;
   private momentumHud!: MomentumHud;
   private minibossBanner!: MinibossBanner;
+  private objectivePanel!: Phaser.GameObjects.Container;
+  private objectiveTitle!: Phaser.GameObjects.Text;
+  private objectiveProgress!: Phaser.GameObjects.Text;
   constructor() {
     super('UI');
   }
@@ -78,6 +82,16 @@ export class UIScene extends Phaser.Scene {
     this.phaseBanner = new PhaseBanner(this, this.gameScene.mobileInput.active);
     this.momentumHud = new MomentumHud(this, this.gameScene.mobileInput.active);
     this.minibossBanner = new MinibossBanner(this);
+    const objectiveBack = this.add.rectangle(0, 0, 330, 70, 0x06101d, 0.9).setStrokeStyle(2, 0x21e6ff, 0.55);
+    this.objectiveTitle = this.add.text(-148, -22, 'OBJETIVO OPCIONAL', {
+      fontFamily: 'Arial Black', fontSize: '11px', color: '#21e6ff', letterSpacing: 1,
+    });
+    this.objectiveProgress = this.add.text(-148, 4, '', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#c7d9e2',
+    });
+    this.objectivePanel = this.add.container(GAME_WIDTH - 185, this.gameScene.mobileInput.active ? 155 : 202,
+      [objectiveBack, this.objectiveTitle, this.objectiveProgress]).setDepth(58).setName('objective-panel');
+    this.onObjectiveChanged(this.gameScene.objectiveState);
     if (this.gameScene.mobileInput.active) {
       this.mobileControls = new MobileControls(this, this.gameScene);
       this.mobileControls.create();
@@ -115,6 +129,8 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.RUN_PHASE_CHANGED, this.onRunPhaseChanged, this);
     this.gameScene.events.on(Events.WEAPON_EVOLVED, this.onWeaponEvolved, this);
     this.gameScene.events.on(Events.MOMENTUM_CHANGED, this.onMomentumChanged, this);
+    this.gameScene.events.on(Events.OBJECTIVE_CHANGED, this.onObjectiveChanged, this);
+    this.gameScene.events.on(Events.UPGRADE_APPLIED, this.onUpgradeApplied, this);
     this.events.once('shutdown', () => {
       this.closeModal();
       this.mobileControls?.destroy();
@@ -138,6 +154,8 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.RUN_PHASE_CHANGED, this.onRunPhaseChanged, this);
       this.gameScene.events.off(Events.WEAPON_EVOLVED, this.onWeaponEvolved, this);
       this.gameScene.events.off(Events.MOMENTUM_CHANGED, this.onMomentumChanged, this);
+      this.gameScene.events.off(Events.OBJECTIVE_CHANGED, this.onObjectiveChanged, this);
+      this.gameScene.events.off(Events.UPGRADE_APPLIED, this.onUpgradeApplied, this);
       this.phaseBanner.destroy();
       this.minibossBanner.destroy();
     });
@@ -180,6 +198,29 @@ export class UIScene extends Phaser.Scene {
     }).setOrigin(0.5);
     const banner = this.add.container(0, 20, [plate, title, brief]).setDepth(125).setAlpha(0).setName('xp-discovery');
     this.tweens.add({ targets: banner, y: 0, alpha: 1, duration: 220, hold: 2100, yoyo: true,
+      onComplete: () => banner.destroy(true) });
+  }
+  private onObjectiveChanged(state: SectorObjectiveState) {
+    const status = state.status === 'complete' ? 'COMPLETADO' : state.status === 'failed' ? 'EXPIRADO' : `${state.progress}/${state.target}`;
+    this.objectiveTitle.setText(state.title).setColor(`#${state.color.toString(16).padStart(6, '0')}`);
+    this.objectiveProgress.setText(`${status}  ·  ${state.status === 'active' ? state.brief : state.status === 'complete' ? state.reward : 'RECOMPENSA PERDIDA'}`);
+    if (state.status !== 'active') {
+      this.tweens.add({ targets: this.objectivePanel, scale: 1.08, duration: 120, yoyo: true });
+      if (state.status === 'complete') this.phaseBanner.show({
+        title: 'OBJETIVO COMPLETADO', brief: state.reward, color: state.color,
+      });
+    }
+  }
+  private onUpgradeApplied(name: string, description: string, level: number, rating: ReturnType<typeof combatRating>) {
+    const plate = this.add.rectangle(0, 0, 600, 94, 0x061323, 0.96).setStrokeStyle(3, 0x73ef62, 0.9);
+    const title = this.add.text(0, -20, `${name}  ·  NIVEL ${level}`, {
+      fontFamily: 'Arial Black', fontSize: '21px', color: '#73ef62',
+    }).setOrigin(0.5);
+    const detail = this.add.text(0, 16, `${description}  //  DPS ${rating.dps} · CRIT ${rating.critical}%`, {
+      fontFamily: 'monospace', fontSize: '12px', color: '#d8e7ed',
+    }).setOrigin(0.5);
+    const banner = this.add.container(GAME_WIDTH / 2, 205, [plate, title, detail]).setDepth(135).setAlpha(0).setScale(0.88);
+    this.tweens.add({ targets: banner, alpha: 1, scale: 1, duration: 180, hold: 1200, yoyo: true,
       onComplete: () => banner.destroy(true) });
   }
   private showAbilities(abilities: Ability[]) {

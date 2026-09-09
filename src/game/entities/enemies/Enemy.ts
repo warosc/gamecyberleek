@@ -253,13 +253,14 @@ export class Enemy extends Phaser.GameObjects.Arc {
       const phase = this.bossPhase;
       this.bossAttackSequence++;
       const radialPhaseTwo = phase === 2 && this.bossAttackSequence % 2 === 0;
+      const spiralPhaseThree = phase === 3 && this.bossAttackSequence % 2 === 0;
       // The two patterns are told apart before they land: the radial burst rings the boss,
       // the spread cone points at where it is about to shoot.
       this.showAttackTelegraph(
         phase === 3 ? 0xff476f : 0xd566ff,
         phase === 3 ? 104 : 86,
         GAMEPLAY.telegraphLeadMs.boss,
-        radialPhaseTwo ? undefined : lockedAim,
+        radialPhaseTwo || spiralPhaseThree ? undefined : lockedAim,
       );
       this.pendingAttack = {
         at: time + GAMEPLAY.telegraphLeadMs.boss,
@@ -269,6 +270,10 @@ export class Enemy extends Phaser.GameObjects.Arc {
           if (radialPhaseTwo) {
             for (let index = 0; index < 8; index++)
               fire(this.x, this.y, (Math.PI * 2 * index) / 8, 240, 13);
+          } else if (spiralPhaseThree) {
+            const offset = (this.bossAttackSequence % 6) * 0.13;
+            for (let index = 0; index < 12; index++)
+              fire(this.x, this.y, offset + (Math.PI * 2 * index) / 12, 255 + (index % 2) * 45, 15);
           } else {
             const spread = phase === 1 ? 2 : phase === 2 ? 3 : 4;
             for (let index = -spread; index <= spread; index++)

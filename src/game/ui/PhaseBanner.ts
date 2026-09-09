@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH } from '../config/Constants';
-import type { RunPhaseCallout } from '../config/RunPacing';
 
 /** Short tactical callout shown only when the enemy roster changes. */
 export class PhaseBanner {
@@ -8,7 +7,7 @@ export class PhaseBanner {
 
   constructor(private readonly scene: Phaser.Scene, private readonly mobile: boolean) {}
 
-  show(phase: RunPhaseCallout) {
+  show(phase: { title: string; brief: string; color: number }) {
     this.active?.destroy(true);
     const width = this.mobile ? 500 : 620;
     const back = this.scene.add.rectangle(0, 0, width, 78, 0x06101d, 0.94)
