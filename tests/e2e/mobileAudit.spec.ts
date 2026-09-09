@@ -22,6 +22,16 @@ const MOBILE_RESOLUTIONS = [
 /** Apple HIG / Material minimum comfortable touch target, in CSS px. */
 const MIN_TOUCH_TARGET = 44;
 
+/**
+ * Floor for the contract HUD's title text, in real CSS px. Regression guard for a bug in this
+ * feature's own history: a "bigger" mobile font (10px -> 13px) still measured out *smaller*
+ * in real CSS pixels than desktop's, because the logical canvas widens on phone landscape
+ * (ViewportLayout.ts) while the physical canvas stays pinned to the viewport -- a ~0.5-0.57
+ * logical-to-CSS scale there, versus 1:1 on desktop. 9px sits just under the ~10-13px this was
+ * tuned to hit across the three phone widths below, so a real shrink still fails this.
+ */
+const MIN_LEGIBLE_TEXT_HEIGHT = 9;
+
 async function deploy(page: Page) {
   await page.route((url) => url.pathname === '/src/main.ts', async (route) => {
     const response = await route.fetch();
@@ -176,6 +186,13 @@ for (const resolution of MOBILE_RESOLUTIONS) {
           expect(overlapX * overlapY, 'contract row must not overlap a protected HUD element').toBe(0);
         }
       }
+    });
+
+    test('the contract tracker title renders at a legible real size, not just a bigger logical number', async ({ page }) => {
+      await deploy(page);
+      const title = (await measureUiElement(page, 'contract-row-0-title'))!;
+      expect(title.visible).toBe(true);
+      expect(title.cssHeight, 'contract row title must render at a legible real size on this phone width').toBeGreaterThanOrEqual(MIN_LEGIBLE_TEXT_HEIGHT);
     });
   });
 }

@@ -35,14 +35,20 @@ export class ContractHud {
   private readonly rowHeight: number;
 
   constructor(scene: Phaser.Scene, contracts: readonly ContractProgress[], mobile: boolean) {
-    // The mobile canvas renders at roughly half its logical size in real CSS pixels (the
-    // logical width grows to match the phone's aspect ratio while the physical canvas stays
-    // pinned to the viewport — see ViewportLayout.ts), so a size tuned for desktop reads as
-    // barely legible on a phone. Bump the row and font size on mobile instead of scaling the
-    // whole panel, which would eat into the arena view.
-    this.panelWidth = mobile ? 280 : 250;
-    this.rowHeight = mobile ? 36 : 30;
-    const fontSize = mobile ? '13px' : '10px';
+    // ViewportLayout widens the logical canvas to match a phone's aspect ratio (up to 1600
+    // logical px) while the physical canvas stays pinned to the real viewport (e.g. 844 CSS
+    // px on an iPhone 13/14 landscape) — a ~0.54-0.5 logical-to-CSS scale, worse than
+    // desktop's 1:1. A first pass here only bumped the font from 10px to 13px, which measured
+    // out to *smaller* real CSS pixels than desktop (13 * 0.54 ≈ 7px vs desktop's 10px): a
+    // proportional-looking increase without checking the actual rendered size. 20px is chosen
+    // so mobile never renders smaller than desktop's 10px even at the worst-case scale seen
+    // across the three phone widths this was measured against (740/844/915 CSS px landscape,
+    // ~0.5-0.57 scale): 20 * 0.5 = 10px, matching or beating desktop everywhere else.
+    this.panelWidth = mobile ? 300 : 250;
+    this.rowHeight = mobile ? 46 : 30;
+    const fontSize = mobile ? '20px' : '10px';
+    const textTop = mobile ? 6 : 4;
+    const barInset = mobile ? 10 : 8;
     const parts: Phaser.GameObjects.GameObject[] = [];
     contracts.forEach((contract, index) => {
       const y = PANEL_Y + index * (this.rowHeight + ROW_GAP);
@@ -53,19 +59,20 @@ export class ContractHud {
         .setName(`contract-row-${index}`);
       const marker = scene.add.rectangle(PANEL_X + 3, y + 4, 4, this.rowHeight - 8, ACCENT, 0.9).setOrigin(0, 0);
       const title = scene.add
-        .text(PANEL_X + 12, y + 4, contract.title, {
+        .text(PANEL_X + 12, y + textTop, contract.title, {
           fontFamily: 'Arial Black', fontSize, color: '#eaffff', letterSpacing: 1,
         })
-        .setOrigin(0, 0);
+        .setOrigin(0, 0)
+        .setName(`contract-row-${index}-title`);
       const progress = scene.add
-        .text(PANEL_X + this.panelWidth - 8, y + 4, '', {
+        .text(PANEL_X + this.panelWidth - 8, y + textTop, '', {
           fontFamily: 'Arial Black', fontSize, color: '#8ba5b8',
         })
         .setOrigin(1, 0);
       const barBack = scene.add
-        .rectangle(PANEL_X + 12, y + this.rowHeight - 8, this.panelWidth - 24, 4, 0x0b1e30, 1)
+        .rectangle(PANEL_X + 12, y + this.rowHeight - barInset, this.panelWidth - 24, 4, 0x0b1e30, 1)
         .setOrigin(0, 0);
-      const barFill = scene.add.rectangle(PANEL_X + 12, y + this.rowHeight - 8, 0, 4, ACCENT, 1).setOrigin(0, 0);
+      const barFill = scene.add.rectangle(PANEL_X + 12, y + this.rowHeight - barInset, 0, 4, ACCENT, 1).setOrigin(0, 0);
       parts.push(back, marker, title, progress, barBack, barFill);
       this.rows.push({ kind: contract.kind, back, marker, title, progress, barFill, lastTitle: '', lastProgress: '' });
     });
