@@ -50,6 +50,7 @@ export const Events = {
   PLAYER_DASHED: 'player-dashed',
   ENEMY_DIED: 'enemy-died',
   XP_COLLECTED: 'xp-collected',
+  XP_DISCOVERED: 'xp-discovered',
   PLAYER_LEVEL_UP: 'player-level-up',
   ABILITY_SELECTED: 'ability-selected',
   STATE_CHANGED: 'state-changed',

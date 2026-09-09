@@ -98,6 +98,7 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.PLAYER_DASHED, this.onDashed, this);
     this.gameScene.events.on(Events.PLAYER_DAMAGED, this.onHealth, this);
     this.gameScene.events.on(Events.XP_COLLECTED, this.onXp, this);
+    this.gameScene.events.on(Events.XP_DISCOVERED, this.onXpDiscovered, this);
     this.gameScene.events.on(Events.PLAYER_LEVEL_UP, this.showAbilities, this);
     this.gameScene.events.on(Events.STATE_CHANGED, this.onState, this);
     this.gameScene.events.on(Events.BOSS_SPAWNED, this.onBossSpawned, this);
@@ -118,6 +119,7 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.PLAYER_DASHED, this.onDashed, this);
       this.gameScene.events.off(Events.PLAYER_DAMAGED, this.onHealth, this);
       this.gameScene.events.off(Events.XP_COLLECTED, this.onXp, this);
+      this.gameScene.events.off(Events.XP_DISCOVERED, this.onXpDiscovered, this);
       this.gameScene.events.off(Events.PLAYER_LEVEL_UP, this.showAbilities, this);
       this.gameScene.events.off(Events.STATE_CHANGED, this.onState, this);
       this.gameScene.events.off(Events.BOSS_SPAWNED, this.onBossSpawned, this);
@@ -161,13 +163,26 @@ export class UIScene extends Phaser.Scene {
   private onXp(xp: number, level: number) {
     this.statusHud.setExperience(xp, level);
   }
+  private onXpDiscovered() {
+    const plate = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 104, 470, 62, 0x061323, 0.94)
+      .setStrokeStyle(2, 0x73ef62, 0.85);
+    const title = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 116, 'BIO-DATOS // EXPERIENCIA', {
+      fontFamily: 'Arial Black', fontSize: '16px', color: '#73ef62', letterSpacing: 2,
+    }).setOrigin(0.5);
+    const brief = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 91, 'ABSÓRBELOS PARA SUBIR DE NIVEL Y ELEGIR PODERES', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#c7d9e2', letterSpacing: 1,
+    }).setOrigin(0.5);
+    const banner = this.add.container(0, 20, [plate, title, brief]).setDepth(125).setAlpha(0).setName('xp-discovery');
+    this.tweens.add({ targets: banner, y: 0, alpha: 1, duration: 220, hold: 2100, yoyo: true,
+      onComplete: () => banner.destroy(true) });
+  }
   private showAbilities(abilities: Ability[]) {
     const parts: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1040, 570, 0x061323, 0.98)
         .setStrokeStyle(2, 0x21e6ff, 0.5),
       this.add
-        .text(GAME_WIDTH / 2, 118, 'LEVEL UP', {
+        .text(GAME_WIDTH / 2, 118, `NIVEL ${this.gameScene.xp.level} ALCANZADO`, {
           fontFamily: 'Arial Black',
           fontSize: '42px',
           color: '#73ef62',
@@ -177,6 +192,10 @@ export class UIScene extends Phaser.Scene {
         fontFamily: 'Arial Black', fontSize: '12px', color: '#8ba5b8', letterSpacing: 3,
       }).setOrigin(0.5),
     ];
+    const levelGlow = this.add.circle(GAME_WIDTH / 2, 118, 72, 0x73ef62, 0)
+      .setStrokeStyle(3, 0x73ef62, 0.55).setDepth(101);
+    parts.unshift(levelGlow);
+    this.tweens.add({ targets: levelGlow, scale: 2.4, alpha: 0, duration: 700, ease: 'Cubic.Out' });
     const accents = [0x21e6ff, 0x73ef62, 0xd566ff];
     this.chooser = new RewardChooser(this, (index) => {
       const chosen = abilities[index];

@@ -95,7 +95,7 @@ test('three milestone choices resume safely and the finale starts once at four m
       bosses:s.enemies.getChildren().filter(e=>(e as Enemy).enemyType==='BOSS').length,state:s.state};
   });
   expect(r.offered).toHaveLength(3);
-  expect(r.callouts).toEqual(['EMBESTIDA DETECTADA','FUEGO A DISTANCIA','BRECHA ABIERTA','ULTIMA OLEADA']);
+  expect(r.callouts).toEqual(['DESCARGA DE RED','EMBESTIDA DETECTADA','FUEGO A DISTANCIA','BRECHA ABIERTA','ULTIMA OLEADA']);
   expect(r.offered.every(o=>o.join(',')==='pulse_protocol,fan,phase_dash')).toBe(true);
   expect(r.protocolLevel).toBe(3); expect(r.weapon).toBe('RAIL SPROUT');
   expect(r.piercing).toBe(2); expect(r.count).toBe(1); expect(r.bosses).toBe(1); expect(r.state).toBe('BOSS');
@@ -235,10 +235,16 @@ test('three rapid eliminations activate momentum and increase XP', async ({ page
     }
     const values = scene.orbs.getChildren().map(orb => (orb as unknown as { value: number }).value);
     const ui = window.combatGame.scene.getScene('UI');
-    return { values, momentumVisible: (ui.children.getByName('momentum-hud') as unknown as { visible?: boolean })?.visible };
+    const firstOrb = scene.orbs.getChildren()[0] as unknown as { visual: Phaser.GameObjects.Container };
+    const xpExplained = Boolean(ui.children.getByName('xp-discovery'));
+    return { values, shardParts: firstOrb.visual.list.length, shardVisible: firstOrb.visual.visible, xpExplained,
+      momentumVisible: (ui.children.getByName('momentum-hud') as unknown as { visible?: boolean })?.visible };
   });
   expect(result.values).toHaveLength(3);
   expect(result.values[2]).toBeGreaterThan(result.values[0]);
+  expect(result.shardParts).toBe(3);
+  expect(result.shardVisible).toBe(true);
+  expect(result.xpExplained).toBe(true);
   expect(result.momentumVisible).toBe(true);
 });
 

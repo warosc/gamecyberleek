@@ -75,6 +75,7 @@ export class GameScene extends Phaser.Scene {
   private encounters!: EncounterSystem;
   private runEnd!: RunEndSystem;
   private lastBossPhase = 1;
+  private xpIntroduced = false;
   private sectorHazards!: SectorHazardSystem;
   private sectorDevices!: SectorDeviceSystem;
   private bossPhases!: BossPhaseDirector;
@@ -146,6 +147,7 @@ export class GameScene extends Phaser.Scene {
     this.pendingEquipmentDrop = false;
     this.victoryPending = false;
     this.lastBossPhase = 1;
+    this.xpIntroduced = false;
     this.deaths = new EnemyDeathResolver();
     this.momentum = new CombatMomentum();
     this.telemetry = new RunTelemetry();
@@ -336,6 +338,7 @@ export class GameScene extends Phaser.Scene {
     this.orbs.getChildren().forEach((o) => {
       const orb = o as ExperienceOrb;
       if (!orb.active) return;
+      orb.syncVisual(this.survivalMs);
       const radius = this.player.stats.magnetRadius;
       const distance = Phaser.Math.Distance.Between(orb.x, orb.y, this.player.x, this.player.y);
       if (distance >= radius) return;
@@ -411,7 +414,10 @@ export class GameScene extends Phaser.Scene {
     // A recycled orb can still carry the pulse tween from its previous life.
     this.tweens.killTweensOf(orb);
     orb.spawn(x, y, value, this.survivalMs);
-    this.tweens.add({ targets: orb, scale: 1.35, duration: 350, yoyo: true, repeat: 2 });
+    if (!this.xpIntroduced) {
+      this.xpIntroduced = true;
+      this.events.emit(Events.XP_DISCOVERED);
+    }
   }
   private stalestOrb() {
     let stalest: ExperienceOrb | null = null;
@@ -452,6 +458,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.state = GameState.LEVEL_UP;
     this.physics.pause();
+    this.audio.play('level_up');
     this.events.emit(Events.STATE_CHANGED, this.state);
     this.events.emit(Events.PLAYER_LEVEL_UP, options);
   }
@@ -477,7 +484,6 @@ export class GameScene extends Phaser.Scene {
       this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
     }
     if (id === 'overdrive') this.player.activateOverdrive(10000 + level * 2000);
-    this.audio.play('level_up');
     this.state = this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
     this.physics.resume();
     this.events.emit(Events.ABILITY_SELECTED, id);
