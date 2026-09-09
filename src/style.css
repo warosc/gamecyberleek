@@ -23,6 +23,63 @@ body {
   position: fixed;
   inset: 0;
 }
+#boot-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 8000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  overflow: hidden;
+  color: #eaffff;
+  background: radial-gradient(circle at 50% 42%, #12384a 0%, #071522 36%, #02060c 76%);
+  transition: opacity 280ms ease, visibility 280ms ease;
+}
+#boot-splash.boot-complete { opacity: 0; visibility: hidden; pointer-events: none; }
+.boot-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.2;
+  background-image: linear-gradient(#21e6ff1c 1px, transparent 1px), linear-gradient(90deg, #21e6ff1c 1px, transparent 1px);
+  background-size: 42px 42px;
+  transform: perspective(500px) rotateX(56deg) scale(1.7) translateY(18%);
+  animation: boot-grid 3s linear infinite;
+}
+.boot-mark {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border: 3px solid #21e6ff;
+  border-radius: 50%;
+  box-shadow: 0 0 30px #21e6ff88, inset 0 0 24px #21e6ff55;
+  animation: boot-spin 1.8s linear infinite;
+}
+.boot-mark::before, .boot-mark::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 44%;
+  width: 20px;
+  height: 48px;
+  border: 5px solid #73ef62;
+  border-bottom: 0;
+  border-radius: 90% 10% 70% 20%;
+  transform-origin: 0 100%;
+  transform: rotate(-28deg);
+  filter: drop-shadow(0 0 8px #73ef62);
+}
+.boot-mark::after { transform: scaleX(-1) rotate(-28deg); }
+.boot-mark span { position: absolute; inset: 31px; border-radius: 50%; background: #73ef62; box-shadow: 0 0 20px #73ef62; }
+#boot-splash strong { z-index: 1; color: #73ef62; font: 900 clamp(38px, 7vw, 70px)/1 'Arial Black', sans-serif; letter-spacing: 5px; text-shadow: 0 0 20px #21e6ff88; }
+#boot-splash small, #boot-status { z-index: 1; font: 700 clamp(10px, 1.6vw, 14px)/1.2 monospace; letter-spacing: 3px; color: #8db7c7; }
+.boot-track { z-index: 1; width: min(520px, 72vw); height: 12px; padding: 2px; border: 1px solid #21e6ff99; background: #02070d; box-shadow: 0 0 18px #21e6ff33; }
+.boot-track i { display: block; width: 3%; height: 100%; background: linear-gradient(90deg, #21e6ff, #73ef62); box-shadow: 0 0 12px #73ef62; transition: width 120ms ease; }
+#boot-status { color: #73ef62; letter-spacing: 2px; }
+@keyframes boot-spin { 50% { transform: rotate(180deg) scale(1.06); } to { transform: rotate(360deg); } }
+@keyframes boot-grid { to { background-position: 0 42px, 42px 0; } }
+@media (prefers-reduced-motion: reduce) { .boot-mark, .boot-grid { animation: none; } }
 #game {
   /* iOS resolves `height: 100%` against a layout viewport taller than the visible area, so
      Phaser sized the canvas to fit a box partly hidden behind Safari's toolbars and the game
