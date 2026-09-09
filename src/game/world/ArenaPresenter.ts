@@ -57,6 +57,14 @@ export class ArenaPresenter {
 
   /** Fixed decoration budget: no emitters, timers spawning objects, or per-frame allocations. */
   private drawLivingLab(theme: ArenaTheme, random: Phaser.Math.RandomDataGenerator) {
+    if (theme.id === 'greenhouse') {
+      this.drawGreenhouse(theme, random);
+      return;
+    }
+    if (theme.id === 'reactor') {
+      this.drawFrozenReactor(theme, random);
+      return;
+    }
     const animated = this.quality.tier !== 'low';
     const centerX = ARENA.width / 2;
     const centerY = ARENA.height / 2;
@@ -108,6 +116,79 @@ export class ArenaPresenter {
       const mote = this.scene.add.circle(x, y, random.between(1, 3), theme.secondary, 0.18).setDepth(-2);
       this.scene.tweens.add({ targets: mote, x: x + random.between(-35, 35), y: y - 65,
         alpha: 0.04, duration: random.between(4000, 7000), yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+    }
+  }
+
+  private drawGreenhouse(theme: ArenaTheme, random: Phaser.Math.RandomDataGenerator) {
+    const animated = this.quality.tier !== 'low';
+    const layer = this.scene.add.container(0, 0).setDepth(-5).setName('arena-biome-greenhouse');
+    // Thick segmented roots cross the floor in irregular silhouettes without becoming collision walls.
+    const roots = this.scene.add.graphics();
+    for (let root = 0; root < 7; root++) {
+      let x = root % 2 ? 0 : ARENA.width;
+      let y = 120 + root * 155;
+      roots.lineStyle(18 - root % 3 * 3, root % 2 ? 0x174c30 : 0x285b38, 0.65).beginPath().moveTo(x, y);
+      for (let segment = 1; segment <= 6; segment++) {
+        x += (root % 2 ? 1 : -1) * ARENA.width / 6;
+        y += random.between(-70, 70);
+        roots.lineTo(x, y);
+      }
+      roots.strokePath();
+    }
+    layer.add(roots);
+    // Spore pools create large landmarks that read differently from laboratory machinery.
+    for (const [x, y, scale] of [[300, 250, 1], [1680, 890, 1.2], [1010, 970, 0.8]] as const) {
+      const pool = this.scene.add.ellipse(x, y, 210 * scale, 90 * scale, 0x183f2b, 0.78)
+        .setStrokeStyle(5, theme.accent, 0.28);
+      const core = this.scene.add.ellipse(x, y, 120 * scale, 48 * scale, theme.secondary, 0.12);
+      layer.add([pool, core]);
+      if (animated) this.scene.tweens.add({ targets: core, scale: 1.18, alpha: 0.26,
+        duration: 1800 + x % 700, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+    }
+    const towers = this.quality.tier === 'low' ? 5 : 9;
+    for (let index = 0; index < towers; index++) {
+      const x = 130 + (index * 223) % (ARENA.width - 220);
+      const y = index % 2 ? 130 : ARENA.height - 130;
+      const stem = this.scene.add.rectangle(x, y, 18, 76, 0x285b38, 0.85);
+      const cap = this.scene.add.ellipse(x, y - 42, 82, 34, 0x703b83, 0.9).setStrokeStyle(3, 0xd566ff, 0.5);
+      const spores = this.scene.add.circle(x, y - 43, 7, theme.accent, 0.65).setBlendMode(Phaser.BlendModes.ADD);
+      layer.add([stem, cap, spores]);
+      if (animated) this.scene.tweens.add({ targets: spores, scale: 2.2, alpha: 0.12,
+        duration: 1300 + index * 90, yoyo: true, repeat: -1 });
+    }
+  }
+
+  private drawFrozenReactor(theme: ArenaTheme, random: Phaser.Math.RandomDataGenerator) {
+    const animated = this.quality.tier !== 'low';
+    const layer = this.scene.add.container(0, 0).setDepth(-5).setName('arena-biome-reactor');
+    const pipes = this.scene.add.graphics();
+    pipes.lineStyle(28, 0x18264d, 0.9).lineBetween(0, 155, 760, 155).lineBetween(1240, 1045, ARENA.width, 1045)
+      .lineBetween(170, 0, 170, 430).lineBetween(1830, 770, 1830, ARENA.height)
+      .lineStyle(5, theme.accent, 0.32).lineBetween(0, 155, 760, 155).lineBetween(1240, 1045, ARENA.width, 1045);
+    layer.add(pipes);
+    for (const [x, y] of [[760, 155], [1240, 1045], [170, 430], [1830, 770]] as const) {
+      const rupture = this.scene.add.circle(x, y, 31, 0x091020, 1).setStrokeStyle(6, 0x76a9ff, 0.55);
+      layer.add(rupture);
+      const vaporCount = this.quality.tier === 'low' ? 1 : 3;
+      for (let mote = 0; mote < vaporCount; mote++) {
+        const vapor = this.scene.add.circle(x, y, 13 + mote * 5, 0xbce8ff, 0.13);
+        layer.add(vapor);
+        if (animated) this.scene.tweens.add({ targets: vapor, x: x + random.between(-55, 55), y: y - 95,
+          scale: 1.8, alpha: 0, duration: 2200 + mote * 500, delay: mote * 420, repeat: -1 });
+      }
+    }
+    const crystalCount = this.quality.tier === 'low' ? 9 : 16;
+    for (let index = 0; index < crystalCount; index++) {
+      const x = 90 + random.between(0, ARENA.width - 180);
+      const y = index % 2 ? 80 + random.between(0, 120) : ARENA.height - 80 - random.between(0, 120);
+      const height = random.between(35, 82);
+      const crystal = this.scene.add.graphics().setPosition(x, y)
+        .fillStyle(index % 3 ? 0x527ed1 : 0x9bdcff, 0.52)
+        .fillTriangle(-18, 15, 0, -height, 18, 15)
+        .lineStyle(2, 0xccefff, 0.55).strokeTriangle(-18, 15, 0, -height, 18, 15);
+      layer.add(crystal);
+      if (animated) this.scene.tweens.add({ targets: crystal, alpha: { from: 0.55, to: 0.9 },
+        duration: 1200 + index * 70, yoyo: true, repeat: -1 });
     }
   }
 

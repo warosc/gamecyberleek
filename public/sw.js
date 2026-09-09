@@ -1,4 +1,4 @@
-const CACHE = 'leek-ops-v18';
+const CACHE = 'leek-ops-v19';
 const SHELL = ['/', '/manifest.webmanifest'];
 self.addEventListener('install', (event) =>
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting())),
