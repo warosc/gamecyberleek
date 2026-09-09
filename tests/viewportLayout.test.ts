@@ -9,7 +9,8 @@ describe('mobile viewport layout', () => {
   it('uses a phone landscape aspect in either orientation and caps ultrawide screens', () => {
     expect(logicalWidthForViewport({ width: 750, height: 342, coarsePointer: true })).toBe(1579);
     expect(logicalWidthForViewport({ width: 342, height: 750, coarsePointer: true })).toBe(1579);
-    expect(logicalWidthForViewport({ width: 1000, height: 300, coarsePointer: true })).toBe(1600);
+    expect(logicalWidthForViewport({ width: 1000, height: 300, coarsePointer: true })).toBe(2048);
+    expect(logicalWidthForViewport({ width: 1280, height: 490, coarsePointer: true })).toBe(1881);
   });
 
   it('never narrows the authored 16:9 layout and only zooms the mobile world', () => {

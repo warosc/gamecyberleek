@@ -6,12 +6,13 @@ export interface ViewportShape {
 
 export const DESIGN_HEIGHT = 720;
 export const DESKTOP_WIDTH = 1280;
-export const MAX_MOBILE_WIDTH = 1600;
+export const MAX_MOBILE_WIDTH = 2048;
 
 /**
  * Phones are much wider than 16:9 in landscape. Matching that aspect ratio avoids shrinking a
  * 1280x720 canvas inside pillarboxes. The upper bound keeps ultrawide devices from exposing an
- * excessive amount of the arena or stretching the HUD too far apart.
+ * excessive amount of the arena. Modern Safari can expose a viewport wider than 2.5:1 while
+ * its browser chrome is visible, so the old 1600 cap still created pillarboxes on real phones.
  */
 export function logicalWidthForViewport(viewport: ViewportShape) {
   if (!viewport.coarsePointer) return DESKTOP_WIDTH;

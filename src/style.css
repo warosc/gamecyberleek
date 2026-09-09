@@ -88,9 +88,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Keep the canvas and touch HUD clear of iPhone notches/home indicators. */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /* The authored mobile HUD already sits inside the safe region. Padding this parent changes
+     Phaser's aspect ratio and creates the large asymmetric bar visible in landscape Safari. */
+  padding: 0;
 }
 canvas {
   display: block;

@@ -16,6 +16,12 @@ export class MobileControls {
     const height = GAME_HEIGHT;
     const moveCenter = new Phaser.Math.Vector2(112, height - 130);
     const aimCenter = new Phaser.Math.Vector2(width - 112, height - 130);
+    // Large invisible capture zones make the controls forgiving on a moving phone. They sit
+    // behind every visible button, so dash, powers and inventory still receive their taps.
+    const moveZone = this.scene.add.rectangle(width * 0.2, height * 0.72, width * 0.4, height * 0.56, 0, 0)
+      .setInteractive().setDepth(-1).setName('touch-move-zone');
+    const aimZone = this.scene.add.rectangle(width * 0.8, height * 0.72, width * 0.4, height * 0.56, 0, 0)
+      .setInteractive().setDepth(-1).setName('touch-aim-zone');
     const moveBase = this.scene.add.circle(moveCenter.x, moveCenter.y, 74, 0x07111f, .38)
       .setStrokeStyle(3, 0x21e6ff, .55).setInteractive().setDepth(60);
     const moveKnob = this.scene.add.circle(moveCenter.x, moveCenter.y, 28, 0x21e6ff, .5).setDepth(61);
@@ -42,15 +48,20 @@ export class MobileControls {
     const toggleAuto = () => { this.game.mobileInput.autoFire = !this.game.mobileInput.autoFire; updateProfile({ autoFire: this.game.mobileInput.autoFire }); autoLabel.setText(this.game.mobileInput.autoFire ? 'AUTO ON' : 'AUTO OFF'); auto.setStrokeStyle(3, this.game.mobileInput.autoFire ? 0x73ef62 : 0x7594a8, .9); };
     auto.on('pointerup', toggleAuto); this.disposers.push(() => auto.off('pointerup', toggleAuto));
     const updateStick = (pointer: Phaser.Input.Pointer, center: Phaser.Math.Vector2, knob: Phaser.GameObjects.Arc, output: Phaser.Math.Vector2) => { output.set(pointer.x - center.x, pointer.y - center.y); if (output.length() > 74) output.setLength(74); knob.setPosition(center.x + output.x, center.y + output.y); output.scale(1 / 74); };
-    const reset = () => { this.movePointer = -1; this.aimPointer = -1; this.game.mobileInput.movement.set(0, 0); this.game.mobileInput.firing = false; moveKnob.setPosition(moveCenter.x, moveCenter.y); aimKnob.setPosition(aimCenter.x, aimCenter.y); setFocus(moveVisuals, false); setFocus(aimVisuals, false); };
+    const reset = () => { this.movePointer = -1; this.aimPointer = -1; this.game.mobileInput.movement.set(0, 0); this.game.mobileInput.aim.set(0, 0); this.game.mobileInput.firing = false; this.game.mobileInput.dash = false; moveKnob.setPosition(moveCenter.x, moveCenter.y); aimKnob.setPosition(aimCenter.x, aimCenter.y); setFocus(moveVisuals, false); setFocus(aimVisuals, false); };
     const onMove = (p: Phaser.Input.Pointer) => { if (p.id === this.movePointer) updateStick(p, moveCenter, moveKnob, this.game.mobileInput.movement); if (p.id === this.aimPointer) updateStick(p, aimCenter, aimKnob, this.game.mobileInput.aim); };
     const onUp = (p: Phaser.Input.Pointer) => { if (p.id === this.movePointer) { this.movePointer = -1; this.game.mobileInput.movement.set(0, 0); moveKnob.setPosition(moveCenter.x, moveCenter.y); setFocus(moveVisuals, false); } if (p.id === this.aimPointer) { this.aimPointer = -1; this.game.mobileInput.firing = false; aimKnob.setPosition(aimCenter.x, aimCenter.y); setFocus(aimVisuals, false); } };
-    moveBase.on('pointerdown', (p: Phaser.Input.Pointer) => { this.movePointer = p.id; setFocus(moveVisuals, true); updateStick(p, moveCenter, moveKnob, this.game.mobileInput.movement); });
-    aimBase.on('pointerdown', (p: Phaser.Input.Pointer) => { this.aimPointer = p.id; this.game.mobileInput.firing = true; setFocus(aimVisuals, true); updateStick(p, aimCenter, aimKnob, this.game.mobileInput.aim); });
+    const beginMove = (p: Phaser.Input.Pointer) => { if (this.movePointer !== -1) return; this.movePointer = p.id; setFocus(moveVisuals, true); updateStick(p, moveCenter, moveKnob, this.game.mobileInput.movement); };
+    const beginAim = (p: Phaser.Input.Pointer) => { if (this.aimPointer !== -1) return; this.aimPointer = p.id; this.game.mobileInput.firing = true; setFocus(aimVisuals, true); updateStick(p, aimCenter, aimKnob, this.game.mobileInput.aim); };
+    moveBase.on('pointerdown', beginMove); moveZone.on('pointerdown', beginMove);
+    aimBase.on('pointerdown', beginAim); aimZone.on('pointerdown', beginAim);
     dash.on('pointerdown', () => { this.game.mobileInput.dash = true; this.scene.tweens.add({ targets: [dash, dashLabel], scale: 1.12, duration: 80, yoyo: true }); });
-    this.scene.input.on('pointermove', onMove); this.scene.input.on('pointerup', onUp); this.scene.input.on('pointercancel', reset); this.scene.input.on('gameout', reset);
+    const onVisibility = () => { if (document.hidden) reset(); };
+    this.scene.input.on('pointermove', onMove); this.scene.input.on('pointerup', onUp); this.scene.input.on('pointercancel', onUp); this.scene.input.on('gameout', reset);
+    window.addEventListener('blur', reset); window.addEventListener('pagehide', reset);
+    document.addEventListener('visibilitychange', onVisibility);
     this.scene.events.once('shutdown', reset);
-    this.disposers.push(() => { this.scene.input.off('pointermove', onMove); this.scene.input.off('pointerup', onUp); this.scene.input.off('pointercancel', reset); this.scene.input.off('gameout', reset); });
+    this.disposers.push(() => { this.scene.input.off('pointermove', onMove); this.scene.input.off('pointerup', onUp); this.scene.input.off('pointercancel', onUp); this.scene.input.off('gameout', reset); window.removeEventListener('blur', reset); window.removeEventListener('pagehide', reset); document.removeEventListener('visibilitychange', onVisibility); });
   }
 
   destroy() { this.disposers.splice(0).forEach((dispose) => dispose()); this.game.mobileInput.movement.set(0, 0); this.game.mobileInput.firing = false; }

@@ -40,6 +40,10 @@ export class PlayerController {
   }
 
   wantsDash(virtual?: VirtualPlayerInput) {
-    return Phaser.Input.Keyboard.JustDown(this.keys.dash) || Boolean(virtual?.dash);
+    const touchDash = Boolean(virtual?.dash);
+    // A touch is an impulse, not a held keyboard key. Consume it here so an interrupted
+    // pointer cannot leave dash active and retrigger it every time the cooldown expires.
+    if (virtual) virtual.dash = false;
+    return Phaser.Input.Keyboard.JustDown(this.keys.dash) || touchDash;
   }
 }

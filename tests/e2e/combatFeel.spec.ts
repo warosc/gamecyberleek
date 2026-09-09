@@ -69,10 +69,11 @@ test('dash commits to input direction and protects only during its window', asyn
     s.player.takeDamage(10);
     const after=s.player.health.current;
     s.player.takeDamage(10);
-    return {during,direction,after,protectedFromStack:s.player.health.current};
+    return {during,direction,after,protectedFromStack:s.player.health.current,dashConsumed:v.dash};
   });
   expect(r.during).toBe(100); expect(r.direction).toBe(600);
   expect(r.after).toBe(90); expect(r.protectedFromStack).toBe(90);
+  expect(r.dashConsumed).toBe(false);
 });
 
 test('three milestone choices resume safely and the finale starts once at four minutes', async ({page}) => {
@@ -246,6 +247,27 @@ test('three rapid eliminations activate momentum and increase XP', async ({ page
   expect(result.shardVisible).toBe(true);
   expect(result.xpExplained).toBe(true);
   expect(result.momentumVisible).toBe(true);
+});
+
+test('wide Safari landscape fills the complete viewport without side bars', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 490 });
+  await deploy(page);
+  const layout = await page.evaluate(() => {
+    const rect = document.querySelector('canvas')!.getBoundingClientRect();
+    const ui = window.combatGame.scene.getScene('UI');
+    return {
+      coverageX: rect.width / window.innerWidth,
+      coverageY: rect.height / window.innerHeight,
+      logicalWidth: window.combatGame.scale.gameSize.width,
+      moveZone: Boolean(ui.children.getByName('touch-move-zone')),
+      aimZone: Boolean(ui.children.getByName('touch-aim-zone')),
+    };
+  });
+  expect(layout.coverageX).toBeGreaterThan(0.995);
+  expect(layout.coverageY).toBeGreaterThan(0.995);
+  expect(layout.logicalWidth).toBe(1881);
+  expect(layout.moveZone).toBe(true);
+  expect(layout.aimZone).toBe(true);
 });
 
 test('mid-run miniboss spawns once, keeps the run active and guarantees equipment', async ({ page }) => {
