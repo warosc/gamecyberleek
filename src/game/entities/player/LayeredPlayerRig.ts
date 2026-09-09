@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { PLAYER_RIG_LAYERS, type PlayerRigLayer } from './PlayerRigManifest';
 import type { PlayerAnimationState, PlayerVisualAdapter } from './PlayerAnimator';
+import type { WeaponMode } from './WeaponSilhouettes';
 import {
   PLAYER_RIG_SKELETON,
   rigOrigin,
@@ -71,6 +72,7 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
   private aimPitch = 0;
   private aimAngle = 0;
   private recoilAt = -1000;
+  private weaponMode: WeaponMode = 'pulse';
 
   setAim(angle: number) {
     this.aimAngle = angle;
@@ -91,6 +93,7 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
   recoil(time: number) {
     this.recoilAt = time;
   }
+  setWeaponMode(mode: WeaponMode) { this.weaponMode = mode; }
 
   static create(scene: Phaser.Scene) {
     if (!PLAYER_RIG_LAYERS.every((layer) => scene.textures.exists(`rig-${layer}`))) return undefined;
@@ -271,6 +274,16 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
       const upperWorld = localAim - upperRestAngle + bend;
       upper.rotation += upperWorld - torsoAngle;
       fore.rotation += localAim - foreRestAngle - bend - upperWorld;
+      if (this.weaponMode === 'plasma' || this.weaponMode === 'laser') {
+        // Heavy and long weapons use the left hand as a support point beneath the barrel.
+        const leftUpperRest = Math.atan2(65, -29);
+        const leftForeRest = Math.atan2(50, -3);
+        const leftUpper = this.pose.get('arm-left-upper')!;
+        const leftFore = this.pose.get('arm-left-fore')!;
+        const supportWorld = localAim - leftUpperRest - 0.1;
+        leftUpper.rotation += supportWorld - torsoAngle;
+        leftFore.rotation += localAim - leftForeRest + 0.2 - supportWorld;
+      }
     }
 
     // Leaves trail the body: the spring is driven by horizontal speed and by the lean, with a

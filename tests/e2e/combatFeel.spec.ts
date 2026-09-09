@@ -334,10 +334,66 @@ test('a new weapon replaces the active weapon, its stats and its visible model',
     };
   });
   expect(equipped).toEqual({
-    count: 1,
+    count: 2,
     name: 'CAÑÓN DE PLASMA MK-1',
     mode: 'plasma',
     damage: 29,
     art: 'weapon-plasma',
   });
+});
+
+test('inventory opens, swaps stored weapons, recycles items and activates a set synergy', async ({ page }) => {
+  await deploy(page);
+  await page.evaluate(async () => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const equipmentPath = '/src/game/loot/Equipment.ts';
+    const { rollEquipment } = await import(equipmentPath);
+    const makeRoll = (values: number[]) => {
+      let index = 0;
+      return () => values[index++] ?? 0;
+    };
+    const internal = scene as unknown as { pendingLoot?: ReturnType<typeof rollEquipment> };
+    for (const values of [[0.1, 0.1, 0.99], [0.1, 0.1, 0.1], [0.1, 0.9, 0.1]]) {
+      internal.pendingLoot = rollEquipment(3, makeRoll(values));
+      scene.state = 'INVENTORY' as typeof scene.state;
+      scene.resolveLoot(true);
+    }
+  });
+  await page.evaluate(() => {
+    const ui = window.combatGame.scene.getScene('UI');
+    (ui.children.getByName('hud-inventory') as Phaser.GameObjects.Rectangle).emit('pointerup');
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const ui = window.combatGame.scene.getScene('UI');
+    return {
+      state: scene.state,
+      slots: ui.children.list.flatMap(child =>
+        (child as Phaser.GameObjects.Container).list ?? [child]
+      ).filter(child => child.name.startsWith('inventory-slot-')).length,
+      mobileButton: Boolean(ui.children.getByName('hud-inventory')),
+    };
+  })).toEqual({ state: 'INVENTORY', slots: 6, mobileButton: true });
+  const result = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    scene.equipInventoryWeapon(0);
+    scene.recycleInventoryItem(1);
+    const weapon = scene.player.getByName('player-aimed-weapon') as Phaser.GameObjects.Container;
+    return {
+      count: scene.inventory.count,
+      mode: scene.player.stats.weaponMode,
+      synergy: scene.activeSynergy?.id,
+      damage: scene.player.stats.attackDamage,
+      evolved: Boolean(weapon.getByName('weapon-evolution-crown')),
+    };
+  });
+  expect(result).toEqual({ count: 2, mode: 'plasma', synergy: 'plague-bastion', damage: 47, evolved: false });
+  await page.keyboard.press('i');
+  await expect.poll(() => page.evaluate(() =>
+    (window.combatGame.scene.getScene('Game') as GameScene).state)).toBe('PLAYING');
+  await expect.poll(() => page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const weapon = scene.player.getByName('player-aimed-weapon') as Phaser.GameObjects.Container;
+    return Boolean(weapon.getByName('weapon-evolution-crown'));
+  })).toBe(true);
 });

@@ -63,6 +63,7 @@ export const Events = {
   CHEST_OPENED: 'chest-opened',
   LOOT_COLLECTED: 'loot-collected',
   LOOT_FOUND: 'loot-found',
+  INVENTORY_OPENED: 'inventory-opened',
   EQUIPMENT_CHANGED: 'equipment-changed',
   RUN_PHASE_CHANGED: 'run-phase-changed',
   WEAPON_EVOLVED: 'weapon-evolved',

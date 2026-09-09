@@ -19,8 +19,11 @@ describe('run inventory', () => {
     const second = rollEquipment(4, () => 0.1);
     expect(inventory.equipWeapon(first)).toEqual({ accepted: true, replaced: undefined });
     expect(inventory.equipWeapon(second)).toEqual({ accepted: true, replaced: first });
-    expect(inventory.count).toBe(1);
+    expect(inventory.count).toBe(2);
     expect(inventory.equippedWeapon).toBe(second);
-    expect(inventory.contents).toEqual([second]);
+    expect(inventory.contents).toEqual([first, second]);
+    expect(inventory.activateWeapon(0)).toEqual({ accepted: true, previous: second, current: first });
+    expect(inventory.recycle(1)).toBe(second);
+    expect(inventory.count).toBe(1);
   });
 });

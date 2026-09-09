@@ -33,6 +33,7 @@ import { SectorDeviceSystem, type SectorDeviceActivation } from '../systems/Sect
 import { BossPhaseDirector } from '../systems/BossPhaseDirector';
 import { RunInventory } from '../systems/RunInventory';
 import { applyEquipmentModifiers, removeEquipmentModifiers, type Equipment } from '../loot/Equipment';
+import { activeBuildSynergy, combatRating, type BuildSynergy } from '../systems/BuildProgression';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -83,6 +84,8 @@ export class GameScene extends Phaser.Scene {
   private bossPhases!: BossPhaseDirector;
   inventory = new RunInventory();
   private pendingLoot?: Equipment;
+  activeSynergy?: BuildSynergy;
+  private inventoryReturnState = GameState.PLAYING;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
   private readonly handlePlayerDamaged = (_current: number, _max: number, applied?: number) => {
@@ -107,8 +110,10 @@ export class GameScene extends Phaser.Scene {
   private readonly handlePlayerDashed = () => this.audio.play('dash');
   private readonly handleWeaponFired = (x: number, y: number, angle: number) => {
     this.telemetry.shotFired();
-    this.audio.play(this.player.stats.weaponMode === 'plasma' ? 'spore_fire' : this.player.stats.weaponMode === 'arc' ? 'arc_fire' : 'weapon_fire');
-    this.effects.muzzle(x, y, angle);
+    this.audio.play(this.player.stats.weaponMode === 'plasma' ? 'spore_fire' :
+      this.player.stats.weaponMode === 'arc' ? 'arc_fire' :
+        this.player.stats.weaponMode === 'laser' ? 'laser_fire' : 'weapon_fire');
+    this.effects.muzzle(x, y, angle, this.player.stats.weaponMode, this.player.stats.projectileColor);
   };
   private readonly handleEscape = (event: KeyboardEvent) => {
     if (!event.repeat) this.togglePause();
@@ -154,6 +159,7 @@ export class GameScene extends Phaser.Scene {
     this.xpIntroduced = false;
     this.inventory = new RunInventory();
     this.pendingLoot = undefined;
+    this.activeSynergy = undefined;
     this.deaths = new EnemyDeathResolver();
     this.momentum = new CombatMomentum();
     this.telemetry = new RunTelemetry();
@@ -245,6 +251,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on('enemy-attack', this.handleEnemyAttack);
     this.events.on(Events.PLAYER_DASHED, this.handlePlayerDashed);
     this.input.keyboard!.on('keydown-ESC', this.handleEscape);
+    this.input.keyboard!.on('keydown-I', this.toggleInventory, this);
     this.game.events.on(Phaser.Core.Events.BLUR, this.handleFocusLost);
     this.game.events.on(Phaser.Core.Events.HIDDEN, this.handleFocusLost);
     this.events.on(Events.STATE_CHANGED, this.syncGameplayPause);
@@ -267,6 +274,7 @@ export class GameScene extends Phaser.Scene {
       this.events.off('enemy-attack', this.handleEnemyAttack);
       this.events.off(Events.PLAYER_DASHED, this.handlePlayerDashed);
       this.input.keyboard?.off('keydown-ESC', this.handleEscape);
+      this.input.keyboard?.off('keydown-I', this.toggleInventory, this);
       this.game.events.off(Phaser.Core.Events.BLUR, this.handleFocusLost);
       this.game.events.off(Phaser.Core.Events.HIDDEN, this.handleFocusLost);
       this.events.off(Events.STATE_CHANGED, this.syncGameplayPause);
@@ -509,18 +517,19 @@ export class GameScene extends Phaser.Scene {
     if (this.state !== GameState.INVENTORY || !this.pendingLoot) return;
     const equipment = this.pendingLoot;
     this.pendingLoot = undefined;
+    if (install) this.clearBuildSynergy();
     const weaponSwap = equipment.kind === 'weapon' && install
       ? this.inventory.equipWeapon(equipment)
       : undefined;
     const installed = install && (weaponSwap?.accepted ||
-      (equipment.kind === 'armor' && this.inventory.install(equipment)));
+      (equipment.kind !== 'weapon' && this.inventory.install(equipment)));
     if (installed) {
       const oldMaxHp = this.player.stats.maxHp;
       if (weaponSwap?.replaced)
         removeEquipmentModifiers(this.player.stats, weaponSwap.replaced.modifiers);
       applyEquipmentModifiers(this.player.stats, equipment.modifiers);
       if (equipment.kind === 'weapon') this.equippedWeapon = equipment.name;
-      else this.equippedArmor = equipment.name;
+      else if (equipment.kind === 'armor') this.equippedArmor = equipment.name;
       this.telemetry.equipped(this.equippedWeapon);
       if (this.player.stats.maxHp > oldMaxHp) {
         const gainedHp = this.player.stats.maxHp - oldMaxHp;
@@ -533,10 +542,71 @@ export class GameScene extends Phaser.Scene {
       this.player.health.heal(12);
       this.effects.floatingText(this.player.x, this.player.y - 55, 'RECICLADO +12 HP', '#73ef62', 15);
     }
+    if (install) this.refreshBuildSynergy();
     this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
     this.state = this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
     this.physics.resume();
     this.events.emit(Events.STATE_CHANGED, this.state);
+  }
+  toggleInventory() {
+    if (this.victoryPending) return;
+    if (this.state === GameState.INVENTORY && !this.pendingLoot) {
+      this.state = this.inventoryReturnState;
+      this.physics.resume();
+      this.events.emit(Events.STATE_CHANGED, this.state);
+      return;
+    }
+    if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
+    this.inventoryReturnState = this.state;
+    this.state = GameState.INVENTORY;
+    this.physics.pause();
+    this.events.emit(Events.STATE_CHANGED, this.state);
+    this.emitInventory();
+  }
+  equipInventoryWeapon(index: number) {
+    if (this.state !== GameState.INVENTORY || this.pendingLoot) return false;
+    const swap = this.inventory.activateWeapon(index);
+    if (!swap.accepted || !swap.current) return false;
+    this.clearBuildSynergy();
+    if (swap.previous) removeEquipmentModifiers(this.player.stats, swap.previous.modifiers);
+    applyEquipmentModifiers(this.player.stats, swap.current.modifiers);
+    this.equippedWeapon = swap.current.name;
+    this.refreshBuildSynergy();
+    this.telemetry.equipped(this.equippedWeapon);
+    this.events.emit(Events.EQUIPMENT_CHANGED, this.equippedWeapon, this.equippedArmor);
+    this.emitInventory();
+    return true;
+  }
+  recycleInventoryItem(index: number) {
+    if (this.state !== GameState.INVENTORY || this.pendingLoot) return false;
+    const item = this.inventory.contents[index];
+    if (!item || item === this.inventory.equippedWeapon) return false;
+    this.clearBuildSynergy();
+    const recycled = this.inventory.recycle(index);
+    if (!recycled) return false;
+    if (recycled.kind !== 'weapon') removeEquipmentModifiers(this.player.stats, recycled.modifiers);
+    if (recycled.kind === 'armor')
+      this.equippedArmor = [...this.inventory.contents].reverse().find(entry => entry.kind === 'armor')?.name ?? 'SIN ARMADURA';
+    this.player.health.max = this.player.stats.maxHp;
+    this.player.health.heal(8);
+    this.refreshBuildSynergy();
+    this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
+    this.events.emit(Events.EQUIPMENT_CHANGED, this.equippedWeapon, this.equippedArmor);
+    this.emitInventory();
+    return true;
+  }
+  private emitInventory() {
+    this.events.emit(Events.INVENTORY_OPENED, this.inventory.contents,
+      this.inventory.equippedWeapon, this.activeSynergy, combatRating(this.player.stats));
+  }
+  private clearBuildSynergy() {
+    if (this.activeSynergy) removeEquipmentModifiers(this.player.stats, this.activeSynergy.modifiers);
+    this.activeSynergy = undefined;
+  }
+  private refreshBuildSynergy() {
+    this.activeSynergy = activeBuildSynergy(this.inventory.contents, this.inventory.equippedWeapon);
+    if (this.activeSynergy) applyEquipmentModifiers(this.player.stats, this.activeSynergy.modifiers);
+    this.player.setWeaponTier(this.activeSynergy ? 2 : (this.inventory.equippedWeapon?.rarity === 'LEGENDARY' ? 2 : 1));
   }
   selectChestReward(id: 'repair' | 'charge' | 'weapon') {
     if (id === 'repair') {

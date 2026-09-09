@@ -1,6 +1,6 @@
 import { createPlayerStats, type PlayerStats } from '../entities/player/PlayerStats';
 
-export type EquipmentKind = 'weapon' | 'armor';
+export type EquipmentKind = 'weapon' | 'armor' | 'module';
 export type EquipmentRarity = 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
 
 export interface EquipmentModifier {
@@ -17,6 +17,8 @@ export interface Equipment {
   rarity: EquipmentRarity;
   description: string;
   color: number;
+  itemLevel: number;
+  power: number;
   /** @deprecated Compatibility bridge for callers outside the loot pipeline. */
   apply: (stats: PlayerStats) => void;
 }
@@ -105,8 +107,11 @@ function rollRarity(level: number, random: () => number): EquipmentRarity {
 export function rollEquipment(level: number, random = Math.random): Equipment {
   const rarity = rollRarity(level, random);
   const { multiplier, color } = rarityData[rarity];
-  const weapon = random() < 0.62;
+  const kindRoll = random();
+  const weapon = kindRoll < 0.55;
+  const module = kindRoll >= 0.55 && kindRoll < 0.72;
   const tier = Math.max(1, Math.ceil(level / 3));
+  const rarityPower: Record<EquipmentRarity, number> = { COMMON: 0, RARE: 8, EPIC: 18, LEGENDARY: 34 };
   if (weapon) {
     const choices = [
       {
@@ -165,7 +170,22 @@ export function rollEquipment(level: number, random = Math.random): Equipment {
       },
     ];
     const choice = choices[Math.floor(random() * choices.length)];
-    return { ...choice, id: `weapon.${choice.name.toLowerCase().replaceAll(' ', '-')}`, modifiers: structuredModifiers(choice.apply), name: `${choice.name} MK-${tier}`, kind: 'weapon', rarity, color };
+    return { ...choice, id: `weapon.${choice.name.toLowerCase().replaceAll(' ', '-')}`, modifiers: structuredModifiers(choice.apply), name: `${choice.name} MK-${tier}`, kind: 'weapon', rarity, color,
+      itemLevel: tier * 10 + rarityPower[rarity], power: Math.round(tier * 12 + multiplier * 10) };
+  }
+  if (module) {
+    const moduleChoices = [
+      { name: 'MATRIZ MICELIAL', description: `+${Math.round(5 * multiplier)} daño · +${Math.round(12 * multiplier)} radio de recolección`,
+        apply: (stats: PlayerStats) => { stats.attackDamage += Math.round(5 * multiplier); stats.magnetRadius += Math.round(12 * multiplier); } },
+      { name: 'CONDUCTOR DE SAVIA', description: `+${Math.round(3 * multiplier)}% crítico · +${Math.round(35 * multiplier)} alcance de cadena`,
+        apply: (stats: PlayerStats) => { stats.criticalChance += 0.03 * multiplier; stats.chainRange += Math.round(35 * multiplier); } },
+      { name: 'ÓPTICA FOTOSINTÉTICA', description: `+${Math.round(70 * multiplier)} velocidad de proyectil · +1 perforación`,
+        apply: (stats: PlayerStats) => { stats.projectileSpeed += Math.round(70 * multiplier); stats.bonusPiercing += 1; } },
+    ];
+    const choice = moduleChoices[Math.floor(random() * moduleChoices.length)];
+    return { ...choice, id: `module.${choice.name.toLowerCase().replaceAll(' ', '-')}`, modifiers: structuredModifiers(choice.apply),
+      name: `${choice.name} MK-${tier}`, kind: 'module', rarity, color,
+      itemLevel: tier * 10 + rarityPower[rarity], power: Math.round(tier * 11 + multiplier * 9) };
   }
   const armorChoices = [
     {
@@ -194,5 +214,6 @@ export function rollEquipment(level: number, random = Math.random): Equipment {
     },
   ];
   const choice = armorChoices[Math.floor(random() * armorChoices.length)];
-  return { ...choice, id: `armor.${choice.name.toLowerCase().replaceAll(' ', '-')}`, modifiers: structuredModifiers(choice.apply), name: `${choice.name} MK-${tier}`, kind: 'armor', rarity, color };
+  return { ...choice, id: `armor.${choice.name.toLowerCase().replaceAll(' ', '-')}`, modifiers: structuredModifiers(choice.apply), name: `${choice.name} MK-${tier}`, kind: 'armor', rarity, color,
+    itemLevel: tier * 10 + rarityPower[rarity], power: Math.round(tier * 10 + multiplier * 9) };
 }

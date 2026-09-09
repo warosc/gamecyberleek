@@ -21,6 +21,7 @@ export type AudioEventId =
   | 'weapon_fire'
   | 'spore_fire'
   | 'arc_fire'
+  | 'laser_fire'
   | 'enemy_hit'
   | 'critical_hit'
   | 'enemy_death'
@@ -98,6 +99,13 @@ export const AUDIO_EVENTS: Record<AudioEventId, AudioEventDefinition> = {
     tones: [
       { frequency: 390, durationS: 0.055, volume: 0.024, type: 'square' },
       { frequency: 780, durationS: 0.04, volume: 0.016, delayMs: 20, type: 'triangle' },
+    ],
+  },
+  laser_fire: {
+    category: 'sfx',
+    tones: [
+      { frequency: 1180, durationS: 0.045, volume: 0.018, type: 'sine' },
+      { frequency: 410, durationS: 0.075, volume: 0.014, delayMs: 14, type: 'sawtooth' },
     ],
   },
   enemy_hit: { category: 'sfx', tones: [{ frequency: 135, durationS: 0.035, volume: 0.025, type: 'square' }] },

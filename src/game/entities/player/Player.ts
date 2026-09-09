@@ -31,6 +31,7 @@ export class Player extends Phaser.GameObjects.Container {
   private overdriveRing: Phaser.GameObjects.Graphics;
   private shadow: Phaser.GameObjects.Ellipse;
   private gameplayTime = 0;
+  private weaponTier = 1;
   constructor(scene: Phaser.Scene, x: number, y: number, weaponId: StarterWeaponId = 'pulse') {
     super(scene, x, y);
     applyStarterWeapon(this.stats, weaponId);
@@ -83,7 +84,7 @@ export class Player extends Phaser.GameObjects.Container {
     ]);
     if (rig) this.add(rig);
     this.weapon = new WeaponVisual(scene);
-    this.weapon.setWeapon(this.stats.weaponMode, this.stats.projectileColor);
+    this.weapon.setWeapon(this.stats.weaponMode, this.stats.projectileColor, this.weaponTier);
     this.add(this.weapon);
     this.animator = new PlayerAnimator(scene, reference, rig?.setAnimationState.bind(rig));
     this.setSize(46, 75);
@@ -134,6 +135,7 @@ export class Player extends Phaser.GameObjects.Container {
     // Mirror the rig first: it converts world velocity into its own local axis using facing.
     this.layeredRig?.setFlipX(facing < 0);
     this.layeredRig?.setAim(this.aim);
+    this.layeredRig?.setWeaponMode(this.stats.weaponMode);
     this.layeredRig?.setMotion(v.x * speed, v.y * speed, dashing, this.stats.moveSpeed);
     this.animator.update(time, v, dashing, facing);
     const socket = this.layeredRig?.getWeaponSocket() ?? {
@@ -141,9 +143,9 @@ export class Player extends Phaser.GameObjects.Container {
       y: Math.sin(this.aim) * 22,
       angle: this.aim,
     };
-    this.weapon.setWeapon(this.stats.weaponMode, this.stats.projectileColor);
+    this.weapon.setWeapon(this.stats.weaponMode, this.stats.projectileColor, this.weaponTier);
     this.weapon.setPosition(socket.x, socket.y).setRotation(socket.angle)
-      .setRecoil(recoil).setAlpha(dashing ? 0.5 : 1);
+      .setRecoil(recoil).animate(time, recoil > 0).setAlpha(dashing ? 0.5 : 1);
     // Ground contact: the shadow tightens as the character rises into a dash.
     this.shadow.setScale(dashing ? 0.78 : 1, dashing ? 0.72 : 1).setAlpha(dashing ? 0.3 : 0.48);
     if (dashing && time - this.lastTrail > 45) {
@@ -248,6 +250,7 @@ export class Player extends Phaser.GameObjects.Container {
   get animationState() {
     return this.animator.currentState;
   }
+  setWeaponTier(tier: number) { this.weaponTier = Phaser.Math.Clamp(tier, 1, 2); }
   get usesLayeredRig() {
     return this.layeredRig !== undefined;
   }
