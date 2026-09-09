@@ -126,6 +126,17 @@ export class CombatEffects {
     });
   }
 
+  bossCollapse(x: number, y: number) {
+    for (let wave = 0; wave < 3; wave++) {
+      const ring = this.track(this.scene.add.circle(x, y, 24, wave === 1 ? 0x21e6ff : 0xd566ff, 0.12)
+        .setStrokeStyle(7 - wave, wave === 1 ? 0x21e6ff : 0xf4d7ff, 0.95).setDepth(25));
+      if (!ring) continue;
+      ring.setScale(0.3).setAlpha(0);
+      this.scene.tweens.add({ targets: ring, scale: 5 + wave * 2, alpha: { from: 1, to: 0 },
+        delay: wave * 150, duration: 520, ease: 'Cubic.Out', onComplete: () => this.release(ring) });
+    }
+  }
+
   /**
    * Death burst sized to the kill. An elite or a boss has to leave a bigger hole in the screen
    * than a grunt, or the player never learns which kills were worth making.

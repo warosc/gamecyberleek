@@ -30,6 +30,7 @@ import { CombatMomentum } from '../systems/CombatMomentum';
 import { applyWeaponMastery } from '../weapons/WeaponMastery';
 import { SectorHazardSystem } from '../systems/SectorHazardSystem';
 import { SectorDeviceSystem, type SectorDeviceActivation } from '../systems/SectorDeviceSystem';
+import { BossPhaseDirector } from '../systems/BossPhaseDirector';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -76,6 +77,7 @@ export class GameScene extends Phaser.Scene {
   private lastBossPhase = 1;
   private sectorHazards!: SectorHazardSystem;
   private sectorDevices!: SectorDeviceSystem;
+  private bossPhases!: BossPhaseDirector;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
   private readonly handlePlayerDamaged = (_current: number, _max: number, applied?: number) => {
@@ -190,6 +192,7 @@ export class GameScene extends Phaser.Scene {
     this.chests = this.loot.chests;
     this.lootDrops = this.loot.drops;
     this.encounters = new EncounterSystem(this, this.enemies, this.player, this.arenaIndex);
+    this.bossPhases = new BossPhaseDirector(this, this.enemies, this.arenaIndex);
     this.runEnd = new RunEndSystem(this, () => this.scene.stop('UI'));
     this.worldProps = new ExplosiveBarrelSystem(this, (x, y, damage, radius) =>
       this.plasmaExplosion(x, y, damage, radius),
@@ -321,6 +324,7 @@ export class GameScene extends Phaser.Scene {
           this.cameras.main.flash(180, 213, 102, 255, false);
           this.cameras.main.shake(220, 0.008);
           this.audio.play('boss_phase');
+          this.bossPhases.enter(enemy.bossPhase as 2 | 3, enemy);
         }
         const preparing = enemy.isPreparingAttack;
         enemy.updateBehavior(this.player, this.survivalMs, (x, y, angle, speed, damage) =>
@@ -679,8 +683,10 @@ export class GameScene extends Phaser.Scene {
       // victory timer before the result screen is reached.
       this.victoryPending = true;
       this.physics.pause();
+      this.enemyProjectiles.group.clear(true, true);
+      this.effects.bossCollapse(defeat.x, defeat.y);
       this.events.emit(Events.BOSS_HEALTH, 0, defeat.maxHealth);
-      this.time.delayedCall(500, () => this.gameOver(true));
+      this.time.delayedCall(900, () => this.gameOver(true));
     }
   }
 }
