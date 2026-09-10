@@ -238,12 +238,14 @@ test('three rapid eliminations activate momentum and increase XP', async ({ page
     const ui = window.combatGame.scene.getScene('UI');
     const firstOrb = scene.orbs.getChildren()[0] as unknown as { visual: Phaser.GameObjects.Container };
     const xpExplained = Boolean(ui.children.getByName('xp-discovery'));
-    return { values, shardParts: firstOrb.visual.list.length, shardVisible: firstOrb.visual.visible, xpExplained,
+    const xpGlyph = firstOrb.visual.list.find(part => part.type === 'Text') as Phaser.GameObjects.Text;
+    return { values, shardParts: firstOrb.visual.list.length, shardVisible: firstOrb.visual.visible, xpGlyph: xpGlyph.text, xpExplained,
       momentumVisible: (ui.children.getByName('momentum-hud') as unknown as { visible?: boolean })?.visible };
   });
   expect(result.values).toHaveLength(3);
   expect(result.values[2]).toBeGreaterThan(result.values[0]);
   expect(result.shardParts).toBe(3);
+  expect(result.xpGlyph).toBe('XP');
   expect(result.shardVisible).toBe(true);
   expect(result.xpExplained).toBe(true);
   expect(result.momentumVisible).toBe(true);
