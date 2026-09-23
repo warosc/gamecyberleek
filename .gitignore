@@ -11,3 +11,9 @@ Thumbs.db
 .vscode/
 test-results/
 playwright-report/
+
+# Local-only binaries and art handoff archives; keep them out of git and Docker contexts.
+*.exe
+*.zip
+leek_ops_phase_B_rig_v2/
+debug.log
