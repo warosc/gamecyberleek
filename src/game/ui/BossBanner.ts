@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
-import { BOSS_IDENTITY } from '../entities/enemies/BossVisual';
+import { BOSS_IDENTITY, bossVariant } from '../entities/enemies/BossVisual';
 
 /** Owns the boss health panel, its arrival banner and the phase callouts. */
 export class BossBanner {
@@ -9,8 +9,10 @@ export class BossBanner {
   private readonly phaseText: Phaser.GameObjects.Text;
   private targetWidth = 510;
   private phaseShown = 1;
+  private readonly identity;
 
-  constructor(private readonly scene: Phaser.Scene) {
+  constructor(private readonly scene: Phaser.Scene, sector = 0) {
+    this.identity = bossVariant(sector);
     // Sits below the run clock and the weapon readout rather than across them: at y=88 the
     // boss bar covered both the moment the encounter that most needs a clock began.
     const back = scene.add
@@ -21,7 +23,7 @@ export class BossBanner {
       .rectangle(GAME_WIDTH / 2 - 255, 136, 510, 15, 0x9d36d6)
       .setOrigin(0, 0.5);
     const name = scene.add
-      .text(GAME_WIDTH / 2 - 130, 114, BOSS_IDENTITY.name, {
+      .text(GAME_WIDTH / 2 - 130, 114, this.identity.name, {
         fontFamily: 'Arial Black',
         fontSize: '15px',
         color: '#f4d7ff',
@@ -58,7 +60,7 @@ export class BossBanner {
       .rectangle(0, 0, 720, 96, 0x100817, 0.94)
       .setStrokeStyle(3, 0xd566ff, 0.9);
     const title = this.scene.add
-      .text(0, -14, `${BOSS_IDENTITY.name} // COMANDANTE`, {
+      .text(0, -14, `${this.identity.name} // COMANDANTE`, {
         fontFamily: 'Arial Black',
         fontSize: '38px',
         color: '#f4d7ff',
@@ -67,7 +69,7 @@ export class BossBanner {
       })
       .setOrigin(0.5);
     const subtitle = this.scene.add
-      .text(0, 26, BOSS_IDENTITY.title, {
+      .text(0, 26, this.identity.title, {
         fontFamily: 'Arial Black',
         fontSize: '13px',
         color: '#d566ff',

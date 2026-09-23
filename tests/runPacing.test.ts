@@ -16,7 +16,7 @@ describe('five-minute combat pacing', () => {
     expect(MINIBOSS_START_MS).toBeGreaterThan(UPGRADE_MILESTONES[1]);
     expect(MINIBOSS_START_MS).toBeLessThan(UPGRADE_MILESTONES[2]);
     expect(RUN_PHASE_CALLOUTS[30000].title).toBe('EMBESTIDA DETECTADA');
-    expect(RUN_PHASE_CALLOUTS[210000].brief).toContain('BROK-9');
+    expect(RUN_PHASE_CALLOUTS[210000].brief).toContain('COMANDANTE');
   });
   it('offers distinct benefits and preserves piercing when a weapon changes', () => {
     const s=createPlayerStats();

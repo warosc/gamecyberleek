@@ -28,6 +28,7 @@ export const STARTER_WEAPONS: readonly StarterWeapon[] = [
       weaponName: 'SPORE CANNON', weaponMode: 'plasma', attackDamage: 38, attackCooldown: 650,
       projectileSpeed: 430, criticalChance: 0.04, projectileColor: 0xd566ff,
       projectileScale: 1.85, projectilePiercing: 0, splashRadius: 108, chainTargets: 0, chainRange: 0,
+      toxinDamage: 1,
     }),
   },
   {

@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { HealthComponent } from '../../components/HealthComponent';
-import { ELITE_AFFIX_DEFS, ENEMY_DEFS, EnemyType, type EliteAffix } from './EnemyTypes';
+import { ELITE_AFFIX_DEFS, ENEMY_DEFS, EnemyType, FAMILY_RULES, type EliteAffix } from './EnemyTypes';
 import { GAMEPLAY, Events } from '../../config/Constants';
 import { detectQualityProfile } from '../../config/QualityProfile';
-import { BossVisual, BOSS_IDENTITY } from './BossVisual';
+import { BossVisual, BOSS_IDENTITY, bossVariant } from './BossVisual';
+import { STATUS_COLORS, StatusEffects, type StatusPayload } from '../../systems/StatusEffects';
 import { VegetableVisual } from './VegetableVisual';
 import { isVegetableType, vegetableTexture, VEGETABLE_ROSTER } from './VegetableRoster';
 import { MinibossVisual } from './MinibossVisual';
@@ -18,7 +19,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
   private melee?: { strike: number; end: number; released: boolean };
   get isPreparingAttack() { return !!this.pendingAttack || !!this.charge || !!this.melee; }
   get canContact() {
-    if (this.enemyType === EnemyType.SHOOTER) return false;
+    if (this.enemyType === EnemyType.SHOOTER || this.enemyType === EnemyType.MEDIC) return false;
     if (this.enemyType === EnemyType.RUNNER) return Boolean(this.charge &&
       this.visualTime >= this.charge.start && this.visualTime < this.charge.end);
     return this.enemyType !== EnemyType.GRUNT && this.enemyType !== EnemyType.TANK ||
@@ -80,6 +81,11 @@ export class Enemy extends Phaser.GameObjects.Arc {
   elite = false;
   eliteAffix: EliteAffix = 'OVERCHARGED';
   private eliteMultiplier = 1;
+  /** Burn, chill and toxin on gameplay time; bosses and minibosses resist them. */
+  readonly status: StatusEffects;
+  /** Gameplay time until which a nearby bulwark's aura reduces damage taken. */
+  shieldedUntil = 0;
+  private statusRing?: Phaser.GameObjects.Arc;
   constructor(
     scene: Phaser.Scene,
     x: number,
@@ -91,6 +97,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
     super(scene, x, y, d.size, 0, 360, false, d.color);
     this.def = d;
     this.health = new HealthComponent(d.hp);
+    this.status = new StatusEffects(enemyType === EnemyType.BOSS || enemyType === EnemyType.MINIBOSS);
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setVisible(false);
@@ -106,20 +113,31 @@ export class Enemy extends Phaser.GameObjects.Arc {
       .setVisible(false)
       .setDepth(13);
   }
+  private get speedScale() {
+    return this.eliteMultiplier * this.status.speedFactor(this.visualTime);
+  }
+  heal(amount: number) {
+    this.health.heal(amount);
+    this.healthFill.setDisplaySize(this.def.size * 2 * (this.health.current / this.health.max), 3);
+  }
+  applyStatus(payload: StatusPayload) {
+    this.status.apply(payload, this.visualTime);
+  }
   chase(target: { x: number; y: number }) {
-    this.scene.physics.moveToObject(this, target, this.def.speed * this.eliteMultiplier);
+    this.scene.physics.moveToObject(this, target, this.def.speed * this.speedScale);
     this.syncVisual(target);
   }
   updateBehavior(
     target: { x: number; y: number },
     time: number,
-    fire: (x: number, y: number, angle: number, speed: number, damage: number) => void,
+    fire: (x: number, y: number, angle: number, speed: number, damage: number, chillMs?: number) => void,
     allowAttack = true,
   ) {
     // Derived from gameplay time, not incremented per frame: a fixed step made the pulse
     // run at the display refresh rate, so a 165Hz screen animated ~2.75x faster than 60Hz.
     this.visualPhase = this.visualOffset + time * PULSE_RADIANS_PER_MS;
     this.visualTime = time;
+    this.updateStatusMark(time);
     if (this.pendingAttack && time >= this.pendingAttack.at) {
       const release = this.pendingAttack.release;
       this.pendingAttack = undefined;
@@ -179,12 +197,37 @@ export class Enemy extends Phaser.GameObjects.Arc {
       this.syncVisual(target);
       return;
     }
+    if (this.def.behavior === 'support') {
+      // Hangs back at mid range and never shoots: its threat is keeping the pack alive.
+      if (distance > 420) this.scene.physics.moveToObject(this, target, this.def.speed * this.speedScale);
+      else if (distance < 280)
+        this.scene.physics.velocityFromRotation(
+          Phaser.Math.Angle.Between(target.x, target.y, this.x, this.y),
+          this.def.speed * this.speedScale,
+          body.velocity,
+        );
+      else body.setVelocity(0);
+      if (this.pendingAttack) { body.setVelocity(0); this.syncVisual(target); return; }
+      const rules = FAMILY_RULES.medic;
+      if (this.lastAttack < 0) this.lastAttack = time;
+      if (time - this.lastAttack > rules.intervalMs) {
+        this.lastAttack = time;
+        body.setVelocity(0);
+        this.showAttackTelegraph(this.def.color, rules.radius * 0.5, rules.leadMs);
+        this.pendingAttack = {
+          at: time + rules.leadMs,
+          release: () => this.scene.events.emit('enemy-support-pulse', this),
+        };
+      }
+      this.syncVisual(target);
+      return;
+    }
     if (this.def.behavior === 'kite') {
-      if (distance > 390) this.scene.physics.moveToObject(this, target, this.def.speed * this.eliteMultiplier);
+      if (distance > 390) this.scene.physics.moveToObject(this, target, this.def.speed * this.speedScale);
       else if (distance < 230)
         this.scene.physics.velocityFromRotation(
           Phaser.Math.Angle.Between(target.x, target.y, this.x, this.y),
-          this.def.speed * this.eliteMultiplier,
+          this.def.speed * this.speedScale,
           (this.body as Phaser.Physics.Arcade.Body).velocity,
         );
       else (this.body as Phaser.Physics.Arcade.Body).setVelocity(0);
@@ -216,7 +259,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
     }
     if (this.def.behavior === 'warden') {
       if (this.pendingAttack) { body.setVelocity(0); this.syncVisual(target); return; }
-      if (distance > 330) this.scene.physics.moveToObject(this, target, this.def.speed);
+      if (distance > 330) this.scene.physics.moveToObject(this, target, this.def.speed * this.speedScale);
       else body.setVelocity(0);
       if (allowAttack && time - this.lastAttack > 2100 && distance < 620) {
         this.lastAttack = time;
@@ -252,6 +295,12 @@ export class Enemy extends Phaser.GameObjects.Arc {
       const lockedAim = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
       const phase = this.bossPhase;
       this.bossAttackSequence++;
+      const signature = bossVariant(this.visualVariant).signature;
+      const signatureTurn = signature !== 'none' && this.bossAttackSequence % 3 === 0;
+      if (signatureTurn) {
+        this.prepareSignature(signature, lockedAim, time, fire);
+        return;
+      }
       const radialPhaseTwo = phase === 2 && this.bossAttackSequence % 2 === 0;
       const spiralPhaseThree = phase === 3 && this.bossAttackSequence % 2 === 0;
       // The two patterns are told apart before they land: the radial burst rings the boss,
@@ -284,6 +333,8 @@ export class Enemy extends Phaser.GameObjects.Arc {
     }
   }
   hit(amount: number, critical = false) {
+    if (this.shieldedUntil > this.visualTime)
+      amount = Math.max(1, Math.round(amount * FAMILY_RULES.bulwark.damageTaken));
     this.health.damage(amount);
     this.healthBack.setVisible(!this.bossVisual);
     this.healthFill
@@ -369,7 +420,59 @@ export class Enemy extends Phaser.GameObjects.Arc {
     this.healthBack?.destroy();
     this.healthFill?.destroy();
     this.eliteLabel?.destroy();
+    this.statusRing?.destroy();
     super.destroy(fromScene);
+  }
+
+  /**
+   * Sector commanders' signature attacks, telegraphed with their own colour so they are never
+   * confused with the standard spread and ring patterns.
+   */
+  private prepareSignature(
+    signature: 'bloom' | 'cryo-lance',
+    lockedAim: number,
+    time: number,
+    fire: (x: number, y: number, angle: number, speed: number, damage: number, chillMs?: number) => void,
+  ) {
+    const lead = GAMEPLAY.telegraphLeadMs.boss + 150;
+    if (signature === 'bloom') {
+      this.showAttackTelegraph(0xb8ff70, 124, lead);
+      this.pendingAttack = {
+        at: time + lead,
+        release: () => {
+          this.scene.events.emit('enemy-attack', 'boss');
+          // Two offset rings at different speeds open staggered gaps to walk through.
+          for (let ring = 0; ring < 2; ring++)
+            for (let index = 0; index < 10; index++)
+              fire(this.x, this.y, (Math.PI * 2 * (index + ring * 0.5)) / 10, 165 + ring * 55, 11);
+        },
+      };
+      return;
+    }
+    this.showAttackTelegraph(0x9fe3ff, 96, lead, lockedAim);
+    this.showLane(lockedAim, 620, 74, 0x9fe3ff);
+    this.pendingAttack = {
+      at: time + lead,
+      release: () => {
+        this.scene.events.emit('enemy-attack', 'boss');
+        for (let index = -2; index <= 2; index++)
+          fire(this.x, this.y, lockedAim + index * 0.07, 430, 12, 1400);
+      },
+    };
+  }
+
+  /** One lazily created ring per enemy; shield takes precedence over a status colour. */
+  private updateStatusMark(time: number) {
+    const shielded = this.shieldedUntil > time;
+    const status = this.status.dominant(time);
+    if (!shielded && !status) {
+      this.statusRing?.setVisible(false);
+      return;
+    }
+    this.statusRing ??= this.scene.add.circle(this.x, this.y, this.def.size + 8)
+      .setFillStyle(0x000000, 0).setDepth(5);
+    const color = shielded ? 0x7fb2ff : STATUS_COLORS[status!];
+    this.statusRing.setPosition(this.x, this.y).setVisible(true).setStrokeStyle(shielded ? 3 : 2, color, 0.85);
   }
 
   private createVisual(scene: Phaser.Scene, size: number, color: number) {
@@ -378,7 +481,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       return scene.add.container(this.x, this.y, [this.minibossVisual]).setDepth(6);
     }
     if (this.enemyType === EnemyType.BOSS && scene.textures.exists(BOSS_IDENTITY.texture)) {
-      this.bossVisual = new BossVisual(scene);
+      this.bossVisual = new BossVisual(scene, this.visualVariant);
       return scene.add.container(this.x, this.y, [this.bossVisual]).setDepth(6);
     }
     if (isVegetableType(this.enemyType) && scene.textures.exists(vegetableTexture(this.enemyType))) {

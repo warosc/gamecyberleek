@@ -33,6 +33,8 @@ export class Player extends Phaser.GameObjects.Container {
   private shadow: Phaser.GameObjects.Ellipse;
   private gameplayTime = 0;
   private weaponTier = 1;
+  private chilledUntil = 0;
+  private readonly chillRing: Phaser.GameObjects.Arc;
   constructor(scene: Phaser.Scene, x: number, y: number, weaponId: StarterWeaponId = 'pulse') {
     super(scene, x, y);
     applyStarterWeapon(this.stats, weaponId);
@@ -72,11 +74,15 @@ export class Player extends Phaser.GameObjects.Container {
       this.overdriveRing.strokePath();
     }
     this.overdriveRing.setBlendMode(Phaser.BlendModes.ADD);
+    this.chillRing = scene.add.circle(0, 18, 34, 0x9fe3ff, 0.12)
+      .setStrokeStyle(3, 0x9fe3ff, 0.85).setScale(1, 0.4).setVisible(false);
+    this.chillRing.name = 'player-chill-ring';
     const reference = scene.add.image(0, 0, 'leek-placeholder-front').setScale(0.2);
     reference.name = 'placeholder-full-body-reference-not-a-rig';
     if (rig) reference.setVisible(false);
     this.add([
       this.shadow,
+      this.chillRing,
       this.overdriveVisual,
       this.overdriveRing,
       this.shieldVisual,
@@ -119,7 +125,10 @@ export class Player extends Phaser.GameObjects.Container {
       this.scene.events.emit(Events.PLAYER_DASHED, v.x, v.y);
     }
     if (time < this.dashingUntil) v.copy(this.dashDirection);
-    const speed = time < this.dashingUntil ? this.stats.dashSpeed : this.stats.moveSpeed;
+    const chilled = time < this.chilledUntil;
+    this.chillRing.setVisible(chilled);
+    // Dash ignores chill on purpose: it is the answer to being slowed.
+    const speed = time < this.dashingUntil ? this.stats.dashSpeed : this.stats.moveSpeed * (chilled ? 0.65 : 1);
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(v.x * speed, v.y * speed);
     const mouseFiring = !pointer.wasTouch && pointer.leftButtonDown();
     const virtualAiming = virtual?.active &&
@@ -257,6 +266,13 @@ export class Player extends Phaser.GameObjects.Container {
   }
   getDashCharge(time = this.gameplayTime) {
     return Phaser.Math.Clamp((time - this.lastDash) / this.stats.dashCooldown, 0, 1);
+  }
+  /** Slows movement for `durationMs` of gameplay time; a longer chill replaces a shorter one. */
+  chill(durationMs: number) {
+    this.chilledUntil = Math.max(this.chilledUntil, this.gameplayTime + durationMs);
+  }
+  get isChilled() {
+    return this.gameplayTime < this.chilledUntil;
   }
   takeDamage(amount: number) {
     if (this.gameplayTime < this.dashingUntil || this.gameplayTime < this.hurtUntil) return;

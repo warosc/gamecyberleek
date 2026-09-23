@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { VEGETABLE_ROSTER, vegetableAsset, type VegetableType } from '../src/game/entities/enemies/VegetableRoster';
+import { VEGETABLE_ART, VEGETABLE_ROSTER, vegetableAsset, type VegetableType } from '../src/game/entities/enemies/VegetableRoster';
 
 describe('Cyberleek enemy roster assets', () => {
   const types = Object.keys(VEGETABLE_ROSTER) as VegetableType[];
@@ -12,10 +12,12 @@ describe('Cyberleek enemy roster assets', () => {
     expect(png.readUInt32BE(20)).toBeLessThanOrEqual(2048);
     expect(png.length).toBeLessThan(2_000_000);
   });
-  it('covers every common role within a shared texture budget', () => {
-    expect(types.sort()).toEqual(['GRUNT', 'RUNNER', 'SHOOTER', 'TANK']);
-    const total = types.reduce((sum, type) => {
-      const png = readFileSync(`public/${vegetableAsset(type)}`);
+  it('covers every role within a shared texture budget, loading each sprite once', () => {
+    expect(types.sort()).toEqual(['BROOD', 'BULWARK', 'GRUNT', 'MEDIC', 'RUNNER', 'SHOOTER', 'TANK']);
+    // Graded variants reuse a sprite, so the decoded budget counts distinct art only.
+    expect(VEGETABLE_ART.sort()).toEqual(['carrot', 'eggplant', 'radish', 'tomato']);
+    const total = VEGETABLE_ART.reduce((sum, art) => {
+      const png = readFileSync(`public/assets/enemies/vegetables/${art}.png`);
       return sum + png.readUInt32BE(16) * png.readUInt32BE(20) * 4;
     }, 0);
     expect(total).toBeLessThan(32 * 1024 * 1024);

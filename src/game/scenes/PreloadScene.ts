@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { PLAYER_RIG_LAYERS, PLAYER_RIG_STATES } from '../entities/player/PlayerRigManifest';
 import { BOSS_IDENTITY } from '../entities/enemies/BossVisual';
-import { VEGETABLE_ROSTER, vegetableAsset, vegetableTexture, type VegetableType } from '../entities/enemies/VegetableRoster';
+import { VEGETABLE_ART } from '../entities/enemies/VegetableRoster';
 export class PreloadScene extends Phaser.Scene {
   private startedAt = 0;
   private bar?: Phaser.GameObjects.Rectangle;
@@ -58,8 +58,8 @@ export class PreloadScene extends Phaser.Scene {
       if (domStatus) domStatus.textContent = 'BIO-SISTEMAS LISTOS';
     });
     this.load.image(BOSS_IDENTITY.texture, BOSS_IDENTITY.asset);
-    for (const type of Object.keys(VEGETABLE_ROSTER) as VegetableType[])
-      this.load.image(vegetableTexture(type), vegetableAsset(type));
+    for (const art of VEGETABLE_ART)
+      this.load.image(`vegetable-${art}`, `assets/enemies/vegetables/${art}.png`);
     this.load.image(
       'leek-placeholder-front',
       'assets/character/leek/placeholder-front-reference.png',

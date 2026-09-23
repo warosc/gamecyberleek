@@ -37,6 +37,7 @@ import { applyEquipmentModifiers, removeEquipmentModifiers, type Equipment } fro
 import { activeBuildSynergy, combatRating, type BuildSynergy } from '../systems/BuildProgression';
 import { SectorObjectiveSystem, type ObjectiveMetric } from '../systems/SectorObjectiveSystem';
 import { shakeCamera } from '../systems/RuntimeSettings';
+import { FAMILY_RULES } from '../entities/enemies/EnemyTypes';
 import { applyWorkshop } from '../progression/Workshop';
 import { dailyMutator, operationScore } from '../progression/DailyOperation';
 import { PAD, setGamepadConsumer, type PadFrame } from '../input/GamepadBridge';
@@ -274,6 +275,8 @@ export class GameScene extends Phaser.Scene {
       const shot = projectile as Phaser.Physics.Arcade.Image;
       if (!shot.active) return;
       this.player.takeDamage(shot.getData('damage') as number);
+      const chill = shot.getData('chill') as number | undefined;
+      if (chill) this.player.chill(chill);
       shot.disableBody(true, true);
     });
     this.physics.add.overlap(this.player, this.chests, (_, chest) =>
@@ -289,6 +292,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on('enemy-warning', this.handleEnemyWarning);
     this.events.on('enemy-attack', this.handleEnemyAttack);
     this.events.on(Events.PLAYER_DASHED, this.handlePlayerDashed);
+    this.events.on('enemy-support-pulse', this.handleSupportPulse);
     this.input.keyboard!.on('keydown-ESC', this.handleEscape);
     this.input.keyboard!.on('keydown-I', this.toggleInventory, this);
     this.game.events.on(Phaser.Core.Events.BLUR, this.handleFocusLost);
@@ -312,6 +316,7 @@ export class GameScene extends Phaser.Scene {
       this.events.off('enemy-warning', this.handleEnemyWarning);
       this.events.off('enemy-attack', this.handleEnemyAttack);
       this.events.off(Events.PLAYER_DASHED, this.handlePlayerDashed);
+      this.events.off('enemy-support-pulse', this.handleSupportPulse);
       this.input.keyboard?.off('keydown-ESC', this.handleEscape);
       this.input.keyboard?.off('keydown-I', this.toggleInventory, this);
       this.game.events.off(Phaser.Core.Events.BLUR, this.handleFocusLost);
@@ -374,6 +379,7 @@ export class GameScene extends Phaser.Scene {
     this.projectiles.update(this.survivalMs);
     this.enemyProjectiles.update(this.survivalMs);
     if (!this.encounters.hasBossSpawned) this.spawn.update(delta, this.player);
+    this.updateBulwarkAuras();
     let attacks = this.enemies.getChildren().filter(object => (object as Enemy).isPreparingAttack).length;
     this.enemies
       .getChildren()
@@ -387,12 +393,13 @@ export class GameScene extends Phaser.Scene {
           this.bossPhases.enter(enemy.bossPhase as 2 | 3, enemy);
         }
         const preparing = enemy.isPreparingAttack;
-        enemy.updateBehavior(this.player, this.survivalMs, (x, y, angle, speed, damage) =>
-          this.enemyProjectiles.fire(x, y, angle, speed, damage, this.survivalMs),
+        enemy.updateBehavior(this.player, this.survivalMs, (x, y, angle, speed, damage, chillMs) =>
+          this.enemyProjectiles.fire(x, y, angle, speed, damage, this.survivalMs, chillMs),
           attacks < GAMEPLAY.maxConcurrentAttacks,
         );
         if (!preparing && enemy.isPreparingAttack) attacks++;
       });
+    this.tickStatusEffects();
     this.orbs.getChildren().forEach((o) => {
       const orb = o as ExperienceOrb;
       if (!orb.active) return;
@@ -432,6 +439,7 @@ export class GameScene extends Phaser.Scene {
       this.resolveEnemyDeath(e);
     } else {
       e.knockback(Phaser.Math.Angle.Between(this.player.x, this.player.y, e.x, e.y), p.critical);
+      this.applyWeaponStatuses(e);
     }
     if (p.mode === 'plasma' && p.splashRadius > 0) this.plasmaExplosion(e.x, e.y, p.damage * 0.55, p.splashRadius, e);
     if (p.mode === 'arc' && this.player.stats.chainTargets > 0)
@@ -815,6 +823,63 @@ export class GameScene extends Phaser.Scene {
       synergy: this.activeSynergy?.name,
     });
   }
+  /** Direct hits carry the build's statuses; splash and chains stay plain damage. */
+  private applyWeaponStatuses(enemy: Enemy) {
+    const stats = this.player.stats;
+    if (stats.burnDamage > 0) enemy.applyStatus({ kind: 'burn', potency: stats.burnDamage, durationMs: 2000 });
+    if (stats.chillDurationMs > 0) enemy.applyStatus({ kind: 'chill', potency: 0, durationMs: stats.chillDurationMs });
+    if (stats.toxinDamage > 0) enemy.applyStatus({ kind: 'toxin', potency: stats.toxinDamage, durationMs: 3000 });
+  }
+  /** Damage over time, resolved after the behaviour pass so no enemy is destroyed mid-iteration. */
+  private tickStatusEffects() {
+    const dying: Enemy[] = [];
+    for (const object of this.enemies.getChildren()) {
+      const enemy = object as Enemy;
+      if (!enemy.active) continue;
+      const damage = enemy.status.tick(this.survivalMs);
+      if (damage <= 0) continue;
+      this.telemetry.dealtDamage(damage);
+      if (enemy.hit(damage)) dying.push(enemy);
+    }
+    for (const enemy of dying) this.resolveEnemyDeath(enemy);
+  }
+  /** Bulwarks shield the pack around them; neither bosses nor other bulwarks are covered. */
+  private updateBulwarkAuras() {
+    const enemies = this.enemies.getChildren() as Enemy[];
+    const bulwarks = enemies.filter(enemy => enemy.active && enemy.enemyType === EnemyType.BULWARK);
+    if (!bulwarks.length) return;
+    const reach = FAMILY_RULES.bulwark.radius ** 2;
+    const until = this.survivalMs + 250;
+    for (const enemy of enemies) {
+      if (!enemy.active || enemy.enemyType === EnemyType.BOSS || enemy.enemyType === EnemyType.MINIBOSS ||
+        enemy.enemyType === EnemyType.BULWARK) continue;
+      if (bulwarks.some(bulwark => Phaser.Math.Distance.Squared(bulwark.x, bulwark.y, enemy.x, enemy.y) <= reach))
+        enemy.shieldedUntil = until;
+    }
+  }
+  private readonly handleSupportPulse = (medic: Enemy) => {
+    if (!medic.active) return;
+    const { radius, healFraction } = FAMILY_RULES.medic;
+    const ring = this.add.circle(medic.x, medic.y, radius, medic.def.color, 0.06)
+      .setStrokeStyle(3, medic.def.color, 0.8).setScale(0.25).setDepth(4);
+    this.tweens.add({ targets: ring, scale: 1, alpha: 0, duration: 420, ease: 'Quad.Out', onComplete: () => ring.destroy() });
+    for (const object of this.enemies.getChildren()) {
+      const ally = object as Enemy;
+      if (!ally.active || ally === medic || ally.enemyType === EnemyType.BOSS) continue;
+      if (ally.health.current >= ally.health.max) continue;
+      if (Phaser.Math.Distance.Squared(medic.x, medic.y, ally.x, ally.y) > radius * radius) continue;
+      ally.heal(Math.round(ally.health.max * healFraction));
+    }
+    this.audio.tone(620, 0.12, 0.018, 'sfx', 'triangle');
+  };
+  private splitBrood(x: number, y: number) {
+    const { spawns, spread } = FAMILY_RULES.brood;
+    for (let index = 0; index < spawns; index++) {
+      if (this.enemies.countActive(true) >= GAMEPLAY.maxEnemies) return;
+      const angle = (Math.PI * 2 * index) / spawns;
+      this.enemies.add(new Enemy(this, x + Math.cos(angle) * spread, y + Math.sin(angle) * spread, EnemyType.RUNNER));
+    }
+  }
   /** Single fan-out point for momentum state: keeps `MOMENTUM_CHANGED` and the kill-streak
    * contract in lockstep instead of duplicating this pair at every call site. */
   /**
@@ -904,8 +969,10 @@ export class GameScene extends Phaser.Scene {
   private resolveEnemyDeath(enemy: Enemy, cause: 'weapon' | 'environment' = 'weapon') {
     const elite = enemy.elite;
     const eliteColor = enemy.eliteColor;
+    const brood = enemy.enemyType === EnemyType.BROOD;
     const defeat = this.deaths.resolve(enemy);
     if (!defeat) return;
+    if (brood) this.splitBrood(defeat.x, defeat.y);
     this.events.emit(Events.ENEMY_DIED);
     this.telemetry.killed();
     const contractCompleted = this.contracts.onEnemyDefeated({

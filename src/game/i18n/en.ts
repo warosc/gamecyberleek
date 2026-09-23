@@ -38,7 +38,7 @@ export const en: Record<StringKey, string> = {
   'weapon.pulse.role': 'PRECISION',
   'weapon.pulse.desc': 'Fast shots · High critical chance',
   'weapon.spore.role': 'DEMOLITION',
-  'weapon.spore.desc': 'Slow shells · Area explosions',
+  'weapon.spore.desc': 'Slow shells · Toxic explosions',
   'weapon.arc.role': 'CROWD CONTROL',
   'weapon.arc.desc': 'Electric bolts · Chains to 2 targets',
 

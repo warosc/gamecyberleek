@@ -6,7 +6,7 @@ vi.mock('phaser', () => ({
   default: { Math: { Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)) } },
 }));
 
-const { SpawnSystem } = await import('../src/game/systems/SpawnSystem');
+const { SpawnSystem, SECTOR_FAMILIES, FAMILY_START_MS } = await import('../src/game/systems/SpawnSystem');
 const { GAMEPLAY } = await import('../src/game/config/Constants');
 const { EnemyType } = await import('../src/game/entities/enemies/EnemyTypes');
 
@@ -17,7 +17,7 @@ interface FakeEnemy {
   makeElite(): FakeEnemy;
 }
 
-function harness() {
+function harness(sector = 0) {
   const spawned: FakeEnemy[] = [];
   const factory = {
     create(type: unknown) {
@@ -40,7 +40,7 @@ function harness() {
   const system = new SpawnSystem(
     factory as unknown as ConstructorParameters<typeof SpawnSystem>[0],
     group as unknown as ConstructorParameters<typeof SpawnSystem>[1],
-    0,
+    sector,
   );
   const run = (steps: number, delta = 1000) => {
     for (let step = 0; step < steps; step++) system.update(delta, { x: 500, y: 500 });
@@ -80,5 +80,28 @@ describe('spawn system elite gating', () => {
     const elites = spawned.filter((enemy) => enemy.elite);
     expect(elites.length).toBeGreaterThan(0);
     expect(elites.every((enemy) => enemy.enemyType !== EnemyType.BOSS)).toBe(true);
+  });
+});
+
+describe('sector enemy families', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('adds no family enemy before the family window opens', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const { spawned, run } = harness(2);
+    run(Math.floor(FAMILY_START_MS / 1000) - 1);
+    const families = new Set(SECTOR_FAMILIES.flat());
+    expect(spawned.some((enemy) => families.has(enemy.enemyType as never))).toBe(false);
+  });
+
+  it('mixes in only the current sector\'s families afterwards', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    for (const sector of [0, 1, 2]) {
+      const { spawned, run } = harness(sector);
+      run(200);
+      const allowed = new Set([EnemyType.GRUNT, EnemyType.RUNNER, EnemyType.SHOOTER, EnemyType.TANK, ...SECTOR_FAMILIES[sector]]);
+      expect(spawned.every((enemy) => allowed.has(enemy.enemyType as never))).toBe(true);
+      expect(spawned.some((enemy) => SECTOR_FAMILIES[sector].includes(enemy.enemyType as never))).toBe(true);
+    }
   });
 });

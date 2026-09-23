@@ -7,6 +7,6 @@ export const BOSS_REINFORCEMENTS = [
 ] as const;
 
 export const BOSS_PHASE_CALLOUTS = {
-  2: { title: 'PROTOCOLO DE REFUERZO', brief: 'ROMPE LA ESCOLTA DE BRÓK-9', color: 0xffb52e },
+  2: { title: 'PROTOCOLO DE REFUERZO', brief: 'ROMPE LA ESCOLTA DEL COMANDANTE', color: 0xffb52e },
   3: { title: 'NÚCLEO EN SOBRECARGA', brief: 'ÚLTIMA FASE · NO DEJES DE MOVERTE', color: 0xff476f },
 } as const;

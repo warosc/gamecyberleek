@@ -4,7 +4,7 @@ import { ARENA, Events } from '../config/Constants';
 import { Enemy } from '../entities/enemies/Enemy';
 import { EnemyType } from '../entities/enemies/EnemyTypes';
 import type { Player } from '../entities/player/Player';
-import { BOSS_IDENTITY } from '../entities/enemies/BossVisual';
+import { bossVariant } from '../entities/enemies/BossVisual';
 import { MINIBOSS_VARIANTS } from '../entities/enemies/MinibossVisual';
 import { shakeCamera } from './RuntimeSettings';
 
@@ -52,9 +52,12 @@ export class EncounterSystem {
     this.enemies.clear(true, true);
     const x = Phaser.Math.Clamp(this.player.x + 520, 100, ARENA.width - 100);
     const y = Phaser.Math.Clamp(this.player.y - 300, 100, ARENA.height - 100);
-    const boss = new Enemy(this.scene, x, y, EnemyType.BOSS);
+    const identity = bossVariant(this.sector);
+    const boss = new Enemy(this.scene, x, y, EnemyType.BOSS, this.sector);
+    boss.health.max = Math.round(boss.health.max * identity.healthScale);
+    boss.health.current = boss.health.max;
     this.enemies.add(boss);
-    this.scene.events.emit(Events.BOSS_SPAWNED, BOSS_IDENTITY.name, boss.health.max);
+    this.scene.events.emit(Events.BOSS_SPAWNED, identity.name, boss.health.max);
     shakeCamera(this.scene.cameras.main, 700, 0.012);
     return true;
   }

@@ -21,6 +21,12 @@ export interface PlayerStats {
   splashRadius: number;
   chainTargets: number;
   chainRange: number;
+  /** Burn damage per tick applied on hit; 0 disables. */
+  burnDamage: number;
+  /** Chill duration applied on hit; 0 disables. */
+  chillDurationMs: number;
+  /** Toxin damage per tick per stack applied on hit; 0 disables. */
+  toxinDamage: number;
 }
 export const createPlayerStats = (): PlayerStats => ({
   maxHp: 100,
@@ -45,4 +51,7 @@ export const createPlayerStats = (): PlayerStats => ({
   splashRadius: 0,
   chainTargets: 0,
   chainRange: 0,
+  burnDamage: 0,
+  chillDurationMs: 0,
+  toxinDamage: 0,
 });

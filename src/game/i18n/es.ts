@@ -36,7 +36,7 @@ export const es = {
   'weapon.pulse.role': 'PRECISIÓN',
   'weapon.pulse.desc': 'Disparos rápidos · Crítico alto',
   'weapon.spore.role': 'DEMOLICIÓN',
-  'weapon.spore.desc': 'Proyectiles lentos · Explosiones de área',
+  'weapon.spore.desc': 'Proyectiles lentos · Explosiones tóxicas',
   'weapon.arc.role': 'CONTROL DE MASAS',
   'weapon.arc.desc': 'Rayos eléctricos · Encadena a 2 objetivos',
 

@@ -2,7 +2,16 @@ import Phaser from 'phaser';
 import { runPhase } from '../config/RunPacing';
 import { ARENA, GAMEPLAY } from '../config/Constants';
 import type { EnemyFactory } from '../entities/enemies/EnemyFactory';
-import { type EliteAffix } from '../entities/enemies/EnemyTypes';
+import { EnemyType, type EliteAffix } from '../entities/enemies/EnemyTypes';
+
+/** Families each sector adds to the base waves, from `FAMILY_START_MS`. */
+export const SECTOR_FAMILIES: readonly (readonly EnemyType[])[] = [
+  [EnemyType.BROOD],
+  [EnemyType.MEDIC, EnemyType.BROOD],
+  [EnemyType.BULWARK, EnemyType.MEDIC],
+];
+export const FAMILY_START_MS = 100000;
+export const FAMILY_CHANCE = 0.18;
 export class SpawnSystem {
   private elapsed = 0;
   private next = 500;
@@ -21,8 +30,11 @@ export class SpawnSystem {
     const distance = 500 + Math.random() * 180;
     const x = Phaser.Math.Clamp(player.x + Math.cos(angle) * distance, 40, ARENA.width - 40);
     const y = Phaser.Math.Clamp(player.y + Math.sin(angle) * distance, 40, ARENA.height - 40);
-    const type = phase.types[Math.floor(Math.random() * phase.types.length)];
+    let type: EnemyType | undefined = phase.types[Math.floor(Math.random() * phase.types.length)];
     if (!type) return;
+    const families = SECTOR_FAMILIES[Math.min(this.sector, SECTOR_FAMILIES.length - 1)];
+    if (this.elapsed >= FAMILY_START_MS && Math.random() < FAMILY_CHANCE)
+      type = families[Math.floor(Math.random() * families.length)];
     const enemy = this.factory.create(type, x, y);
     // Both statements are the elite branch. Without the braces `makeElite()` ran
     // unconditionally, so every spawn from the first second was an elite: the crown and

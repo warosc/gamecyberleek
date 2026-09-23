@@ -74,7 +74,7 @@ export class UIScene extends Phaser.Scene {
       () => this.gameScene.toggleInventory(),
       this.gameScene.mobileInput.active,
     );
-    this.bossBanner = new BossBanner(this);
+    this.bossBanner = new BossBanner(this, this.gameScene.arenaIndex);
     this.abilityBar = new AbilityBar(
       this,
       this.gameScene.mobileInput.active,
