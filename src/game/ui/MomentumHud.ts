@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH } from '../config/Constants';
 import { MOMENTUM_WINDOW_MS, type MomentumState } from '../systems/CombatMomentum';
+import { t } from '../i18n';
 
 export class MomentumHud {
   private readonly panel: Phaser.GameObjects.Container;
@@ -15,7 +16,7 @@ export class MomentumHud {
     // corner (see StatusHud); 110 sat directly under it, so the panel is nudged down to clear it.
     const y = mobile ? 142 : 205;
     const back = scene.add.rectangle(0, 0, 220, 68, 0x06101d, 0.88).setStrokeStyle(2, 0xffc857, 0.75);
-    this.count = scene.add.text(-92, -20, 'CHAIN x2', {
+    this.count = scene.add.text(-92, -20, t('hud.chain', { chain: 2 }), {
       fontFamily: 'Arial Black', fontSize: '16px', color: '#ffffff',
     });
     this.bonus = scene.add.text(92, -18, '+0% XP', {
@@ -31,7 +32,7 @@ export class MomentumHud {
     this.expiresAt = state.expiresAt;
     this.panel.setVisible(state.chain >= 2);
     if (state.chain < 2) return;
-    this.count.setText(`CHAIN x${state.chain}`);
+    this.count.setText(t('hud.chain', { chain: state.chain }));
     this.bonus.setText(`+${Math.round((state.xpMultiplier - 1) * 100)}% XP`);
     this.panel.setScale(1.08);
     this.panel.scene.tweens.add({ targets: this.panel, scale: 1, duration: 110, ease: 'Quad.Out' });

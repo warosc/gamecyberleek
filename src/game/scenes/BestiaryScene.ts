@@ -3,6 +3,7 @@ import { GAME_WIDTH } from '../config/Constants';
 import {
   VEGETABLE_ROSTER, vegetableTexture, vegetableTint, type VegetableType,
 } from '../entities/enemies/VegetableRoster';
+import { t, td } from '../i18n';
 
 const TACTICS: Record<VegetableType, string> = {
   GRUNT: 'Te persigue y prepara un golpe. Al ver el aro rojo, sepárate.',
@@ -20,10 +21,10 @@ export class BestiaryScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.setBackgroundColor(0x07111f);
-    this.add.text(GAME_WIDTH / 2, 55, 'FUERZAS DE LA BRECHA', {
+    this.add.text(GAME_WIDTH / 2, 55, td('FUERZAS DE LA BRECHA'), {
       fontFamily: 'Arial Black', fontSize: '34px', color: '#73ef62',
     }).setOrigin(0.5);
-    this.add.text(GAME_WIDTH / 2, 98, 'CYBERLEEK  //  ARCHIVO DE ENEMIGOS', {
+    this.add.text(GAME_WIDTH / 2, 98, td('CYBERLEEK  //  ARCHIVO DE ENEMIGOS'), {
       fontFamily: 'monospace', fontSize: '14px', color: '#21e6ff', letterSpacing: 3,
     }).setOrigin(0.5);
     const types = Object.keys(VEGETABLE_ROSTER) as VegetableType[];
@@ -39,15 +40,15 @@ export class BestiaryScene extends Phaser.Scene {
       const tint = vegetableTint(type);
       if (tint !== undefined) sprite.setTint(tint);
       this.add.text(x, 420, spec.name, { fontFamily: 'Arial Black', fontSize: '21px', color }).setOrigin(0.5);
-      this.add.text(x, 448, spec.role, { fontFamily: 'Arial Black', fontSize: '10px', color: '#eaffff' }).setOrigin(0.5);
-      this.add.text(x, 505, TACTICS[type], {
+      this.add.text(x, 448, td(spec.role), { fontFamily: 'Arial Black', fontSize: '10px', color: '#eaffff' }).setOrigin(0.5);
+      this.add.text(x, 505, td(TACTICS[type]), {
         fontFamily: 'Arial', fontSize: '12px', color: '#a9bbc9', align: 'center', lineSpacing: 4,
         wordWrap: { width: pitch - 28 },
       }).setOrigin(0.5);
     });
     const back = this.add.rectangle(GAME_WIDTH / 2, 635, 300, 56, 0x102535)
       .setStrokeStyle(2, 0x21e6ff).setInteractive({ useHandCursor: true });
-    this.add.text(GAME_WIDTH / 2, 635, 'VOLVER AL MENÚ', {
+    this.add.text(GAME_WIDTH / 2, 635, t('common.back'), {
       fontFamily: 'Arial Black', fontSize: '18px', color: '#eaffff',
     }).setOrigin(0.5);
     const leave = () => this.scene.start('Menu');

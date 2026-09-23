@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
-import { t } from '../i18n';
+import { t, td } from '../i18n';
 import { WORKSHOP_UPGRADES, nextRankCost, type WorkshopUpgradeId } from '../progression/Workshop';
 import { loadProfile, purchaseWorkshopRank } from '../systems/ProfileStore';
 import { AudioManager } from '../managers/AudioManager';
@@ -35,8 +35,8 @@ export class WorkshopScene extends Phaser.Scene {
       // The whole row is a purchase target, not only the button: rows are tall enough to tap.
       this.add.rectangle(GAME_WIDTH / 2, y, 1000, 72, 0x0b1b2b, 0.95).setStrokeStyle(2, upgrade.color, 0.5)
         .setInteractive({ useHandCursor: true }).on('pointerup', () => this.buy(upgrade.id));
-      this.add.text(ox + 170, y - 13, upgrade.name, { fontFamily: 'Arial Black', fontSize: '18px', color: hex(upgrade.color) }).setOrigin(0, 0.5);
-      this.add.text(ox + 170, y + 15, upgrade.effect, { fontFamily: 'Arial', fontSize: '14px', color: '#a9bbc9' }).setOrigin(0, 0.5);
+      this.add.text(ox + 170, y - 13, td(upgrade.name), { fontFamily: 'Arial Black', fontSize: '18px', color: hex(upgrade.color) }).setOrigin(0, 0.5);
+      this.add.text(ox + 170, y + 15, td(upgrade.effect), { fontFamily: 'Arial', fontSize: '14px', color: '#a9bbc9' }).setOrigin(0, 0.5);
       const pips = upgrade.costs.map((_, pip) =>
         this.add.rectangle(ox + 560 + pip * 34, y, 26, 14, upgrade.color, 0.15).setStrokeStyle(2, upgrade.color, 0.7));
       const rank = this.add.text(ox + 560 + upgrade.costs.length * 34 + 8, y, '', {

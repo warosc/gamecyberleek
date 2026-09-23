@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
+import { t } from '../i18n';
 
 /** Owns the special-ability buttons and their cooldown readouts on both layouts. */
 export class AbilityBar {
@@ -53,7 +54,7 @@ export class AbilityBar {
         .setOrigin(0.5);
       if (label.width > labelWidth) label.setScale(labelWidth / label.width);
       const cooldownText = scene.add
-        .text(x, y + 8, 'READY', {
+        .text(x, y + 8, t('hud.ready'), {
           fontFamily: 'Arial Black',
           fontSize: '10px',
           color: '#ffffff',
@@ -71,7 +72,7 @@ export class AbilityBar {
       this.fills.get(ability.id)!.width = 86 * charge;
       this.cooldowns
         .get(ability.id)!
-        .setText(charge >= 1 ? 'READY' : `${Math.ceil((ability.cooldown * (1 - charge)) / 1000)}s`);
+        .setText(charge >= 1 ? t('hud.ready') : `${Math.ceil((ability.cooldown * (1 - charge)) / 1000)}s`);
     }
   }
 }

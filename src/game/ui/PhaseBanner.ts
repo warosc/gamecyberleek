@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH } from '../config/Constants';
+import { td } from '../i18n';
 
 /** Short tactical callout shown only when the enemy roster changes. */
 export class PhaseBanner {
@@ -13,10 +14,10 @@ export class PhaseBanner {
     const back = this.scene.add.rectangle(0, 0, width, 78, 0x06101d, 0.94)
       .setStrokeStyle(3, phase.color, 0.92);
     const marker = this.scene.add.rectangle(-width / 2 + 6, 0, 8, 62, phase.color, 1);
-    const title = this.scene.add.text(0, -14, phase.title, {
+    const title = this.scene.add.text(0, -14, td(phase.title), {
       fontFamily: 'Arial Black', fontSize: this.mobile ? '20px' : '23px', color: '#ffffff', letterSpacing: 2,
     }).setOrigin(0.5);
-    const brief = this.scene.add.text(0, 18, phase.brief, {
+    const brief = this.scene.add.text(0, 18, td(phase.brief), {
       fontFamily: 'monospace', fontSize: this.mobile ? '11px' : '12px',
       color: `#${phase.color.toString(16).padStart(6, '0')}`, letterSpacing: 2,
     }).setOrigin(0.5);

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
+import { t, td } from '../i18n';
 
 /** Compact mid-run encounter panel that stays clear of the permanent HUD. */
 export class MinibossBanner {
@@ -23,17 +24,17 @@ export class MinibossBanner {
   }
 
   show(name = 'REM-Ω', title = 'CENTINELA REMOLACHA', color = 0xff3b76) {
-    this.name.setText(`${name} // ${title}`).setColor(`#${color.toString(16).padStart(6, '0')}`);
+    this.name.setText(`${name} // ${td(title)}`).setColor(`#${color.toString(16).padStart(6, '0')}`);
     this.panel.setVisible(true).setScale(1, 0.2);
     this.targetWidth = 330;
     this.fill.width = 330;
     this.scene.tweens.add({ targets: this.panel, scaleY: 1, duration: 260, ease: 'Back.Out' });
     const banner = this.scene.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 35).setDepth(120);
     const plate = this.scene.add.rectangle(0, 0, 680, 92, 0x160811, 0.95).setStrokeStyle(3, color);
-    const titleText = this.scene.add.text(0, -13, `${name} // ${title}`, {
+    const titleText = this.scene.add.text(0, -13, `${name} // ${td(title)}`, {
       fontFamily: 'Arial Black', fontSize: '34px', color: '#ffd7e5', stroke: '#24030f', strokeThickness: 6,
     }).setOrigin(0.5);
-    const brief = this.scene.add.text(0, 25, 'LEE EL PATRÓN · RECOMPENSA DE EQUIPO', {
+    const brief = this.scene.add.text(0, 25, t('miniboss.brief'), {
       fontFamily: 'monospace', fontSize: '13px', color: '#ff6f9f', letterSpacing: 3,
     }).setOrigin(0.5);
     banner.add([plate, titleText, brief]).setAlpha(0).setScale(0.86);

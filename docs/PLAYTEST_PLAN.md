@@ -159,6 +159,39 @@ playtests reproduce that, players never see the level-up at all and the reward l
 which would make "reached a level-up in their first run" the finding that matters most in this
 round. Record it precisely; it is a balance decision for Phase E, not a UI one.
 
+## Round 2 additions (build 0.2.0)
+
+Build 0.2.0 adds the loop between runs: the **Taller** (workshop), a sector selector, the daily
+operation, **Registro** (records and achievements), **Ajustes** (settings), gamepad support and an
+English translation. Keep the round-1 sheet and add these rows. The same no-coaching rules apply:
+nobody points at the workshop.
+
+### Between runs
+
+| Observation | Record |
+| --- | --- |
+| After the first death, did they open TALLER unprompted? | yes / no, which run |
+| Did they understand what a workshop upgrade would do before buying? | ask in debrief |
+| Did they buy something, save up, or ignore credits? | which |
+| Did they notice the sector arrows once sector 2 unlocked? | yes / no |
+| Did they try the OPERACIÓN DIARIA? Did the modifier make sense? | yes / no, quote |
+| Did an achievement banner on the results screen register? | yes / no |
+
+### Sessions to add
+
+- **One gamepad session** (Xbox or PlayStation controller on desktop): record time to first shot
+  and whether the player could get through the level-up cards and the pause menu with the pad.
+- **One English-speaking session**, with the language set to English in AJUSTES *before* the
+  player sits down. Note any Spanish text they still see; each is a missed translation.
+
+### Extra debrief question
+
+Ask after question 1: **"Is there anything you'd want to buy or unlock next time?"** An answer that
+names a workshop upgrade or a sector means the meta loop is doing its job.
+
+Clearing between participants: `localStorage.clear()` still resets everything, including the v5
+profile, records, achievements and daily scores.
+
 ## Reporting
 
 Per participant, one page: the observation sheet, verbatim answers to questions 1–4, and the raw

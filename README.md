@@ -25,7 +25,13 @@ For a local Node 22 workflow: `npm install`, then `npm run dev`. Available check
 - Q: LEEK NOVA area attack
 - E: BIO SHIELD temporary immunity
 - R: OVERDRIVE damage and fire-rate boost
+- I: inventory
 - Escape: pause
+
+**Gamepad** (standard mapping, e.g. Xbox or PlayStation): left stick or d-pad moves, right stick
+aims and fires, right trigger fires, A / LB dash, X nova, Y shield, B / RB overdrive, Start
+pauses, Back opens the inventory. Menus, level-up cards and results are navigated with the
+stick/d-pad, A to confirm and B to go back.
 
 Switching windows or hiding the tab automatically pauses combat. Resume explicitly with Escape
 or CONTINUAR. Gameplay timers and world animations also freeze during pause and reward selection.
@@ -36,7 +42,23 @@ Every third level drops a collectible equipment capsule. Weapons include pulse p
 
 Weapons now have distinct behavior: ARC shots pierce, ion lasers penetrate multiple targets, and plasma rounds deal area damage. Elite enemies can appear later in a run, and marked bio-fuel barrels can be detonated to damage nearby enemies. The HUD tracks equipped weapon and armor.
 
-Run results are saved locally as best level, victories, and bio-credits. Mobile players can toggle persistent auto-fire; compatible devices provide damage vibration feedback.
+## Between runs (build 0.2.0)
+
+- **Sectors**: pick any unlocked sector from the menu (arrows or ← →). Sector 2 pays ×1.25 and
+  sector 3 ×1.5 bio-credits. Each sector has its own hazards, devices, objective, enemy families,
+  music key and commander (BRÓK-9, KOLI-6, ROMA-X).
+- **Taller / Workshop**: spend bio-credits on five permanent upgrades.
+- **Operación diaria / Daily operation**: a date-seeded sector, weapon and modifier, scored and
+  kept on a local top-5 board. The board goes through `src/game/online/OnlinePorts.ts`, whose
+  default adapter is offline.
+- **Registro / Records**: lifetime totals, the last 12 runs and 10 achievements with credit bonuses.
+- **Ajustes / Settings**: graphics quality, motion, volumes, screen shake, vibration, language
+  (Spanish / English), and export/import of the save file.
+
+In-run statuses: *burn*, *chill* and *toxin* come from level-up options and the spore cannon.
+The medic heals nearby enemies, the bulwark shields them, and the brood splits into runners.
+
+Run results are saved locally (profile schema v5; older saves migrate automatically). Mobile players can toggle persistent auto-fire; compatible devices provide damage vibration feedback.
 
 ### Mobile controls
 
@@ -99,7 +121,15 @@ Use **Dev Containers: Reopen in Container** in VS Code. If HMR stalls on Windows
 
 ## Roadmap
 
-Professional character rig and animation, audio, PWA/mobile controls, gamepads, additional arenas and bosses, then opt-in online/stream integrations. No backend or streaming integration is part of this milestone.
+See [docs/ROADMAP.md](docs/ROADMAP.md). Open items need people or decisions rather than code: a
+human playtest round ([docs/PLAYTEST_PLAN.md](docs/PLAYTEST_PLAN.md)), profiling on physical
+phones ([docs/DEVICE_PROFILING.md](docs/DEVICE_PROFILING.md)), dedicated art for the new enemy
+families and commanders, recorded audio, and a backend choice for online leaderboards and cloud saves.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs lint, build and unit tests, then the Playwright suite on
+chromium, webkit and mobile-webkit, for every pull request and push to `main`.
 
 
 ## Combat slice: expressive movement and readable attacks

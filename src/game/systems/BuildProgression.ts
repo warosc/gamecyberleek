@@ -9,7 +9,7 @@ export interface BuildSynergy {
   modifiers: readonly EquipmentModifier[];
 }
 
-const SYNERGIES: readonly (BuildSynergy & { weapon: PlayerStats['weaponMode']; requiredItem: string })[] = [
+export const SYNERGIES: readonly (BuildSynergy & { weapon: PlayerStats['weaponMode']; requiredItem: string })[] = [
   { id: 'plague-bastion', name: 'BASTIÓN DE PLAGA', description: '+18 daño y +28 área de plasma',
     color: 0xff7bdf, weapon: 'plasma', requiredItem: 'placa-bioacero', modifiers: [
       { key: 'attackDamage', operation: 'add', value: 18 },

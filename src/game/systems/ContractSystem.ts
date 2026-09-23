@@ -1,4 +1,5 @@
 import type { MomentumState } from './CombatMomentum';
+import { t } from '../i18n';
 
 export type ContractKind = 'ELIMINATIONS' | 'KILL_STREAK' | 'DEVICE_KILLS' | 'UNSCATHED' | 'ELITE_HUNT';
 
@@ -29,7 +30,6 @@ interface ContractBlueprint {
   title: string;
   reward: number;
   rollTarget: () => number;
-  describe: (target: number) => string;
 }
 
 /**
@@ -42,39 +42,35 @@ const BLUEPRINTS: Record<ContractKind, ContractBlueprint> = {
     title: 'ELIMINACIONES',
     reward: 45,
     rollTarget: () => 15 + Math.floor(Math.random() * 11), // 15-25
-    describe: (target) => `Elimina ${target} enemigos`,
   },
   KILL_STREAK: {
     kind: 'KILL_STREAK',
     title: 'CADENA LETAL',
     reward: 55,
     rollTarget: () => 5 + Math.floor(Math.random() * 4), // 5-8
-    describe: (target) => `Encadena ${target} bajas`,
   },
   DEVICE_KILLS: {
     kind: 'DEVICE_KILLS',
     title: 'SABOTAJE',
     reward: 60,
     rollTarget: () => 2 + Math.floor(Math.random() * 3), // 2-4
-    describe: (target) => `Elimina ${target} enemigos con barriles`,
   },
   UNSCATHED: {
     kind: 'UNSCATHED',
     title: 'SIN RASGUÑOS',
     reward: 65,
     rollTarget: () => 30000 + Math.floor(Math.random() * 31) * 1000, // 30s-60s
-    describe: (target) => `Sobrevive ${Math.round(target / 1000)}s sin recibir daño`,
   },
   ELITE_HUNT: {
     kind: 'ELITE_HUNT',
     title: 'CAZA MAYOR',
     reward: 70,
     rollTarget: () => 2 + Math.floor(Math.random() * 2), // 2-3
-    describe: (target) => `Derrota a ${target} elites o al comandante`,
   },
 };
 
 export const ALL_CONTRACT_KINDS = Object.keys(BLUEPRINTS) as ContractKind[];
+export const contractTitle = (kind: ContractKind) => BLUEPRINTS[kind].title;
 export const CONTRACTS_PER_RUN = 3;
 export const PERFECT_BONUS_CREDITS = 120;
 
@@ -89,7 +85,8 @@ function shuffled<T>(items: readonly T[]): T[] {
 }
 
 export function contractDescription(contract: Pick<ContractProgress, 'kind' | 'target'>) {
-  return BLUEPRINTS[contract.kind].describe(contract.target);
+  const target = contract.kind === 'UNSCATHED' ? Math.round(contract.target / 1000) : contract.target;
+  return t(`contract.${contract.kind}`, { target });
 }
 
 function rollContract(kind: ContractKind): ContractProgress {

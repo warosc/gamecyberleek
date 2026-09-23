@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
+import { t, type StringKey } from '../i18n';
 
 export type HintAction = 'move' | 'aim' | 'fire' | 'dash';
 
 interface HintSpec {
   action: HintAction;
-  label: string;
+  label: StringKey;
   x: number;
   y: number;
   delayMs: number;
@@ -41,7 +42,7 @@ export class OnboardingHints {
     this.active = true;
     for (const spec of touch ? TOUCH_HINTS : DESKTOP_HINTS) {
       const label = this.scene.add
-        .text(spec.x, spec.y, spec.label, {
+        .text(spec.x, spec.y, t(spec.label), {
           fontFamily: 'Arial Black',
           fontSize: '15px',
           color: '#eaffff',
@@ -98,18 +99,18 @@ export class OnboardingHints {
 }
 
 const DESKTOP_HINTS: HintSpec[] = [
-  { action: 'move', label: 'W A S D / ARROWS   MOVE', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 120, delayMs: 500 },
-  { action: 'aim', label: 'MOUSE   AIM', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 160, delayMs: 1100 },
-  { action: 'fire', label: 'CLICK   FIRE', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 200, delayMs: 1700 },
-  { action: 'dash', label: 'SPACE   DASH', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 240, delayMs: 2600 },
+  { action: 'move', label: 'hint.move', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 120, delayMs: 500 },
+  { action: 'aim', label: 'hint.aim', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 160, delayMs: 1100 },
+  { action: 'fire', label: 'hint.fire', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 200, delayMs: 1700 },
+  { action: 'dash', label: 'hint.dash', x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 + 240, delayMs: 2600 },
 ];
 
 // Anchored over the sticks they describe rather than centred, because on a phone the thing to
 // point at is the control itself.
 const TOUCH_HINTS: HintSpec[] = [
-  { action: 'move', label: 'MOVE', x: 135, y: GAME_HEIGHT - 285, delayMs: 500 },
-  { action: 'fire', label: 'AIM  ·  FIRE', x: GAME_WIDTH - 135, y: GAME_HEIGHT - 300, delayMs: 1200 },
+  { action: 'move', label: 'hint.touchMove', x: 135, y: GAME_HEIGHT - 285, delayMs: 500 },
+  { action: 'fire', label: 'hint.touchFire', x: GAME_WIDTH - 135, y: GAME_HEIGHT - 300, delayMs: 1200 },
   // Beside the dash pad, not above it: directly above sits the AUTO FIRE toggle, and a hint
   // there labels the wrong control.
-  { action: 'dash', label: 'DASH', x: GAME_WIDTH - 400, y: GAME_HEIGHT - 285, delayMs: 2200 },
+  { action: 'dash', label: 'hint.touchDash', x: GAME_WIDTH - 400, y: GAME_HEIGHT - 285, delayMs: 2200 },
 ];

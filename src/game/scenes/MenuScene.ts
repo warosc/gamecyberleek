@@ -7,7 +7,7 @@ import { AudioManager } from '../managers/AudioManager';
 import { STARTER_WEAPONS, starterWeapon, type StarterWeaponId } from '../weapons/WeaponRegistry';
 import { masteryRank, type WeaponMastery } from '../weapons/WeaponMastery';
 import { dailyOperation } from '../progression/DailyOperation';
-import { t, type StringKey } from '../i18n';
+import { t, td, type StringKey } from '../i18n';
 import { hex } from '../ui/SceneWidgets';
 
 /** Last sector chosen in this session, so returning from a sub-menu keeps the selection. */
@@ -128,7 +128,7 @@ export class MenuScene extends Phaser.Scene {
       date: daily.date,
       sector: ARENA_THEMES[daily.sector].subtitle,
       weapon: starterWeapon(daily.weaponId).name,
-      mutator: daily.mutator.name,
+      mutator: td(daily.mutator.name),
     })];
     if (profile.daily.date === daily.date && profile.daily.bestScore > 0)
       dailyLines.push(t('menu.dailyBest', { score: profile.daily.bestScore }));

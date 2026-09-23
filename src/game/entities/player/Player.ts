@@ -9,6 +9,7 @@ import { LayeredPlayerRig } from './LayeredPlayerRig';
 import { applyStarterWeapon, type StarterWeaponId } from '../../weapons/WeaponRegistry';
 import { WeaponVisual } from './WeaponVisual';
 import { shakeCamera } from '../../systems/RuntimeSettings';
+import { PlayerStatusController } from './PlayerStatusController';
 
 export class Player extends Phaser.GameObjects.Container {
   readonly stats = createPlayerStats();
@@ -18,14 +19,12 @@ export class Player extends Phaser.GameObjects.Container {
   private readonly weapon: WeaponVisual;
   private lastDash = -9999;
   private readonly dashDirection = new Phaser.Math.Vector2();
-  private hurtUntil = 0;
   private dashingUntil = 0;
   aim = 0;
-  private overdriveUntil = 0;
   private animator: PlayerAnimator;
   private layeredRig?: LayeredPlayerRig;
   private lastTrail = 0;
-  private shieldUntil = 0;
+  private readonly status = new PlayerStatusController();
   private shieldVisual: Phaser.GameObjects.Arc;
   private shieldRing: Phaser.GameObjects.Graphics;
   private overdriveVisual: Phaser.GameObjects.Arc;
@@ -33,7 +32,6 @@ export class Player extends Phaser.GameObjects.Container {
   private shadow: Phaser.GameObjects.Ellipse;
   private gameplayTime = 0;
   private weaponTier = 1;
-  private chilledUntil = 0;
   private readonly chillRing: Phaser.GameObjects.Arc;
   constructor(scene: Phaser.Scene, x: number, y: number, weaponId: StarterWeaponId = 'pulse') {
     super(scene, x, y);
@@ -125,10 +123,10 @@ export class Player extends Phaser.GameObjects.Container {
       this.scene.events.emit(Events.PLAYER_DASHED, v.x, v.y);
     }
     if (time < this.dashingUntil) v.copy(this.dashDirection);
-    const chilled = time < this.chilledUntil;
+    const chilled = this.status.isChilled(time);
     this.chillRing.setVisible(chilled);
     // Dash ignores chill on purpose: it is the answer to being slowed.
-    const speed = time < this.dashingUntil ? this.stats.dashSpeed : this.stats.moveSpeed * (chilled ? 0.65 : 1);
+    const speed = time < this.dashingUntil ? this.stats.dashSpeed : this.stats.moveSpeed * this.status.moveSpeedScale(time);
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(v.x * speed, v.y * speed);
     const mouseFiring = !pointer.wasTouch && pointer.leftButtonDown();
     const virtualAiming = virtual?.active &&
@@ -179,9 +177,9 @@ export class Player extends Phaser.GameObjects.Container {
         onComplete: () => streak.destroy(),
       });
     }
-    const overdrive = time < this.overdriveUntil;
+    const overdrive = this.status.isOverdriven(time);
     this.setScale(overdrive ? 1.08 : 1);
-    const shielded = time < this.shieldUntil;
+    const shielded = this.status.isShielded(time);
     this.shieldVisual.setVisible(shielded);
     this.shieldRing.setVisible(shielded);
     if (shielded) {
@@ -204,7 +202,7 @@ export class Player extends Phaser.GameObjects.Container {
     this.layeredRig?.setPowerGlow(overdrive ? 0.55 : 0);
     if (
       (mouseFiring || (virtual?.active && (virtual.firing || virtual.autoFire))) &&
-      time - this.lastShot >= this.stats.attackCooldown * (overdrive ? 0.5 : 1)
+      time - this.lastShot >= this.stats.attackCooldown * this.status.fireCooldownScale(time)
     ) {
       this.lastShot = time;
       this.layeredRig?.recoil(time);
@@ -217,14 +215,14 @@ export class Player extends Phaser.GameObjects.Container {
     }
   }
   activateOverdrive(durationMs: number) {
-    this.overdriveUntil = Math.max(this.overdriveUntil, this.gameplayTime) + durationMs;
+    this.status.overdrive(this.gameplayTime, durationMs);
     this.overdriveVisual.setVisible(true);
     this.overdriveRing.setVisible(true);
     this.scene.tweens.add({ targets: this.overdriveVisual, scale: 1.16, alpha: 0.45, duration: 180, yoyo: true });
     this.castFlare(0xd566ff, 74);
   }
   activateShield(durationMs: number) {
-    this.shieldUntil = Math.max(this.shieldUntil, this.gameplayTime) + durationMs;
+    this.status.shield(this.gameplayTime, durationMs);
     this.shieldVisual.setVisible(true);
     this.shieldRing.setVisible(true);
     this.shieldVisual.setScale(0.92);
@@ -255,7 +253,7 @@ export class Player extends Phaser.GameObjects.Container {
     });
   }
   get damageMultiplier() {
-    return this.gameplayTime < this.overdriveUntil ? 1.5 : 1;
+    return this.status.damageMultiplier(this.gameplayTime);
   }
   get animationState() {
     return this.animator.currentState;
@@ -269,14 +267,14 @@ export class Player extends Phaser.GameObjects.Container {
   }
   /** Slows movement for `durationMs` of gameplay time; a longer chill replaces a shorter one. */
   chill(durationMs: number) {
-    this.chilledUntil = Math.max(this.chilledUntil, this.gameplayTime + durationMs);
+    this.status.chill(this.gameplayTime, durationMs);
   }
   get isChilled() {
-    return this.gameplayTime < this.chilledUntil;
+    return this.status.isChilled(this.gameplayTime);
   }
   takeDamage(amount: number) {
-    if (this.gameplayTime < this.dashingUntil || this.gameplayTime < this.hurtUntil) return;
-    if (this.gameplayTime < this.shieldUntil) {
+    if (this.gameplayTime < this.dashingUntil || this.status.inGrace(this.gameplayTime)) return;
+    if (this.status.isShielded(this.gameplayTime)) {
       // A blocked hit has to be as readable as a taken one, or the shield feels like nothing.
       this.scene.tweens.add({ targets: this.shieldVisual, scale: 1.18, duration: 70, yoyo: true });
       this.scene.tweens.add({ targets: this.shieldRing, alpha: { from: 1, to: 0.35 }, duration: 90, yoyo: true });
@@ -290,7 +288,7 @@ export class Player extends Phaser.GameObjects.Container {
     });
     const applied = Math.max(1, hit.amount);
     if (this.health.damage(applied)) {
-      this.hurtUntil = this.gameplayTime + 350;
+      this.status.grace(this.gameplayTime, 350);
       // The third argument is the damage actually applied after armor. Heals emit the same
       // event without it, so a listener can tell a hit from a repair.
       this.scene.events.emit(Events.PLAYER_DAMAGED, this.health.current, this.health.max, applied);
@@ -304,9 +302,9 @@ export class Player extends Phaser.GameObjects.Container {
     }
   }
   isShieldActive() {
-    return this.gameplayTime < this.shieldUntil;
+    return this.status.isShielded(this.gameplayTime);
   }
   isOverdriveActive() {
-    return this.gameplayTime < this.overdriveUntil;
+    return this.status.isOverdriven(this.gameplayTime);
   }
 }

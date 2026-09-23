@@ -41,6 +41,15 @@ export default defineConfig({
   plugins: [devLogBridge()],
   server: { host: '0.0.0.0', port: 5173 },
   preview: { host: '0.0.0.0', port: 4173 },
+  build: {
+    rollupOptions: {
+      // Phaser changes far less often than the game: in its own chunk it stays cached across
+      // game deploys, and the game chunk a returning player downloads is a fraction of the size.
+      output: { manualChunks: { phaser: ['phaser'] } },
+    },
+    // Phaser alone is ~1.4 MB minified (~370 KB gzip); that chunk is expected and cached long-term.
+    chunkSizeWarningLimit: 1450,
+  },
   // tests/e2e belongs to Playwright, which drives a real browser; vitest runs in node and
   // cannot load @playwright/test.
   test: { include: ['tests/**/*.test.ts'], exclude: ['**/node_modules/**', '**/dist/**', 'tests/e2e/**'] },

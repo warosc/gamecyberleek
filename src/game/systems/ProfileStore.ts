@@ -235,3 +235,28 @@ export function unlock(id: string) {
 export function isUnlocked(id: string) {
   return loadProfile().unlocks.includes(id);
 }
+
+/** A portable copy of the save, for the player to keep or move to another device. */
+export function exportProfileJson() {
+  return JSON.stringify({ game: 'leek-ops', exportedAt: new Date().toISOString(), profile: loadProfile() }, null, 2);
+}
+
+/**
+ * Restores a save exported by `exportProfileJson`. Every field is re-validated exactly as on
+ * load, so a hand-edited or damaged file can at worst reset the fields it broke. Returns
+ * `undefined`, and changes nothing, when the text is not a LEEK OPS save.
+ */
+export function importProfileJson(text: string) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== 'object') return undefined;
+  const envelope = parsed as { game?: unknown; profile?: unknown };
+  if (envelope.game !== 'leek-ops' || !envelope.profile || typeof envelope.profile !== 'object') return undefined;
+  const profile = normalizeProfile(envelope.profile);
+  persist(profile);
+  return profile;
+}

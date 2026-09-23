@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { ARENA_THEMES } from '../config/ArenaDefinitions';
-import { t } from '../i18n';
+import { t, td } from '../i18n';
 import { ACHIEVEMENTS } from '../progression/Achievements';
 import { loadProfile } from '../systems/ProfileStore';
 import { starterWeapon } from '../weapons/WeaponRegistry';
 import { backToMenu, subMenuFrame } from '../ui/SceneWidgets';
+import { onlineService } from '../online/OnlinePorts';
 
 export function formatDuration(ms: number) {
   const seconds = Math.floor(ms / 1000);
@@ -47,10 +48,18 @@ export class RecordsScene extends Phaser.Scene {
       this.add.text(ox + 76, y, t(key), label).setOrigin(0, 0.5);
       this.add.text(ox + 354, y, text, value).setOrigin(1, 0.5).setName(`records-${key}`);
     });
-    if (profile.daily.bestScore > 0)
+    if (profile.daily.bestScore > 0) {
       this.add.text(ox + 70, 520, `${t('records.dailyBest', { date: profile.daily.date })}  ${profile.daily.bestScore}`, {
         ...label, color: '#ffc857',
       });
+      // Through the online port: offline it is this device's board, with a backend the world's.
+      void onlineService().fetchDailyBoard(profile.daily.date).then(board => {
+        if (!this.sys.isActive() || !board.length) return;
+        this.add.text(ox + 70, 544, board.map(entry => `${entry.rank}. ${entry.displayName}  ${entry.score}`).join('\n'), {
+          fontFamily: 'monospace', fontSize: '11px', color: '#c7d9e2', lineSpacing: 3,
+        }).setName('records-daily-board');
+      }).catch(() => undefined);
+    }
 
     this.add.text(ox + 410, 140, t('records.history'), { ...label, color: '#21e6ff', fontSize: '14px' });
     const history = [...profile.history].reverse().slice(0, 9);
@@ -79,10 +88,10 @@ export class RecordsScene extends Phaser.Scene {
       const owned = profile.achievements.includes(achievement.id);
       this.add.rectangle(ox + 1025, y, 370, 34, owned ? 0x14331f : 0x0b1b2b, 0.95)
         .setStrokeStyle(1, owned ? 0x73ef62 : 0x214c65, owned ? 0.9 : 0.6);
-      this.add.text(ox + 850, y - 7, achievement.name, {
+      this.add.text(ox + 850, y - 7, td(achievement.name), {
         fontFamily: 'Arial Black', fontSize: '12px', color: owned ? '#73ef62' : '#7594a8',
       }).setOrigin(0, 0.5);
-      this.add.text(ox + 850, y + 8, achievement.description, {
+      this.add.text(ox + 850, y + 8, td(achievement.description), {
         fontFamily: 'Arial', fontSize: '10px', color: owned ? '#c7d9e2' : '#5d7688',
       }).setOrigin(0, 0.5);
       this.add.text(ox + 1200, y, `+${achievement.reward}`, {

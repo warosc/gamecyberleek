@@ -20,6 +20,8 @@ import type { MomentumState } from '../systems/CombatMomentum';
 import { ContractHud } from '../ui/ContractHud';
 import { contractDescription, type ContractProgress } from '../systems/ContractSystem';
 import { MinibossBanner } from '../ui/MinibossBanner';
+import { buildInventoryPanel, buildLootDecision, showLootBanner } from '../ui/LootPanels';
+import { abilityText, t, td } from '../i18n';
 import type { BuildSynergy, combatRating } from '../systems/BuildProgression';
 import type { SectorObjectiveState } from '../systems/SectorObjectiveSystem';
 
@@ -88,7 +90,7 @@ export class UIScene extends Phaser.Scene {
     this.showContractBriefing();
     this.minibossBanner = new MinibossBanner(this);
     const objectiveBack = this.add.rectangle(0, 0, 330, 70, 0x06101d, 0.9).setStrokeStyle(2, 0x21e6ff, 0.55);
-    this.objectiveTitle = this.add.text(-148, -22, 'OBJETIVO OPCIONAL', {
+    this.objectiveTitle = this.add.text(-148, -22, t('objective.optional'), {
       fontFamily: 'Arial Black', fontSize: '11px', color: '#21e6ff', letterSpacing: 1,
     });
     this.objectiveProgress = this.add.text(-148, 4, '', {
@@ -199,10 +201,10 @@ export class UIScene extends Phaser.Scene {
   private onXpDiscovered() {
     const plate = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 104, 470, 62, 0x061323, 0.94)
       .setStrokeStyle(2, 0x73ef62, 0.85);
-    const title = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 116, 'BIO-DATOS // EXPERIENCIA', {
+    const title = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 116, t('xp.title'), {
       fontFamily: 'Arial Black', fontSize: '16px', color: '#73ef62', letterSpacing: 2,
     }).setOrigin(0.5);
-    const brief = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 91, 'ABSÓRBELOS PARA SUBIR DE NIVEL Y ELEGIR PODERES', {
+    const brief = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 91, t('xp.brief'), {
       fontFamily: 'monospace', fontSize: '11px', color: '#c7d9e2', letterSpacing: 1,
     }).setOrigin(0.5);
     const banner = this.add.container(0, 20, [plate, title, brief]).setDepth(125).setAlpha(0).setName('xp-discovery');
@@ -210,19 +212,19 @@ export class UIScene extends Phaser.Scene {
       onComplete: () => banner.destroy(true) });
   }
   private onObjectiveChanged(state: SectorObjectiveState) {
-    const status = state.status === 'complete' ? 'COMPLETADO' : state.status === 'failed' ? 'EXPIRADO' : `${state.progress}/${state.target}`;
-    this.objectiveTitle.setText(state.title).setColor(`#${state.color.toString(16).padStart(6, '0')}`);
-    this.objectiveProgress.setText(`${status}  ·  ${state.status === 'active' ? state.brief : state.status === 'complete' ? state.reward : 'RECOMPENSA PERDIDA'}`);
+    const status = state.status === 'complete' ? t('objective.complete') : state.status === 'failed' ? t('objective.expired') : `${state.progress}/${state.target}`;
+    this.objectiveTitle.setText(td(state.title)).setColor(`#${state.color.toString(16).padStart(6, '0')}`);
+    this.objectiveProgress.setText(`${status}  ·  ${state.status === 'active' ? td(state.brief) : state.status === 'complete' ? td(state.reward) : t('objective.lost')}`);
     if (state.status !== 'active') {
       this.tweens.add({ targets: this.objectivePanel, scale: 1.08, duration: 120, yoyo: true });
       if (state.status === 'complete') this.phaseBanner.show({
-        title: 'OBJETIVO COMPLETADO', brief: state.reward, color: state.color,
+        title: t('objective.done'), brief: td(state.reward), color: state.color,
       });
     }
   }
   private onUpgradeApplied(name: string, description: string, level: number, rating: ReturnType<typeof combatRating>) {
     const plate = this.add.rectangle(0, 0, 600, 94, 0x061323, 0.96).setStrokeStyle(3, 0x73ef62, 0.9);
-    const title = this.add.text(0, -20, `${name}  ·  NIVEL ${level}`, {
+    const title = this.add.text(0, -20, t('upgrade.level', { name, level }), {
       fontFamily: 'Arial Black', fontSize: '21px', color: '#73ef62',
     }).setOrigin(0.5);
     const detail = this.add.text(0, 16, `${description}  //  DPS ${rating.dps} · CRIT ${rating.critical}%`, {
@@ -238,13 +240,13 @@ export class UIScene extends Phaser.Scene {
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1040, 570, 0x061323, 0.98)
         .setStrokeStyle(2, 0x21e6ff, 0.5),
       this.add
-        .text(GAME_WIDTH / 2, 118, `NIVEL ${this.gameScene.xp.level} ALCANZADO`, {
+        .text(GAME_WIDTH / 2, 118, t('levelup.title', { level: this.gameScene.xp.level }), {
           fontFamily: 'Arial Black',
           fontSize: '42px',
           color: '#73ef62',
         })
         .setOrigin(0.5),
-      this.add.text(GAME_WIDTH / 2, 164, 'CHOOSE YOUR NEXT PROTOCOL', {
+      this.add.text(GAME_WIDTH / 2, 164, t('levelup.subtitle'), {
         fontFamily: 'Arial Black', fontSize: '12px', color: '#8ba5b8', letterSpacing: 3,
       }).setOrigin(0.5),
     ];
@@ -262,15 +264,16 @@ export class UIScene extends Phaser.Scene {
       ...this.chooser.build(
         abilities.map((ability, index) => {
           const current = this.gameScene.abilityLevels.get(ability.id) ?? 0;
+          const text = abilityText(ability);
           return {
             accent: accents[index] ?? 0x21e6ff,
             icon: ability.icon,
-            name: ability.name,
-            effect: ability.description,
+            name: text.name,
+            effect: text.description,
             footer:
               current + 1 >= ability.maxLevel
-                ? `LEVEL ${current + 1}  ·  MAX`
-                : `LEVEL ${current}  →  ${current + 1}`,
+                ? t('levelup.max', { level: current + 1 })
+                : t('levelup.next', { current, next: current + 1 }),
             pips: { filled: current + 1, total: ability.maxLevel },
           };
         }),
@@ -279,8 +282,8 @@ export class UIScene extends Phaser.Scene {
       ),
     );
     parts.push(this.add.text(GAME_WIDTH / 2, 585, this.gameScene.mobileInput.active
-      ? 'TAP A PROTOCOL TO CONTINUE'
-      : 'PRESS 1-3, OR USE ← → AND ENTER', {
+      ? t('levelup.tap')
+      : t('levelup.keys'), {
       fontFamily: 'monospace', fontSize: '12px', color: '#7594a8', letterSpacing: 2,
     }).setOrigin(0.5));
     this.modal.replace(parts, 100);
@@ -303,22 +306,22 @@ export class UIScene extends Phaser.Scene {
   }
   private showChestRewards() {
     const rewards = [
-      { id: 'repair' as const, name: 'FIELD REPAIR', effect: 'Restore 40 HP', icon: '✚', color: 0x73ef62 },
-      { id: 'charge' as const, name: 'FULL CHARGE', effect: 'Reset powers + shield', icon: '⚡', color: 0x21e6ff },
-      { id: 'weapon' as const, name: 'WEAPON CACHE', effect: '+6 permanent damage', icon: '✦', color: 0xd566ff },
+      { id: 'repair' as const, name: t('chest.repair'), effect: t('chest.repairEffect'), icon: '✚', color: 0x73ef62 },
+      { id: 'charge' as const, name: t('chest.charge'), effect: t('chest.chargeEffect'), icon: '⚡', color: 0x21e6ff },
+      { id: 'weapon' as const, name: t('chest.weapon'), effect: t('chest.weaponEffect'), icon: '✦', color: 0xd566ff },
     ];
     const parts: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1040, 540, 0x061323, 0.98)
         .setStrokeStyle(2, 0x73ef62, 0.5),
       this.add
-        .text(GAME_WIDTH / 2, 140, 'SUPPLY CHEST', {
+        .text(GAME_WIDTH / 2, 140, t('chest.title'), {
           fontFamily: 'Arial Black',
           fontSize: '42px',
           color: '#73ef62',
         })
         .setOrigin(0.5),
-      this.add.text(GAME_WIDTH / 2, 182, 'SELECT ONE FIELD REWARD', {
+      this.add.text(GAME_WIDTH / 2, 182, t('chest.subtitle'), {
         fontFamily: 'Arial Black', fontSize: '12px', color: '#8ba5b8', letterSpacing: 3,
       }).setOrigin(0.5),
     ];
@@ -334,15 +337,15 @@ export class UIScene extends Phaser.Scene {
           icon: reward.icon,
           name: reward.name,
           effect: reward.effect,
-          footer: 'CLAIM REWARD',
+          footer: t('chest.claim'),
         })),
         GAME_WIDTH / 2,
         382,
       ),
     );
     parts.push(this.add.text(GAME_WIDTH / 2, 578, this.gameScene.mobileInput.active
-      ? 'TAP A REWARD TO CONTINUE'
-      : 'PRESS 1-3, OR USE ← → AND ENTER', {
+      ? t('chest.tap')
+      : t('levelup.keys'), {
       fontFamily: 'monospace', fontSize: '12px', color: '#7594a8', letterSpacing: 2,
     }).setOrigin(0.5));
     this.modal.replace(parts, 110);
@@ -355,77 +358,11 @@ export class UIScene extends Phaser.Scene {
     rating: ReturnType<typeof combatRating>,
   ) {
     this.chooser?.destroy();
-    const parts: Phaser.GameObjects.GameObject[] = [
-      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.95),
-      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, Math.min(1120, GAME_WIDTH - 44), 650, 0x061323, 0.98)
-        .setStrokeStyle(3, synergy?.color ?? 0x21e6ff, 0.8),
-      this.add.text(80, 42, 'ARSENAL CYBERLEEK', {
-        fontFamily: 'Arial Black', fontSize: '30px', color: '#eaffff',
-      }),
-      this.add.text(82, 82, `DAÑO ${rating.damage}   DPS ${rating.dps}   CAD ${rating.cadence}/s   CRIT ${rating.critical}%   ARM ${rating.armor}%   VEL ${rating.speed}`, {
-        fontFamily: 'monospace', fontSize: '14px', color: '#9fd8e8',
-      }),
-      this.add.text(GAME_WIDTH - 82, 50, 'I  CERRAR', {
-        fontFamily: 'Arial Black', fontSize: '14px', color: '#73ef62', backgroundColor: '#07111f', padding: { x: 14, y: 9 },
-      }).setOrigin(1, 0).setInteractive({ useHandCursor: true }),
-    ];
-    const close = parts[4] as Phaser.GameObjects.Text;
-    close.on('pointerup', () => this.gameScene.toggleInventory());
-    const synergyText = synergy
-      ? `SINERGIA ACTIVA // ${synergy.name} — ${synergy.description}`
-      : 'SINERGIA // combina arma y armadura compatibles para evolucionar tu build';
-    parts.push(this.add.text(GAME_WIDTH / 2, 122, synergyText, {
-      fontFamily: 'Arial Black', fontSize: '13px', color: synergy ? `#${synergy.color.toString(16).padStart(6, '0')}` : '#708b9b',
-    }).setOrigin(0.5));
-
-    for (let index = 0; index < 6; index++) {
-      const item = items[index];
-      const column = index % 3;
-      const row = Math.floor(index / 3);
-      const x = GAME_WIDTH / 2 + (column - 1) * 350;
-      const y = 245 + row * 215;
-      const active = item === activeWeapon;
-      const color = item?.color ?? 0x294252;
-      parts.push(this.add.rectangle(x, y, 316, 178, active ? 0x11344a : 0x0a1b2c, 1)
-        .setStrokeStyle(active ? 4 : 2, active ? 0x73ef62 : color, active ? 1 : 0.65)
-        .setName(`inventory-slot-${index}`));
-      if (!item) {
-        parts.push(this.add.text(x, y, `RANURA ${index + 1}\nVACÍA`, {
-          fontFamily: 'monospace', fontSize: '14px', color: '#496474', align: 'center',
-        }).setOrigin(0.5));
-        continue;
-      }
-      parts.push(
-        this.add.text(x - 138, y - 73, `${item.rarity}  ·  NIVEL ${item.itemLevel}`, {
-          fontFamily: 'monospace', fontSize: '11px', color: `#${color.toString(16).padStart(6, '0')}`,
-        }),
-        this.add.text(x - 138, y - 48, item.name, {
-          fontFamily: 'Arial Black', fontSize: '16px', color: '#eaffff', wordWrap: { width: 276 },
-        }),
-        this.add.text(x - 138, y - 14, `${item.kind === 'weapon' ? 'ARMA' : item.kind === 'armor' ? 'ARMADURA' : 'MÓDULO'}  ·  PODER ${item.power}\n${item.description}`, {
-          fontSize: '12px', color: '#a9bdc9', wordWrap: { width: 276 }, lineSpacing: 4,
-        }),
-      );
-      if (item.kind === 'weapon') {
-        const equip = this.add.text(x - 138, y + 56, active ? 'EQUIPADA' : 'EQUIPAR', {
-          fontFamily: 'Arial Black', fontSize: '12px', color: active ? '#73ef62' : '#21e6ff',
-          backgroundColor: '#06101d', padding: { x: 11, y: 7 },
-        });
-        if (!active) equip.setInteractive({ useHandCursor: true }).on('pointerup', () => this.gameScene.equipInventoryWeapon(index));
-        parts.push(equip);
-      }
-      if (!active) {
-        const recycle = this.add.text(x + 138, y + 56, 'RECICLAR', {
-          fontFamily: 'Arial Black', fontSize: '11px', color: '#ff9a65', backgroundColor: '#06101d', padding: { x: 10, y: 7 },
-        }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
-        recycle.on('pointerup', () => this.gameScene.recycleInventoryItem(index));
-        parts.push(recycle);
-      }
-    }
-    parts.push(this.add.text(GAME_WIDTH / 2, 672, 'PC: I PARA ABRIR/CERRAR  ·  MÓVIL: BOTÓN INV  ·  RECICLAR RESTAURA 8 HP', {
-      fontFamily: 'monospace', fontSize: '12px', color: '#7894a5',
-    }).setOrigin(0.5));
-    this.modal.replace(parts, 118);
+    this.modal.replace(buildInventoryPanel(this, items, activeWeapon, synergy, rating, {
+      close: () => this.gameScene.toggleInventory(),
+      equip: index => this.gameScene.equipInventoryWeapon(index),
+      recycle: index => this.gameScene.recycleInventoryItem(index),
+    }), 118);
   }
 
   private showLootBanner(equipment: Equipment) {
@@ -434,74 +371,14 @@ export class UIScene extends Phaser.Scene {
         ? equipment.name
         : `${this.gameScene.player.stats.weaponName}  ·  ARMOR ${Math.round(this.gameScene.player.stats.damageReduction * 100)}%`,
     );
-    const color = `#${equipment.color.toString(16).padStart(6, '0')}`;
-    const panel = this.add.rectangle(GAME_WIDTH / 2, 175, 560, 112, 0x06101d, 0.96)
-      .setStrokeStyle(4, equipment.color, 0.95);
-    const rarity = this.add.text(GAME_WIDTH / 2, 141, `${equipment.rarity}  //  ${equipment.kind.toUpperCase()}`, {
-      fontFamily: 'Arial Black', fontSize: '13px', color, letterSpacing: 3,
-    }).setOrigin(0.5);
-    const title = this.add.text(GAME_WIDTH / 2, 170, equipment.name, {
-      fontFamily: 'Arial Black', fontSize: '23px', color: '#ffffff',
-    }).setOrigin(0.5);
-    const description = this.add.text(GAME_WIDTH / 2, 202, equipment.description, {
-      fontSize: '14px', color: '#c7d9e2',
-    }).setOrigin(0.5);
-    const banner = this.add.container(0, -35, [panel, rarity, title, description]).setDepth(130).setAlpha(0);
-    this.tweens.add({
-      targets: banner,
-      y: 0,
-      alpha: 1,
-      duration: 260,
-      hold: 2300,
-      yoyo: true,
-      onComplete: () => banner.destroy(),
-    });
+    showLootBanner(this, equipment);
   }
   private showLootDecision(equipment: Equipment, count: number, full: boolean, activeWeapon?: Equipment) {
-    const color = `#${equipment.color.toString(16).padStart(6, '0')}`;
-    const parts: Phaser.GameObjects.GameObject[] = [
-      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
-      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 760, 550, 0x061323, 0.98)
-        .setStrokeStyle(3, equipment.color, 0.75),
-      this.add.text(GAME_WIDTH / 2, 105, 'BOTÍN ENCONTRADO', {
-        fontFamily: 'Arial Black', fontSize: '34px', color: '#ffffff',
-      }).setOrigin(0.5),
-      this.add.text(GAME_WIDTH / 2, 148, `${equipment.rarity} // NIVEL ${equipment.itemLevel} // PODER ${equipment.power} // ${equipment.kind.toUpperCase()}`, {
-        fontFamily: 'monospace', fontSize: '14px', color, letterSpacing: 3,
-      }).setOrigin(0.5),
-      this.add.text(GAME_WIDTH / 2, 184, equipment.name, {
-        fontFamily: 'Arial Black', fontSize: '25px', color,
-      }).setOrigin(0.5),
-      this.add.text(GAME_WIDTH / 2, 220, equipment.description, {
-        fontSize: '16px', color: '#c7d9e2', align: 'center', wordWrap: { width: 620 },
-      }).setOrigin(0.5),
-      this.add.text(GAME_WIDTH / 2, 254, `MOCHILA ${count}/6`, {
-        fontFamily: 'Arial Black', fontSize: '13px', color: full ? '#ff476f' : '#8ba5b8', letterSpacing: 2,
-      }).setOrigin(0.5),
-    ];
-    if (equipment.kind === 'weapon') {
-      parts.push(this.add.text(
-        GAME_WIDTH / 2,
-        286,
-        activeWeapon ? `EQUIPADA: ${activeWeapon.name} · PODER ${activeWeapon.power}\nNUEVA: ${equipment.name} · PODER ${equipment.power}` : 'RANURA DE ARMA DISPONIBLE',
-        { fontFamily: 'monospace', fontSize: '13px', color: '#9eb8c8', align: 'center', lineSpacing: 7 },
-      ).setOrigin(0.5));
-    }
-    const canInstall = !full || (equipment.kind === 'weapon' && activeWeapon !== undefined);
-    const choices = !canInstall ? [
-      { accent: 0x73ef62, icon: '↻', name: 'RECICLAR', effect: 'Convierte la pieza en +12 HP', footer: 'MOCHILA LLENA' },
-    ] : [
-      { accent: equipment.color, icon: equipment.kind === 'weapon' ? '⚡' : '◆',
-        name: activeWeapon && equipment.kind === 'weapon' ? 'REEMPLAZAR' : 'INSTALAR',
-        effect: activeWeapon && equipment.kind === 'weapon' ? 'Cambia arma, estadísticas y disparo' : 'Añade sus estadísticas a tu build',
-        footer: activeWeapon && equipment.kind === 'weapon' ? 'RANURA DE ARMA' : `ESPACIO ${count + 1}/6` },
-      { accent: 0x73ef62, icon: '↻', name: 'RECICLAR', effect: 'Convierte la pieza en +12 HP', footer: 'RECUPERACIÓN' },
-    ];
-    this.chooser = new RewardChooser(this, index => {
+    const { parts, chooser } = buildLootDecision(this, equipment, count, full, activeWeapon, install => {
       this.closeModal();
-      this.gameScene.resolveLoot(canInstall && index === 0);
+      this.gameScene.resolveLoot(install);
     });
-    parts.push(...this.chooser.build(choices, GAME_WIDTH / 2, 455));
+    this.chooser = chooser;
     this.modal.replace(parts, 115);
   }
   private onEquipmentChanged(weapon: string, armor: string) {
@@ -514,7 +391,7 @@ export class UIScene extends Phaser.Scene {
     const tint = `#${color.toString(16).padStart(6, '0')}`;
     const back = this.add.rectangle(GAME_WIDTH / 2, 260, 620, 118, 0x06101d, 0.97)
       .setStrokeStyle(4, color, 1);
-    const kicker = this.add.text(GAME_WIDTH / 2, 232, 'WEAPON EVOLUTION', {
+    const kicker = this.add.text(GAME_WIDTH / 2, 232, t('evolution.title'), {
       fontFamily: 'monospace', fontSize: '13px', color: tint, letterSpacing: 4,
     }).setOrigin(0.5);
     const title = this.add.text(GAME_WIDTH / 2, 270, name, {
@@ -542,13 +419,13 @@ export class UIScene extends Phaser.Scene {
    */
   private showContractBriefing() {
     const contracts = this.gameScene.contracts.list;
-    const lines = contracts.map((contract) => `${contract.title} — ${contractDescription(contract)}`);
+    const lines = contracts.map((contract) => `${td(contract.title)} — ${contractDescription(contract)}`);
     const width = this.gameScene.mobileInput.active ? 640 : 720;
     const height = 74 + lines.length * 28;
     const parts: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(0, 0, width, height, 0x06101d, 0.95).setStrokeStyle(3, 0x21e6ff, 0.75),
       this.add
-        .text(0, -height / 2 + 24, 'CONTRATOS ASIGNADOS', {
+        .text(0, -height / 2 + 24, t('contracts.assigned'), {
           fontFamily: 'Arial Black', fontSize: '16px', color: '#21e6ff', letterSpacing: 3,
         })
         .setOrigin(0.5),

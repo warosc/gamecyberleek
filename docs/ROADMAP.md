@@ -2,6 +2,34 @@
 
 This roadmap intentionally defers new content until the current vertical slice is stable and measurable.
 
+## Improvement roadmap v2 (2026-09-23)
+
+A review of the integrated build produced the plan below. Status is kept here; the phase sections
+further down are the original plan and remain for history.
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Merge `audit/mobile-ux-perf`, `feature/contract-system` and `feature/game-feel-product`; fix the failing BRÓK-9 e2e | Done — `integration/roadmap` |
+| 2 | Keep installers, art archives and deploy tarballs out of git and the Docker context | Done — `.gitignore`, `.dockerignore` |
+| 3 | CI: lint, build, unit tests, Playwright on chromium / webkit / mobile-webkit | Done — `.github/workflows/ci.yml` |
+| 4 | Human playtest round | **Needs people** — [PLAYTEST_PLAN.md](PLAYTEST_PLAN.md), round 2 section |
+| 5 | Workshop: permanent upgrades bought with bio-credits | Done |
+| 6 | Sector selector in the menu with scaled rewards | Done |
+| 7 | Persistent settings: quality, motion, volumes, shake, vibration, language | Done |
+| 8 | Records: lifetime stats, run history, achievements | Done |
+| 9 | Sector-specific mechanics | Done — hazards, devices and objectives from the game-feel branch |
+| 10 | A commander per sector | Done — KOLI-6 (bloom rings) and ROMA-X (chilling cryo lance); art is a colour grade of BRÓK-9 until dedicated sprites exist |
+| 11 | Status effects (burn, chill, toxin) | Done — three level-up options; the spore cannon applies toxin |
+| 12 | New enemy families | Done — medic, bulwark, brood; art is a colour grade of existing sprites until dedicated sprites exist |
+| 13 | Gamepad support | Done |
+| 14 | Localization | Done — Spanish source, English translation |
+| 15 | Original audio and dynamic mixing | Partial — sector music themes and dynamic intensity/ducking on the procedural score; recorded audio still needs a composer |
+| 16 | PWA offline fallback and bundle split | Done |
+| 17 | Physical low-end device profiling | **Needs a device** — [DEVICE_PROFILING.md](DEVICE_PROFILING.md) |
+| 18 | Daily operation with a leaderboard | Done locally — the online board is a port with an offline adapter; it needs a backend decision |
+| 19 | Save backup | Done as export/import of a save file; cloud sync needs the same backend decision |
+| — | Split `UIScene`; player status controller | Done |
+
 ## PHASE A — Stabilization
 
 Goal: make existing behavior safe to extend.

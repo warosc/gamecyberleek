@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { AUDIO_EVENTS, type AudioEventId } from '../audio/AudioEvents';
-import { musicCue, musicStepDuration, type MusicState } from '../audio/MusicScore';
+import { musicCue, musicStepDuration, type MusicContext, type MusicState } from '../audio/MusicScore';
 
 /**
  * One AudioContext for the whole game, created on the first user gesture that reaches any
@@ -49,6 +49,8 @@ export class AudioManager {
   private musicState?: MusicState;
   private musicStep = 0;
   private nextMusicAt = 0;
+  private duckUntil = 0;
+  private duckLevel = 1;
   constructor(scene: Phaser.Scene) {
     // Re-arm per scene only while no context exists: a run where the player never taps
     // leaves nothing behind, and the next run gets another chance to unlock.
@@ -109,15 +111,25 @@ export class AudioManager {
       );
   }
 
-  updateMusic(gameTime: number, state: MusicState) {
+  /**
+   * Pulls the music under an important cue (boss arrival, phase change) so the cue reads,
+   * then lets it return on its own. Wall-clock based: a duck is about what the player hears.
+   */
+  duck(durationMs: number, level = 0.35) {
+    this.duckUntil = performance.now() + durationMs;
+    this.duckLevel = Math.min(Math.max(level, 0), 1);
+  }
+
+  updateMusic(gameTime: number, state: MusicState, context: MusicContext = {}) {
     if (this.musicState !== state) {
       this.musicState = state;
       this.musicStep = 0;
       this.nextMusicAt = gameTime;
     }
     if (gameTime < this.nextMusicAt) return;
-    for (const note of musicCue(state, this.musicStep))
-      this.tone(note.frequency, note.durationS, note.volume, 'ambience', note.type, (note.delayMs ?? 0) / 1000);
+    const duck = performance.now() < this.duckUntil ? this.duckLevel : 1;
+    for (const note of musicCue(state, this.musicStep, context))
+      this.tone(note.frequency, note.durationS, note.volume * duck, 'ambience', note.type, (note.delayMs ?? 0) / 1000);
     this.musicStep++;
     this.nextMusicAt = gameTime + musicStepDuration(state);
   }

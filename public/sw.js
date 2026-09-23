@@ -1,5 +1,6 @@
-const CACHE = 'leek-ops-v32';
-const SHELL = ['/', '/manifest.webmanifest'];
+const CACHE = 'leek-ops-v33';
+const OFFLINE = '/offline.html';
+const SHELL = ['/', '/manifest.webmanifest', OFFLINE];
 self.addEventListener('install', (event) =>
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting())),
 );
@@ -13,6 +14,9 @@ self.addEventListener('activate', (event) =>
       .then(() => self.clients.claim()),
   ),
 );
+// Network first, so a deploy is picked up immediately; every successful response refreshes the
+// cache, so a game that loaded once keeps working offline. A page request with neither network
+// nor cache gets the offline page instead of the browser's error screen.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
@@ -22,6 +26,12 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE).then((cache) => cache.put(event.request, copy));
         return response;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/'))),
+      .catch(() =>
+        caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          if (event.request.mode === 'navigate') return caches.match('/').then((shell) => shell || caches.match(OFFLINE));
+          return Response.error();
+        }),
+      ),
   );
 });

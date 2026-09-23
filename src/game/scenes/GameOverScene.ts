@@ -5,7 +5,7 @@ import { loadProfile } from '../systems/ProfileStore';
 import { recordRestart, type RunRecord } from '../systems/RunTelemetry';
 import type { ContractOutcome } from '../systems/ContractSystem';
 import { AudioManager } from '../managers/AudioManager';
-import { t } from '../i18n';
+import { t, td } from '../i18n';
 
 const BUTTON_WIDTH = 270;
 const BUTTON_GAP = 20;
@@ -77,7 +77,7 @@ export class GameOverScene extends Phaser.Scene {
       });
     if (data.newAchievements?.length)
       notes.push({
-        text: data.newAchievements.map(a => t('gameover.achievement', { name: a.name, reward: a.reward })).join('   ·   '),
+        text: data.newAchievements.map(a => t('gameover.achievement', { name: td(a.name), reward: a.reward })).join('   ·   '),
         color: '#73ef62', name: 'results-achievements',
       });
     if (data.newUnlocks?.length)

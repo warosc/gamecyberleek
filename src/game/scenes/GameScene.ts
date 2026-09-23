@@ -39,6 +39,7 @@ import { SectorObjectiveSystem, type ObjectiveMetric } from '../systems/SectorOb
 import { shakeCamera } from '../systems/RuntimeSettings';
 import { FAMILY_RULES } from '../entities/enemies/EnemyTypes';
 import { applyWorkshop } from '../progression/Workshop';
+import { abilityText, td } from '../i18n';
 import { dailyMutator, operationScore } from '../progression/DailyOperation';
 import { PAD, setGamepadConsumer, type PadFrame } from '../input/GamepadBridge';
 import type { VirtualPlayerInput } from '../entities/player/PlayerController';
@@ -63,6 +64,7 @@ export class GameScene extends Phaser.Scene {
     holdAim: true,
   };
   private padEngaged = false;
+  private musicIntensity = 0;
   /** Set when this run is the daily operation; the date and mutator identify its board. */
   daily?: { date: string; mutator: string };
   player!: Player;
@@ -123,6 +125,7 @@ export class GameScene extends Phaser.Scene {
   private readonly handleBossSpawned = () => {
     this.telemetry.bossSpawned();
     this.audio.play('boss_spawn');
+    this.audio.duck(1600, 0.2);
     if (this.state === GameState.PLAYING) {
       this.state = GameState.BOSS;
       this.events.emit(Events.STATE_CHANGED, this.state);
@@ -171,6 +174,7 @@ export class GameScene extends Phaser.Scene {
   init(data: { arenaIndex?: number; weaponId?: StarterWeaponId; daily?: { date: string; mutator: string } }) {
     this.daily = data.daily;
     this.padEngaged = false;
+    this.musicIntensity = 0;
     this.arenaIndex = (data.arenaIndex ?? this.arenaIndex) % ARENA_THEMES.length;
     this.arenaName = ARENA_THEMES[this.arenaIndex].name;
     this.selectedWeaponId = data.weaponId ?? 'pulse';
@@ -349,12 +353,14 @@ export class GameScene extends Phaser.Scene {
       const callout = RUN_PHASE_CALLOUTS[phase.at as keyof typeof RUN_PHASE_CALLOUTS];
       if (callout) {
         this.audio.play('phase_change');
+        this.audio.duck(900);
         this.events.emit(Events.RUN_PHASE_CHANGED, callout);
       }
     }
     this.audio.updateMusic(
       this.survivalMs,
       this.encounters.hasBossSpawned ? 'boss' : this.survivalMs >= 135000 ? 'danger' : 'combat',
+      { sector: this.arenaIndex, intensity: this.musicIntensity },
     );
     const milestone = UPGRADE_MILESTONES[this.milestoneIndex];
     if (milestone !== undefined && this.survivalMs >= milestone && !this.encounters.hasBossSpawned) {
@@ -540,7 +546,7 @@ export class GameScene extends Phaser.Scene {
     this.abilityLevels.set(id, level);
     this.telemetry.choseUpgrade(id);
     ability.apply(this.player.stats, level);
-    this.events.emit(Events.UPGRADE_APPLIED, ability.name, ability.description, level,
+    this.events.emit(Events.UPGRADE_APPLIED, abilityText(ability).name, abilityText(ability).description, level,
       combatRating(this.player.stats));
     if (isSignatureAbility(id) && level === ability.maxLevel) {
       this.equippedWeapon = this.player.stats.weaponName;
@@ -904,6 +910,8 @@ export class GameScene extends Phaser.Scene {
     if (!pointer.wasTouch) this.padEngaged = false;
   };
   private applyMomentum(state: MomentumState) {
+    // The score leans in while a chain is alive: a pulse at 3+, a doubled lead at 8+.
+    this.musicIntensity = state.chain >= 8 ? 2 : state.chain >= 3 ? 1 : 0;
     this.events.emit(Events.MOMENTUM_CHANGED, state);
     const streakCompleted = this.contracts.onMomentumChanged(state);
     if (streakCompleted) this.announceContractCompleted(streakCompleted);
@@ -936,7 +944,7 @@ export class GameScene extends Phaser.Scene {
   private activateSectorDevice(activation: SectorDeviceActivation) {
     const { x, y, radius, damage, heal, effect, color, name } = activation;
     this.effects.explosion(x, y, radius);
-    this.effects.floatingText(x, y - 70, name, `#${color.toString(16).padStart(6, '0')}`, 16);
+    this.effects.floatingText(x, y - 70, td(name), `#${color.toString(16).padStart(6, '0')}`, 16);
     this.enemies.getChildren().forEach(object => {
       const enemy = object as Enemy;
       if (!enemy.active || Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y) > radius) return;

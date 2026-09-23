@@ -77,17 +77,18 @@ test('the workshop spends credits and the next run starts with the upgrade', asy
 
 test('an unlocked sector can be chosen from the menu and pays its multiplier', async ({ page }) => {
   await boot(page, { unlocks: ['sector-2'], bestLevel: 5 });
-  // Phaser reads the keyboard once per frame, so each press waits for the menu to react.
   const sector = () => page.evaluate(() => (window.combatGame.scene.getScene('Menu') as unknown as { sector: number }).sector);
-  await page.keyboard.press('ArrowRight');
+  // Steps use the on-screen arrows: back-to-back synthetic key presses can coalesce inside one
+  // Phaser frame, which a person never produces. Arrow keys reach the same handler.
+  await tap(page, 'Menu', 'menu-sector-next');
   await expect.poll(sector).toBe(1);
   expect(await page.evaluate(() =>
     (window.combatGame.scene.getScene('Menu').children.getByName('menu-sector-name') as Phaser.GameObjects.Text).text))
     .toBe('NEON GREENHOUSE');
   // Sector 3 is locked, so the next step wraps back to sector 1.
-  await page.keyboard.press('ArrowRight');
+  await tap(page, 'Menu', 'menu-sector-next');
   await expect.poll(sector).toBe(0);
-  await page.keyboard.press('ArrowRight');
+  await tap(page, 'Menu', 'menu-sector-prev');
   await expect.poll(sector).toBe(1);
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.combatGame.scene.isActive('Game'));
@@ -181,4 +182,19 @@ test('a standard gamepad moves, dashes, pauses and navigates the pause menu', as
   await page.waitForTimeout(100);
   await page.evaluate(() => { window.fakePad!.pressed.add(1); });
   await expect.poll(() => page.evaluate(() => (window.combatGame.scene.getScene('Game') as GameScene).state)).toBe('PLAYING');
+});
+
+test('an English save plays the whole run in English', async ({ page }) => {
+  await boot(page, { settings: { locale: 'en' }, runs: 0 });
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Game'));
+  // The debug build opens a level-up on L; it is the densest screen of in-run text.
+  await page.keyboard.press('l');
+  await expect.poll(() => page.evaluate(() => (window.combatGame.scene.getScene('Game') as GameScene).state)).toBe('LEVEL_UP');
+  const texts = (await sceneTexts(page, 'UI')).join(' | ');
+  expect(texts).toContain('REACHED');
+  expect(texts).toContain('CHOOSE YOUR NEXT PROTOCOL');
+  expect(texts).toContain('BIO-DATA');
+  // Words that only appear in the Spanish strings of this screen.
+  expect(texts).not.toMatch(/NIVEL|ALCANZADO|PROTOCOLO|ELIGE|DISPARAR|MOVER|RATÓN/);
 });

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { BOSS_IDENTITY, bossVariant } from '../entities/enemies/BossVisual';
+import { t, td } from '../i18n';
 
 /** Owns the boss health panel, its arrival banner and the phase callouts. */
 export class BossBanner {
@@ -30,7 +31,7 @@ export class BossBanner {
       })
       .setOrigin(0.5);
     this.phaseText = scene.add
-      .text(GAME_WIDTH / 2 + 246, 114, BOSS_IDENTITY.phases[0], {
+      .text(GAME_WIDTH / 2 + 246, 114, td(BOSS_IDENTITY.phases[0]), {
         fontFamily: 'monospace',
         fontSize: '11px',
         color: '#d566ff',
@@ -60,7 +61,7 @@ export class BossBanner {
       .rectangle(0, 0, 720, 96, 0x100817, 0.94)
       .setStrokeStyle(3, 0xd566ff, 0.9);
     const title = this.scene.add
-      .text(0, -14, `${this.identity.name} // COMANDANTE`, {
+      .text(0, -14, `${this.identity.name} // ${t('boss.commander')}`, {
         fontFamily: 'Arial Black',
         fontSize: '38px',
         color: '#f4d7ff',
@@ -69,7 +70,7 @@ export class BossBanner {
       })
       .setOrigin(0.5);
     const subtitle = this.scene.add
-      .text(0, 26, this.identity.title, {
+      .text(0, 26, td(this.identity.title), {
         fontFamily: 'Arial Black',
         fontSize: '13px',
         color: '#d566ff',
@@ -96,7 +97,7 @@ export class BossBanner {
     if (ratio === 0) return;
     const phase = ratio <= 0.33 ? 3 : ratio <= 0.66 ? 2 : 1;
     this.phaseText
-      .setText(BOSS_IDENTITY.phases[phase - 1])
+      .setText(td(BOSS_IDENTITY.phases[phase - 1]))
       .setColor(phase === 3 ? '#ff476f' : phase === 2 ? '#ffb52e' : '#d566ff');
     if (phase === this.phaseShown) return;
     // A phase change alters how the boss attacks, so it has to be impossible to miss.
@@ -105,7 +106,7 @@ export class BossBanner {
     this.scene.tweens.add({ targets: this.phaseText, scale: 1.9, duration: 180, yoyo: true });
     this.scene.tweens.add({ targets: this.panel, scaleX: 1.04, duration: 140, yoyo: true });
     const flash = this.scene.add
-      .text(GAME_WIDTH / 2, 208, BOSS_IDENTITY.phases[phase - 1], {
+      .text(GAME_WIDTH / 2, 208, td(BOSS_IDENTITY.phases[phase - 1]), {
         fontFamily: 'Arial Black',
         fontSize: '44px',
         color: phase === 3 ? '#ff476f' : '#ffb52e',

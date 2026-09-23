@@ -18,4 +18,14 @@ describe('offline online boundaries', () => {
   it('does not enqueue events while offline', async () => {
     expect(await new OfflineStreamingGateway().enqueue({ type: 'spawn', payload: {}, issuedAt: 1, nonce: 'x'.repeat(16) })).toBe(false);
   });
+
+  it('serves the local daily board for the matching date only', async () => {
+    const service = new OfflineOnlineService(() => ({ date: '2026-09-23', scores: [900, 400] }));
+    await service.submitDailyScore('2026-09-23', 100);
+    expect(await service.fetchDailyBoard('2026-09-23')).toEqual([
+      { rank: 1, displayName: 'LOCAL', score: 900 },
+      { rank: 2, displayName: 'LOCAL', score: 400 },
+    ]);
+    expect(await service.fetchDailyBoard('2026-09-24')).toEqual([]);
+  });
 });

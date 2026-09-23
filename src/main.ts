@@ -5,10 +5,13 @@ import { installDevTelemetry, reportViewport } from './game/systems/DevTelemetry
 import { loadProfile } from './game/systems/ProfileStore';
 import { applyRuntimeSettings } from './game/systems/RuntimeSettings';
 import { installGamepadBridge } from './game/input/GamepadBridge';
+import { OfflineOnlineService, setOnlineService } from './game/online/OnlinePorts';
 
 installDevTelemetry();
 // Before the game exists: quality, locale and mixer levels are read by the first scene.
 applyRuntimeSettings(loadProfile().settings);
+// No backend is configured: the offline adapter serves this device's own daily board.
+setOnlineService(new OfflineOnlineService(() => loadProfile().daily));
 const game = new Phaser.Game(gameConfig);
 installGamepadBridge(game);
 

@@ -159,3 +159,34 @@ describe('schema v5 progression', () => {
     expect(loadProfile().daily).toMatchObject({ date: '2026-09-23', bestScore: 900, attempts: 2, scores: [900, 400] });
   });
 });
+
+describe('save backup', () => {
+  it('round-trips an exported save into a fresh browser', async () => {
+    const first = await import('../src/game/systems/ProfileStore');
+    first.saveRun(9, true, 'arc');
+    const exported = first.exportProfileJson();
+    storage.clear();
+    vi.resetModules();
+    const second = await import('../src/game/systems/ProfileStore');
+    expect(second.loadProfile().runs).toBe(0);
+    const restored = second.importProfileJson(exported);
+    expect(restored).toMatchObject({ runs: 1, victories: 1, bestLevel: 9 });
+    expect(second.loadProfile().runs).toBe(1);
+  });
+
+  it('rejects files that are not a LEEK OPS save and changes nothing', async () => {
+    const { importProfileJson, loadProfile, saveRun } = await import('../src/game/systems/ProfileStore');
+    saveRun(3, false);
+    expect(importProfileJson('not json')).toBeUndefined();
+    expect(importProfileJson(JSON.stringify({ game: 'other', profile: {} }))).toBeUndefined();
+    expect(importProfileJson(JSON.stringify({ runs: 99 }))).toBeUndefined();
+    expect(loadProfile().runs).toBe(1);
+  });
+
+  it('re-validates imported fields instead of trusting the file', async () => {
+    const { importProfileJson } = await import('../src/game/systems/ProfileStore');
+    const profile = importProfileJson(JSON.stringify({ game: 'leek-ops', profile: { bioCredits: -50, workshop: { plating: 99 } } }));
+    expect(profile?.bioCredits).toBe(0);
+    expect(profile?.workshop.plating).toBe(5);
+  });
+});

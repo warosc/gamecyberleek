@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { ContractKind, ContractProgress } from '../systems/ContractSystem';
+import { t, td } from '../i18n';
 
 const PANEL_X = 16;
 // Starts below the HP/energy panel (which ends at y=126) and stays clear of the boss banner
@@ -59,7 +60,7 @@ export class ContractHud {
         .setName(`contract-row-${index}`);
       const marker = scene.add.rectangle(PANEL_X + 3, y + 4, 4, this.rowHeight - 8, ACCENT, 0.9).setOrigin(0, 0);
       const title = scene.add
-        .text(PANEL_X + 12, y + textTop, contract.title, {
+        .text(PANEL_X + 12, y + textTop, td(contract.title), {
           fontFamily: 'Arial Black', fontSize, color: '#eaffff', letterSpacing: 1,
         })
         .setOrigin(0, 0)
@@ -85,12 +86,12 @@ export class ContractHud {
       if (!row) return;
       const ratio = Phaser.Math.Clamp(contract.progress / contract.target, 0, 1);
       row.barFill.width = (this.panelWidth - 24) * ratio;
-      const titleText = contract.completed ? `✓ ${contract.title}` : contract.title;
+      const titleText = contract.completed ? `✓ ${td(contract.title)}` : td(contract.title);
       if (row.lastTitle !== titleText) {
         row.title.setText(titleText).setColor(contract.completed ? '#73ef62' : '#eaffff');
         row.lastTitle = titleText;
       }
-      const progressText = contract.completed ? 'HECHO' : formatProgress(contract);
+      const progressText = contract.completed ? t('contracts.done') : formatProgress(contract);
       if (row.lastProgress !== progressText) {
         row.progress.setText(progressText);
         row.lastProgress = progressText;
