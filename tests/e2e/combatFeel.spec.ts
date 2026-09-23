@@ -69,10 +69,11 @@ test('dash commits to input direction and protects only during its window', asyn
     s.player.takeDamage(10);
     const after=s.player.health.current;
     s.player.takeDamage(10);
-    return {during,direction,after,protectedFromStack:s.player.health.current};
+    return {during,direction,after,protectedFromStack:s.player.health.current,dashConsumed:v.dash};
   });
   expect(r.during).toBe(100); expect(r.direction).toBe(600);
   expect(r.after).toBe(90); expect(r.protectedFromStack).toBe(90);
+  expect(r.dashConsumed).toBe(false);
 });
 
 test('three milestone choices resume safely and the finale starts once at four minutes', async ({page}) => {
@@ -95,7 +96,7 @@ test('three milestone choices resume safely and the finale starts once at four m
       bosses:s.enemies.getChildren().filter(e=>(e as Enemy).enemyType==='BOSS').length,state:s.state};
   });
   expect(r.offered).toHaveLength(3);
-  expect(r.callouts).toEqual(['EMBESTIDA DETECTADA','FUEGO A DISTANCIA','BRECHA ABIERTA','ULTIMA OLEADA']);
+  expect(r.callouts).toEqual(['DESCARGA DE RED','EMBESTIDA DETECTADA','FUEGO A DISTANCIA','BRECHA ABIERTA','ULTIMA OLEADA']);
   expect(r.offered.every(o=>o.join(',')==='pulse_protocol,fan,phase_dash')).toBe(true);
   expect(r.protocolLevel).toBe(3); expect(r.weapon).toBe('RAIL SPROUT');
   expect(r.piercing).toBe(2); expect(r.count).toBe(1); expect(r.bosses).toBe(1); expect(r.state).toBe('BOSS');
@@ -235,10 +236,18 @@ test('three rapid eliminations activate momentum and increase XP', async ({ page
     }
     const values = scene.orbs.getChildren().map(orb => (orb as unknown as { value: number }).value);
     const ui = window.combatGame.scene.getScene('UI');
-    return { values, momentumVisible: (ui.children.getByName('momentum-hud') as unknown as { visible?: boolean })?.visible };
+    const firstOrb = scene.orbs.getChildren()[0] as unknown as { visual: Phaser.GameObjects.Container };
+    const xpExplained = Boolean(ui.children.getByName('xp-discovery'));
+    const xpGlyph = firstOrb.visual.list.find(part => part.type === 'Text') as Phaser.GameObjects.Text;
+    return { values, shardParts: firstOrb.visual.list.length, shardVisible: firstOrb.visual.visible, xpGlyph: xpGlyph.text, xpExplained,
+      momentumVisible: (ui.children.getByName('momentum-hud') as unknown as { visible?: boolean })?.visible };
   });
   expect(result.values).toHaveLength(3);
   expect(result.values[2]).toBeGreaterThan(result.values[0]);
+  expect(result.shardParts).toBe(3);
+  expect(result.xpGlyph).toBe('XP');
+  expect(result.shardVisible).toBe(true);
+  expect(result.xpExplained).toBe(true);
   expect(result.momentumVisible).toBe(true);
 });
 
@@ -336,6 +345,102 @@ test('shows a one-time briefing naming each rolled contract\'s full objective', 
   for (const title of result.titles) expect(result.lines!.some((line) => line.startsWith(title))).toBe(true);
 });
 
+test('wide Safari landscape fills the complete viewport without side bars', async ({ page }) => {
+  // The widened layout is for touch devices; state that here instead of inheriting it from
+  // whatever the host machine reports, which differs between a touch-screen PC and CI.
+  await page.addInitScript(() => Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 5 }));
+  await page.setViewportSize({ width: 1280, height: 490 });
+  await deploy(page);
+  const layout = await page.evaluate(() => {
+    const rect = document.querySelector('canvas')!.getBoundingClientRect();
+    const ui = window.combatGame.scene.getScene('UI');
+    return {
+      coverageX: rect.width / window.innerWidth,
+      coverageY: rect.height / window.innerHeight,
+      logicalWidth: window.combatGame.scale.gameSize.width,
+      moveZone: Boolean(ui.children.getByName('touch-move-zone')),
+      aimZone: Boolean(ui.children.getByName('touch-aim-zone')),
+    };
+  });
+  expect(layout.coverageX).toBeGreaterThan(0.995);
+  expect(layout.coverageY).toBeGreaterThan(0.995);
+  expect(layout.logicalWidth).toBe(1881);
+  expect(layout.moveZone).toBe(true);
+  expect(layout.aimZone).toBe(true);
+});
+
+test('mid-run miniboss spawns once, keeps the run active and guarantees equipment', async ({ page }) => {
+  await deploy(page);
+  const result = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const internal = scene as unknown as {
+      encounters: { spawnMiniboss: () => boolean };
+      resolveEnemyDeath: (enemy: Enemy) => void;
+    };
+    internal.encounters.spawnMiniboss();
+    internal.encounters.spawnMiniboss();
+    const minibosses = scene.enemies.getChildren().filter(object => (object as Enemy).enemyType === 'MINIBOSS') as Enemy[];
+    const stateAtSpawn = scene.state;
+    internal.resolveEnemyDeath(minibosses[0]);
+    return { count: minibosses.length, stateAtSpawn, drops: scene.lootDrops.getChildren().length };
+  });
+  expect(result).toEqual({ count: 1, stateAtSpawn: 'PLAYING', drops: 1 });
+});
+
+test('sector objective grants its advertised combat reward only once', async ({ page }) => {
+  await deploy(page);
+  const result = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const internal = scene as unknown as { objective: { record: (metric: 'kills') => boolean } };
+    const damageBefore = scene.player.stats.attackDamage;
+    for (let kill = 0; kill < 18; kill++) internal.objective.record('kills');
+    const damageAfter = scene.player.stats.attackDamage;
+    internal.objective.record('kills');
+    const ui = window.combatGame.scene.getScene('UI');
+    const panel = ui.children.getByName('objective-panel') as Phaser.GameObjects.Container;
+    const copy = panel.list.filter(item => item.type === 'Text').map(item => (item as Phaser.GameObjects.Text).text);
+    return { damageBefore, damageAfter, status: scene.objectiveState.status, copy };
+  });
+  expect(result.damageAfter - result.damageBefore).toBe(6);
+  expect(result.status).toBe('complete');
+  expect(result.copy.join(' ')).toContain('COMPLETADO');
+});
+
+test('results screen explains performance, build and permanent rewards', async ({ page }) => {
+  await deploy(page);
+  await page.evaluate(() => {
+    const game = window.combatGame;
+    game.scene.stop('UI');
+    game.scene.start('GameOver', {
+      time: 93_000, level: 6, victory: true, arenaIndex: 0, weaponId: 'pulse',
+      equipment: ['GUANTE CRIO', 'NÚCLEO ESPORA'], synergy: 'CIRCUITO VERDE',
+      masteryEarned: 11, creditsEarned: 130, newUnlocks: ['sector-2'],
+      summary: {
+        startedAt: '', durationMs: 93_000, level: 6, kills: 42, damageDealt: 1337,
+        damageTaken: 64, shotsFired: 100, hits: 73, abilityUses: { nova: 2, shield: 1, overdrive: 0 },
+        upgrades: ['power', 'rapid', 'fan'], weapon: 'PULSEGUN-01', bossReached: true,
+        bossDefeated: true, outcome: 'victory', restarted: false,
+      },
+    });
+  });
+  await page.waitForFunction(() => window.combatGame.scene.isActive('GameOver'));
+  const result = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('GameOver');
+    const text = (name: string) => (scene.children.getByName(name) as Phaser.GameObjects.Text)?.text;
+    return {
+      kills: text('results-kills'), damage: text('results-damage'), accuracy: text('results-accuracy'),
+      build: text('results-build'), equipment: text('results-equipment'), rewards: text('results-rewards'),
+      unlocks: text('results-unlocks'),
+    };
+  });
+  expect(result).toEqual(expect.objectContaining({
+    kills: '42', damage: '1337', accuracy: '73%', build: 'SINERGIA ACTIVA: CIRCUITO VERDE',
+  }));
+  expect(result.equipment).toContain('GUANTE CRIO');
+  expect(result.rewards).toContain('+130 BIO-CRÉDITOS');
+  expect(result.unlocks).toContain('sector-2');
+});
+
 test('weapon mastery migrates safely and applies permanent rank bonuses', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('leek-ops-profile-v3', JSON.stringify({
     schemaVersion: 3, runs: 4, bestLevel: 7, victories: 1, bioCredits: 140,
@@ -349,4 +454,121 @@ test('weapon mastery migrates safely and applies permanent rank bonuses', async 
   expect(stats.damage).toBe(21);
   expect(stats.cooldown).toBeCloseTo(218.5);
   expect(stats.critical).toBeCloseTo(0.11);
+});
+
+test('loot pauses for an inventory decision and installs into the backpack', async ({ page }) => {
+  await deploy(page);
+  const found = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const internal = scene as unknown as {
+      loot: { spawnEquipmentDrop: () => void };
+      collectEquipment: (drop: Phaser.GameObjects.GameObject) => void;
+    };
+    internal.loot.spawnEquipmentDrop();
+    internal.collectEquipment(scene.lootDrops.getChildren()[0]);
+    return { state: scene.state, count: scene.inventory.count };
+  });
+  expect(found).toEqual({ state: 'INVENTORY', count: 0 });
+  await page.keyboard.press('1');
+  await expect.poll(() => page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    return { state: scene.state, count: scene.inventory.count };
+  })).toEqual({ state: 'PLAYING', count: 1 });
+});
+
+test('a new weapon replaces the active weapon, its stats and its visible model', async ({ page }) => {
+  await deploy(page);
+  await page.evaluate(async () => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const equipmentPath = '/src/game/loot/Equipment.ts';
+    const { rollEquipment } = await import(equipmentPath);
+    const roll = (values: number[]) => {
+      let index = 0;
+      return () => values[index++] ?? 0;
+    };
+    const internal = scene as unknown as { pendingLoot?: ReturnType<typeof rollEquipment> };
+    internal.pendingLoot = rollEquipment(1, roll([0.1, 0.1, 0.1]));
+    scene.state = 'INVENTORY' as typeof scene.state;
+    scene.resolveLoot(true);
+    internal.pendingLoot = rollEquipment(1, roll([0.1, 0.1, 0.99]));
+    scene.state = 'INVENTORY' as typeof scene.state;
+    scene.resolveLoot(true);
+  });
+  await page.waitForTimeout(100);
+  const equipped = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const weapon = scene.player.getByName('player-aimed-weapon') as Phaser.GameObjects.Container;
+    const slide = weapon.list.find(child => (child as Phaser.GameObjects.Container).list?.length) as Phaser.GameObjects.Container;
+    const body = slide?.list.find(child => (child as Phaser.GameObjects.Graphics).name.startsWith('weapon-')) as Phaser.GameObjects.Graphics;
+    return {
+      count: scene.inventory.count,
+      name: scene.equippedWeapon,
+      mode: scene.player.stats.weaponMode,
+      damage: scene.player.stats.attackDamage,
+      art: body?.name,
+    };
+  });
+  expect(equipped).toEqual({
+    count: 2,
+    name: 'CAÑÓN DE PLASMA MK-1',
+    mode: 'plasma',
+    damage: 29,
+    art: 'weapon-plasma',
+  });
+});
+
+test('inventory opens, swaps stored weapons, recycles items and activates a set synergy', async ({ page }) => {
+  await deploy(page);
+  await page.evaluate(async () => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const equipmentPath = '/src/game/loot/Equipment.ts';
+    const { rollEquipment } = await import(equipmentPath);
+    const makeRoll = (values: number[]) => {
+      let index = 0;
+      return () => values[index++] ?? 0;
+    };
+    const internal = scene as unknown as { pendingLoot?: ReturnType<typeof rollEquipment> };
+    for (const values of [[0.1, 0.1, 0.99], [0.1, 0.1, 0.1], [0.1, 0.9, 0.1]]) {
+      internal.pendingLoot = rollEquipment(3, makeRoll(values));
+      scene.state = 'INVENTORY' as typeof scene.state;
+      scene.resolveLoot(true);
+    }
+  });
+  await page.evaluate(() => {
+    const ui = window.combatGame.scene.getScene('UI');
+    (ui.children.getByName('hud-inventory') as Phaser.GameObjects.Rectangle).emit('pointerup');
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const ui = window.combatGame.scene.getScene('UI');
+    return {
+      state: scene.state,
+      slots: ui.children.list.flatMap(child =>
+        (child as Phaser.GameObjects.Container).list ?? [child]
+      ).filter(child => child.name.startsWith('inventory-slot-')).length,
+      mobileButton: Boolean(ui.children.getByName('hud-inventory')),
+    };
+  })).toEqual({ state: 'INVENTORY', slots: 6, mobileButton: true });
+  const result = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    scene.equipInventoryWeapon(0);
+    scene.recycleInventoryItem(1);
+    const weapon = scene.player.getByName('player-aimed-weapon') as Phaser.GameObjects.Container;
+    return {
+      count: scene.inventory.count,
+      mode: scene.player.stats.weaponMode,
+      synergy: scene.activeSynergy?.id,
+      damage: scene.player.stats.attackDamage,
+      evolved: Boolean(weapon.getByName('weapon-evolution-crown')),
+    };
+  });
+  expect(result).toEqual({ count: 2, mode: 'plasma', synergy: 'plague-bastion', damage: 47, evolved: false });
+  await page.keyboard.press('i');
+  await expect.poll(() => page.evaluate(() =>
+    (window.combatGame.scene.getScene('Game') as GameScene).state)).toBe('PLAYING');
+  await expect.poll(() => page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const weapon = scene.player.getByName('player-aimed-weapon') as Phaser.GameObjects.Container;
+    return Boolean(weapon.getByName('weapon-evolution-crown'));
+  })).toBe(true);
 });

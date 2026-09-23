@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { PLAYER_RIG_LAYERS, type PlayerRigLayer } from './PlayerRigManifest';
 import type { PlayerAnimationState, PlayerVisualAdapter } from './PlayerAnimator';
+import type { WeaponMode } from './WeaponSilhouettes';
 import {
   PLAYER_RIG_SKELETON,
   rigOrigin,
@@ -69,15 +70,30 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
   private powerGlow = 0;
   private gaitTime = 0;
   private aimPitch = 0;
+  private aimAngle = 0;
   private recoilAt = -1000;
+  private weaponMode: WeaponMode = 'pulse';
 
   setAim(angle: number) {
+    this.aimAngle = angle;
     this.aimPitch = Math.sin(angle) * 0.12 * this.facing;
+  }
+
+  /** Player-local socket resolved from the animated right wrist after forward kinematics. */
+  getWeaponSocket() {
+    const hand = this.worldPosition.get('hand-right')!;
+    const stretch = this.squash * 0.16;
+    return {
+      x: hand.x * this.facing * this.externalScale * (1 + stretch),
+      y: hand.y * this.externalScale * (1 - stretch * 0.75),
+      angle: this.aimAngle,
+    };
   }
 
   recoil(time: number) {
     this.recoilAt = time;
   }
+  setWeaponMode(mode: WeaponMode) { this.weaponMode = mode; }
 
   static create(scene: Phaser.Scene) {
     if (!PLAYER_RIG_LAYERS.every((layer) => scene.textures.exists(`rig-${layer}`))) return undefined;
@@ -244,6 +260,29 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
         this.pose.get('arm-right-upper')!.rotation -= recoil * 0.18;
         this.pose.get('arm-right-fore')!.rotation += recoil * 0.12;
         leaves.rotation += recoil * 0.08;
+      }
+      // Turn the complete right-arm chain toward the cursor. The angles account for the
+      // downward rest vectors in the exported artwork; mirroring converts world aim back into
+      // the rig's local space before forward kinematics is solved.
+      const localAim = this.facing < 0 ? Math.PI - this.aimAngle : this.aimAngle;
+      const upperRestAngle = Math.atan2(66, 31);
+      const foreRestAngle = Math.atan2(49, 6);
+      const bend = 0.16;
+      const upper = this.pose.get('arm-right-upper')!;
+      const fore = this.pose.get('arm-right-fore')!;
+      const torsoAngle = torso.rotation;
+      const upperWorld = localAim - upperRestAngle + bend;
+      upper.rotation += upperWorld - torsoAngle;
+      fore.rotation += localAim - foreRestAngle - bend - upperWorld;
+      if (this.weaponMode === 'plasma' || this.weaponMode === 'laser') {
+        // Heavy and long weapons use the left hand as a support point beneath the barrel.
+        const leftUpperRest = Math.atan2(65, -29);
+        const leftForeRest = Math.atan2(50, -3);
+        const leftUpper = this.pose.get('arm-left-upper')!;
+        const leftFore = this.pose.get('arm-left-fore')!;
+        const supportWorld = localAim - leftUpperRest - 0.1;
+        leftUpper.rotation += supportWorld - torsoAngle;
+        leftFore.rotation += localAim - leftForeRest + 0.2 - supportWorld;
       }
     }
 

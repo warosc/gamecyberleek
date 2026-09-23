@@ -56,7 +56,7 @@ describe('impact tiers', () => {
 describe('audio event map', () => {
   it('covers every gameplay moment the product brief lists', () => {
     const required = [
-      'weapon_fire', 'enemy_hit', 'critical_hit', 'enemy_death', 'xp_collect', 'level_up',
+      'weapon_fire', 'laser_fire', 'enemy_hit', 'critical_hit', 'enemy_death', 'xp_collect', 'level_up',
       'dash', 'nova', 'shield', 'overdrive', 'boss_spawn', 'boss_phase', 'boss_death',
       'victory', 'game_over',
     ];

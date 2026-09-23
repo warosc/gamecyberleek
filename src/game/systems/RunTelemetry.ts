@@ -18,6 +18,7 @@ export interface RunRecord {
   damageDealt: number;
   damageTaken: number;
   shotsFired: number;
+  hits: number;
   abilityUses: Record<SpecialAbilityId, number>;
   /** Upgrade ids in the order they were chosen. */
   upgrades: string[];
@@ -112,6 +113,7 @@ export class RunTelemetry {
     damageDealt: 0,
     damageTaken: 0,
     shotsFired: 0,
+    hits: 0,
     abilityUses: { nova: 0, shield: 0, overdrive: 0 },
     upgrades: [],
     weapon: 'PULSEGUN-01',
@@ -124,6 +126,10 @@ export class RunTelemetry {
 
   shotFired() {
     this.record.shotsFired++;
+  }
+
+  hitLanded() {
+    this.record.hits++;
   }
 
   dealtDamage(amount: number) {

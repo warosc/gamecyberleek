@@ -1,4 +1,5 @@
 export interface ArenaTheme {
+  id: 'lab' | 'greenhouse' | 'reactor';
   name: string;
   subtitle: string;
   background: number;
@@ -10,6 +11,7 @@ export interface ArenaTheme {
 
 export const ARENA_THEMES: ArenaTheme[] = [
   {
+    id: 'lab',
     name: 'CYBER VEGETABLE LAB',
     subtitle: 'SECTOR C-01',
     background: 0x07111f,
@@ -19,6 +21,7 @@ export const ARENA_THEMES: ArenaTheme[] = [
     floorTint: 0xffffff,
   },
   {
+    id: 'greenhouse',
     name: 'NEON GREENHOUSE',
     subtitle: 'BIO-DOME G-07',
     background: 0x07170f,
@@ -28,6 +31,7 @@ export const ARENA_THEMES: ArenaTheme[] = [
     floorTint: 0xb9ffd0,
   },
   {
+    id: 'reactor',
     name: 'FROZEN REACTOR',
     subtitle: 'CRYO CORE B-12',
     background: 0x090b22,

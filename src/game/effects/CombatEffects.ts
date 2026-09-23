@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { COLORS, GAMEPLAY } from '../config/Constants';
 import { detectQualityProfile } from '../config/QualityProfile';
 import { impactProfile, type ImpactTier } from '../presentation/ImpactFeedback';
+import type { WeaponMode } from '../entities/player/WeaponSilhouettes';
 
 /** Particle count the quality profile is expressed against, so tiers scale relative to it. */
 const IMPACT_PARTICLE_BASELINE = 3;
@@ -30,11 +31,11 @@ export class CombatEffects {
     if (object.active) object.destroy();
   }
 
-  muzzle(x: number, y: number, angle: number) {
+  muzzle(x: number, y: number, angle: number, mode: WeaponMode = 'pulse', color: number = COLORS.cyan) {
     const muzzleX = x;
     const muzzleY = y;
     const flash = this.track(this.scene.add
-      .circle(muzzleX, muzzleY, 8, COLORS.cyan, 0.8)
+      .circle(muzzleX, muzzleY, mode === 'plasma' ? 13 : mode === 'laser' ? 6 : 8, color, 0.82)
       .setDepth(20));
     if (!flash) return;
     this.scene.tweens.add({
@@ -47,12 +48,16 @@ export class CombatEffects {
     if (this.reducedMotion) return;
     // A short cone along the shot: the weapon reads as pointing somewhere, and the shot is
     // legible in the first frame after the click rather than only once the bolt has travelled.
+    const length = mode === 'laser' ? 48 : mode === 'plasma' ? 22 : mode === 'arc' ? 34 : 30;
+    const width = mode === 'plasma' ? 14 : mode === 'laser' ? 4 : 9;
     const cone = this.track(this.scene.add
-      .triangle(muzzleX, muzzleY, 0, -9, 0, 9, 30, 0, COLORS.white, 0.75)
+      .triangle(muzzleX, muzzleY, 0, -width, 0, width, length, 0,
+        mode === 'arc' ? color : COLORS.white, 0.78)
       .setRotation(angle)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(21));
     if (!cone) return;
+    cone.name = `muzzle-${mode}`;
     this.scene.tweens.add({
       targets: cone,
       scaleX: 0.25,
@@ -62,6 +67,19 @@ export class CombatEffects {
       ease: 'Quad.Out',
       onComplete: () => this.release(cone),
     });
+    if (mode === 'plasma') {
+      const ring = this.track(this.scene.add.circle(muzzleX, muzzleY, 9, color, 0)
+        .setStrokeStyle(3, color, 0.9).setDepth(20).setName('muzzle-plasma-ring'));
+      if (ring) this.scene.tweens.add({ targets: ring, scale: 2.6, alpha: 0, duration: 130,
+        onComplete: () => this.release(ring) });
+    } else if (mode === 'arc') {
+      const fork = this.track(this.scene.add.graphics().lineStyle(2, color, 0.9)
+        .lineBetween(muzzleX, muzzleY, muzzleX + Math.cos(angle + 0.3) * 23, muzzleY + Math.sin(angle + 0.3) * 23)
+        .lineBetween(muzzleX, muzzleY, muzzleX + Math.cos(angle - 0.3) * 23, muzzleY + Math.sin(angle - 0.3) * 23)
+        .setDepth(21).setName('muzzle-arc-fork'));
+      if (fork) this.scene.tweens.add({ targets: fork, alpha: 0, duration: 90,
+        onComplete: () => this.release(fork) });
+    }
   }
 
   /**
@@ -126,6 +144,17 @@ export class CombatEffects {
     });
   }
 
+  bossCollapse(x: number, y: number) {
+    for (let wave = 0; wave < 3; wave++) {
+      const ring = this.track(this.scene.add.circle(x, y, 24, wave === 1 ? 0x21e6ff : 0xd566ff, 0.12)
+        .setStrokeStyle(7 - wave, wave === 1 ? 0x21e6ff : 0xf4d7ff, 0.95).setDepth(25));
+      if (!ring) continue;
+      ring.setScale(0.3).setAlpha(0);
+      this.scene.tweens.add({ targets: ring, scale: 5 + wave * 2, alpha: { from: 1, to: 0 },
+        delay: wave * 150, duration: 520, ease: 'Cubic.Out', onComplete: () => this.release(ring) });
+    }
+  }
+
   /**
    * Death burst sized to the kill. An elite or a boss has to leave a bigger hole in the screen
    * than a grunt, or the player never learns which kills were worth making.
@@ -176,12 +205,12 @@ export class CombatEffects {
    * Confirmation that an orb was banked. XP is the loop the whole run hangs off, and before
    * this the only sign a pickup happened was a number moving in the bar at the bottom edge.
    */
-  xpPickup(x: number, y: number) {
+  xpPickup(x: number, y: number, value = 1) {
     if (this.reducedMotion) return;
     const spark = this.track(
       this.scene.add
-        .circle(x, y, 5, COLORS.green, 0)
-        .setStrokeStyle(2, COLORS.green, 0.9)
+        .circle(x, y, value >= 50 ? 9 : value >= 25 ? 7 : 5, value >= 50 ? 0xffd166 : value >= 25 ? COLORS.cyan : COLORS.green, 0)
+        .setStrokeStyle(value >= 25 ? 3 : 2, value >= 50 ? 0xffd166 : value >= 25 ? COLORS.cyan : COLORS.green, 0.9)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(20),
     );
@@ -194,6 +223,7 @@ export class CombatEffects {
       ease: 'Quad.Out',
       onComplete: () => this.release(spark),
     });
+    if (value >= 25) this.floatingText(x, y - 10, `BIO-DATOS +${value}`, value >= 50 ? '#ffd166' : '#21e6ff', 12);
   }
 
   floatingText(x: number, y: number, text: string, color: string, size = 18) {

@@ -6,6 +6,7 @@ import { detectQualityProfile } from '../../config/QualityProfile';
 import { BossVisual, BOSS_IDENTITY } from './BossVisual';
 import { VegetableVisual } from './VegetableVisual';
 import { isVegetableType, vegetableTexture, VEGETABLE_ROSTER } from './VegetableRoster';
+import { MinibossVisual } from './MinibossVisual';
 
 /** Preserves the original feel: 0.075 rad per frame at 60fps. */
 const PULSE_RADIANS_PER_MS = 0.075 * 0.06;
@@ -32,7 +33,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
 
   /** Bounded impulse; distance from the player never amplifies knockback. */
   knockback(angle: number, critical: boolean) {
-    if (this.enemyType === EnemyType.BOSS || this.charge || this.pendingAttack || this.melee) return;
+    if (this.enemyType === EnemyType.BOSS || this.enemyType === EnemyType.MINIBOSS || this.charge || this.pendingAttack || this.melee) return;
     const speed = (critical ? 170 : 95) * (this.enemyType === EnemyType.TANK ? 0.35 : 1);
     this.knockbackX = Math.cos(angle) * speed;
     this.knockbackY = Math.sin(angle) * speed;
@@ -47,6 +48,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       .lineBetween(length - 18, -12, length, 0).lineBetween(length, 0, length - 18, 12);
   }
   private bossAttackSequence = 0;
+  private wardenAttackSequence = 0;
   /**
    * A shot that has been telegraphed but not yet fired. Scheduled on gameplay time rather than
    * through `scene.time`, so a telegraph cannot resolve while the run is paused or a level-up
@@ -56,6 +58,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
   private visual: Phaser.GameObjects.Container;
   private bossVisual?: BossVisual;
   private vegetableVisual?: VegetableVisual;
+  private minibossVisual?: MinibossVisual;
   private chassis!: Phaser.GameObjects.Container;
   private shadow!: Phaser.GameObjects.Ellipse;
   private feet: Phaser.GameObjects.Ellipse[] = [];
@@ -82,6 +85,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
     x: number,
     y: number,
     public enemyType: EnemyType,
+    private readonly visualVariant = 0,
   ) {
     const d = ENEMY_DEFS[enemyType];
     super(scene, x, y, d.size, 0, 360, false, d.color);
@@ -210,6 +214,36 @@ export class Enemy extends Phaser.GameObjects.Arc {
       this.syncVisual(target);
       return;
     }
+    if (this.def.behavior === 'warden') {
+      if (this.pendingAttack) { body.setVelocity(0); this.syncVisual(target); return; }
+      if (distance > 330) this.scene.physics.moveToObject(this, target, this.def.speed);
+      else body.setVelocity(0);
+      if (allowAttack && time - this.lastAttack > 2100 && distance < 620) {
+        this.lastAttack = time;
+        body.setVelocity(0);
+        const lockedAim = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
+        const radial = ++this.wardenAttackSequence % 2 === 0;
+        this.showAttackTelegraph(0xff3b76, radial ? 92 : 72, GAMEPLAY.telegraphLeadMs.miniboss,
+          radial ? undefined : lockedAim);
+        if (!radial) this.showLane(lockedAim, 600, 42, 0xff3b76);
+        this.scene.events.emit('enemy-warning', 'miniboss');
+        this.pendingAttack = {
+          at: time + GAMEPLAY.telegraphLeadMs.miniboss,
+          release: () => {
+            this.scene.events.emit('enemy-attack', 'miniboss');
+            if (radial) {
+              for (let index = 0; index < 10; index++)
+                fire(this.x, this.y, (Math.PI * 2 * index) / 10, 225, 11);
+            } else {
+              for (let index = -1; index <= 1; index++)
+                fire(this.x, this.y, lockedAim + index * 0.16, 315, 14);
+            }
+          },
+        };
+      }
+      this.syncVisual(target);
+      return;
+    }
     if (this.pendingAttack) { body.setVelocity(0); this.syncVisual(target); return; }
     this.chase(target);
     if (this.def.behavior === 'commander' && time - this.lastAttack > this.bossAttackCooldown) {
@@ -219,13 +253,14 @@ export class Enemy extends Phaser.GameObjects.Arc {
       const phase = this.bossPhase;
       this.bossAttackSequence++;
       const radialPhaseTwo = phase === 2 && this.bossAttackSequence % 2 === 0;
+      const spiralPhaseThree = phase === 3 && this.bossAttackSequence % 2 === 0;
       // The two patterns are told apart before they land: the radial burst rings the boss,
       // the spread cone points at where it is about to shoot.
       this.showAttackTelegraph(
         phase === 3 ? 0xff476f : 0xd566ff,
         phase === 3 ? 104 : 86,
         GAMEPLAY.telegraphLeadMs.boss,
-        radialPhaseTwo ? undefined : lockedAim,
+        radialPhaseTwo || spiralPhaseThree ? undefined : lockedAim,
       );
       this.pendingAttack = {
         at: time + GAMEPLAY.telegraphLeadMs.boss,
@@ -235,6 +270,10 @@ export class Enemy extends Phaser.GameObjects.Arc {
           if (radialPhaseTwo) {
             for (let index = 0; index < 8; index++)
               fire(this.x, this.y, (Math.PI * 2 * index) / 8, 240, 13);
+          } else if (spiralPhaseThree) {
+            const offset = (this.bossAttackSequence % 6) * 0.13;
+            for (let index = 0; index < 12; index++)
+              fire(this.x, this.y, offset + (Math.PI * 2 * index) / 12, 255 + (index % 2) * 45, 15);
           } else {
             const spread = phase === 1 ? 2 : phase === 2 ? 3 : 4;
             for (let index = -spread; index <= spread; index++)
@@ -253,6 +292,8 @@ export class Enemy extends Phaser.GameObjects.Arc {
     this.flashHit(critical);
     if (this.enemyType === EnemyType.BOSS)
       this.scene.events.emit(Events.BOSS_HEALTH, this.health.current, this.health.max);
+    else if (this.enemyType === EnemyType.MINIBOSS)
+      this.scene.events.emit(Events.MINIBOSS_HEALTH, this.health.current, this.health.max);
     return this.health.dead;
   }
 
@@ -287,7 +328,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       isVegetableType(this.enemyType) ? VEGETABLE_ROSTER[this.enemyType].color : this.def.color;
   }
   makeElite() {
-    if (this.enemyType === EnemyType.BOSS || this.elite) return this;
+    if (this.enemyType === EnemyType.BOSS || this.enemyType === EnemyType.MINIBOSS || this.elite) return this;
     this.elite = true;
     const affix = ELITE_AFFIX_DEFS[this.eliteAffix];
     this.eliteMultiplier = affix.speedMultiplier;
@@ -332,6 +373,10 @@ export class Enemy extends Phaser.GameObjects.Arc {
   }
 
   private createVisual(scene: Phaser.Scene, size: number, color: number) {
+    if (this.enemyType === EnemyType.MINIBOSS) {
+      this.minibossVisual = new MinibossVisual(scene, this.visualVariant);
+      return scene.add.container(this.x, this.y, [this.minibossVisual]).setDepth(6);
+    }
     if (this.enemyType === EnemyType.BOSS && scene.textures.exists(BOSS_IDENTITY.texture)) {
       this.bossVisual = new BossVisual(scene);
       return scene.add.container(this.x, this.y, [this.bossVisual]).setDepth(6);
@@ -498,6 +543,12 @@ export class Enemy extends Phaser.GameObjects.Arc {
       this.bossVisual.updatePose(this.visualTime, this.bossPhase, !!this.pendingAttack,
         recoil, hit, moving, target.x < this.x);
       // The global boss panel carries its health; a miniature bar would cut through the face.
+      this.healthBack.setVisible(false);
+      this.healthFill.setVisible(false);
+      return;
+    }
+    if (this.minibossVisual) {
+      this.minibossVisual.updatePose(this.visualTime, moving, !!this.pendingAttack, recoil, hit, target.x < this.x);
       this.healthBack.setVisible(false);
       this.healthFill.setVisible(false);
       return;
