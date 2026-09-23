@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import type { GameScene } from '../scenes/GameScene';
+import { t } from '../i18n';
 
 /** Builds the pause overlay. The objects are handed to `ModalOverlay`, which owns their life. */
 export class PauseMenu {
@@ -22,7 +23,7 @@ export class PauseMenu {
     parts.push(this.scene.add.image(GAME_WIDTH / 2, 166, 'leek-avatar').setDisplaySize(104, 104));
     parts.push(
       this.scene.add
-        .text(GAME_WIDTH / 2, 240, 'OPERACIÓN EN PAUSA', {
+        .text(GAME_WIDTH / 2, 240, t('pause.title'), {
           fontFamily: 'Arial Black',
           fontSize: '34px',
           color: '#eaffff',
@@ -44,8 +45,8 @@ export class PauseMenu {
         )
         .setOrigin(0.5),
     );
-    const resume = this.button(GAME_WIDTH / 2, 360, 'CONTINUAR', 0x73ef62, () => this.game.resumeGame());
-    const menu = this.button(GAME_WIDTH / 2, 440, 'MENÚ PRINCIPAL', 0x21e6ff, () => this.game.returnToMenu());
+    const resume = this.button(GAME_WIDTH / 2, 360, t('pause.resume'), 0x73ef62, () => this.game.resumeGame());
+    const menu = this.button(GAME_WIDTH / 2, 440, t('pause.menu'), 0x21e6ff, () => this.game.returnToMenu());
     parts.push(...resume, ...menu);
     const volumeLabel = this.scene.add
       .text(GAME_WIDTH / 2, 505, '', {
@@ -56,7 +57,7 @@ export class PauseMenu {
       })
       .setOrigin(0.5);
     const refreshVolume = () =>
-      volumeLabel.setText(`VOLUME ${Math.round(this.game.audioVolume * 100)}%`);
+      volumeLabel.setText(t('pause.volume', { value: Math.round(this.game.audioVolume * 100) }));
     const volumeDown = this.button(GAME_WIDTH / 2 - 145, 505, '−', 0xd566ff, () => {
       this.game.adjustAudioVolume(-0.1);
       refreshVolume();
@@ -69,7 +70,7 @@ export class PauseMenu {
     parts.push(volumeLabel, ...volumeDown, ...volumeUp);
     parts.push(
       this.scene.add
-        .text(GAME_WIDTH / 2, 570, 'ESC  ·  VOLVER AL COMBATE', {
+        .text(GAME_WIDTH / 2, 570, t('pause.keys'), {
           fontFamily: 'monospace',
           fontSize: '12px',
           color: '#7594a8',

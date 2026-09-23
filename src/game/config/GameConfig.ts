@@ -7,6 +7,9 @@ import { UIScene } from '../scenes/UIScene';
 import { GameOverScene } from '../scenes/GameOverScene';
 import { PreloadScene } from '../scenes/PreloadScene';
 import { BestiaryScene } from '../scenes/BestiaryScene';
+import { WorkshopScene } from '../scenes/WorkshopScene';
+import { SettingsScene } from '../scenes/SettingsScene';
+import { RecordsScene } from '../scenes/RecordsScene';
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.WEBGL,
   parent: 'game',
@@ -22,6 +25,9 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   // pointers available so movement, aim, dash and ability taps can coexist on phones.
   input: { activePointers: 7, touch: { capture: true } },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BootScene, PreloadScene, MenuScene, GameScene, UIScene, GameOverScene, BestiaryScene],
+  scene: [
+    BootScene, PreloadScene, MenuScene, GameScene, UIScene, GameOverScene, BestiaryScene,
+    WorkshopScene, SettingsScene, RecordsScene,
+  ],
   render: { antialias: true },
 };

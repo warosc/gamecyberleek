@@ -7,6 +7,7 @@ import {
   type ImpactContext,
   type ImpactTier,
 } from './ImpactFeedback';
+import { reducedMotion, shakeCamera } from '../systems/RuntimeSettings';
 
 /**
  * Applies one impact tier across every channel at once: sparks, damage number, camera and
@@ -15,8 +16,7 @@ import {
  */
 export class ImpactPresenter {
   private lastCameraAt = -1000;
-  private readonly reducedMotion =
-    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  private readonly reducedMotion = reducedMotion();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -50,7 +50,7 @@ export class ImpactPresenter {
     if (tier !== 'bossDeath' && now - this.lastCameraAt < 140) return;
     this.lastCameraAt = now;
     const profile = impactProfile(tier);
-    if (profile.shakeMs > 0) this.scene.cameras.main.shake(profile.shakeMs, profile.shakeIntensity);
+    if (profile.shakeMs > 0) shakeCamera(this.scene.cameras.main, profile.shakeMs, profile.shakeIntensity);
     if (profile.flash)
       this.scene.cameras.main.flash(
         profile.flash.durationMs,

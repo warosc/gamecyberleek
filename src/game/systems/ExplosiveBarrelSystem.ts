@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { Projectile } from '../entities/projectiles/Projectile';
+import { shakeCamera } from './RuntimeSettings';
 
 export const BARREL_CONFIG = {
   damage: 75,
@@ -39,6 +40,6 @@ export class ExplosiveBarrelSystem {
     (barrel.getData('stripe') as Phaser.GameObjects.Rectangle | undefined)?.destroy();
     barrel.destroy();
     this.onExplode(x, y, BARREL_CONFIG.damage, BARREL_CONFIG.radius);
-    this.scene.cameras.main.shake(180, 0.008);
+    shakeCamera(this.scene.cameras.main, 180, 0.008);
   }
 }

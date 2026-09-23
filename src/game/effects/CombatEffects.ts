@@ -3,6 +3,7 @@ import { COLORS, GAMEPLAY } from '../config/Constants';
 import { detectQualityProfile } from '../config/QualityProfile';
 import { impactProfile, type ImpactTier } from '../presentation/ImpactFeedback';
 import type { WeaponMode } from '../entities/player/WeaponSilhouettes';
+import { reducedMotion } from '../systems/RuntimeSettings';
 
 /** Particle count the quality profile is expressed against, so tiers scale relative to it. */
 const IMPACT_PARTICLE_BASELINE = 3;
@@ -12,8 +13,7 @@ export class CombatEffects {
   private readonly transient = new Set<Phaser.GameObjects.GameObject>();
   private readonly quality = detectQualityProfile();
   private readonly maxTransient = Math.floor(GAMEPLAY.maxTransientEffects * this.quality.transientBudgetScale);
-  private readonly reducedMotion =
-    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  private readonly reducedMotion = reducedMotion();
 
   constructor(private readonly scene: Phaser.Scene) {}
 

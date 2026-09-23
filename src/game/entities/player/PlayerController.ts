@@ -7,6 +7,8 @@ export interface VirtualPlayerInput {
   firing: boolean;
   dash: boolean;
   autoFire: boolean;
+  /** Keep facing the last stick aim between shots (gamepad), instead of the mouse cursor. */
+  holdAim?: boolean;
 }
 
 export class PlayerController {

@@ -7,6 +7,8 @@ export interface ArenaTheme {
   accent: number;
   secondary: number;
   floorTint: number;
+  /** Bio-credit multiplier for runs in this sector; later sectors pay more for more risk. */
+  rewardMultiplier: number;
 }
 
 export const ARENA_THEMES: ArenaTheme[] = [
@@ -19,6 +21,7 @@ export const ARENA_THEMES: ArenaTheme[] = [
     accent: 0x21e6ff,
     secondary: 0x73ef62,
     floorTint: 0xffffff,
+    rewardMultiplier: 1,
   },
   {
     id: 'greenhouse',
@@ -29,6 +32,7 @@ export const ARENA_THEMES: ArenaTheme[] = [
     accent: 0x73ef62,
     secondary: 0x21e6ff,
     floorTint: 0xb9ffd0,
+    rewardMultiplier: 1.25,
   },
   {
     id: 'reactor',
@@ -39,5 +43,10 @@ export const ARENA_THEMES: ArenaTheme[] = [
     accent: 0x76a9ff,
     secondary: 0xd566ff,
     floorTint: 0xbcc9ff,
+    rewardMultiplier: 1.5,
   },
 ];
+
+export function sectorRewardMultiplier(sector: number) {
+  return ARENA_THEMES[Math.min(Math.max(0, sector), ARENA_THEMES.length - 1)].rewardMultiplier;
+}

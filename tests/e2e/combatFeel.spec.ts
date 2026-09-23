@@ -312,7 +312,7 @@ test('contracts roll three distinct objectives, track progress from combat event
   expect(result.summary.creditsEarned).toBe(45 + 60 + 70 + 120);
   await page.waitForFunction(() => window.combatGame.scene.isActive('GameOver'));
   const credited = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('leek-ops-profile-v4')!) as { bioCredits: number; contractsCompleted: number; perfectContracts: number },
+    JSON.parse(localStorage.getItem('leek-ops-profile-v5')!) as { bioCredits: number; contractsCompleted: number; perfectContracts: number },
   );
   expect(credited.contractsCompleted).toBe(3);
   expect(credited.perfectContracts).toBe(1);

@@ -13,6 +13,7 @@ import {
   sampleRigAnimation,
   type RigAnimationData,
 } from './PlayerRigAnimation';
+import { reducedMotion } from '../../systems/RuntimeSettings';
 
 interface PoseEntry {
   x: number;
@@ -46,8 +47,7 @@ export class LayeredPlayerRig extends Phaser.GameObjects.Container implements Pl
   private readonly solveOrder = rigSolveOrder(PLAYER_RIG_LAYERS);
   private readonly animations = new Map<PlayerAnimationState, RigAnimationData>();
   private readonly clock = new RigAnimationClock();
-  private readonly reducedMotion =
-    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  private readonly reducedMotion = reducedMotion();
 
   private glassesShine?: Phaser.GameObjects.Image;
   private shineStartedAt = -SHINE_MIN_GAP_MS;

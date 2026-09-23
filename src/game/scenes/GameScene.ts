@@ -15,7 +15,7 @@ import { AudioManager } from '../managers/AudioManager';
 import { ARENA_THEMES } from '../config/ArenaDefinitions';
 import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
 import { EnemyProjectileManager } from '../entities/projectiles/EnemyProjectileManager';
-import { loadProfile } from '../systems/ProfileStore';
+import { loadProfile, updateSettings } from '../systems/ProfileStore';
 import { EnemyDeathResolver } from '../systems/EnemyDeathResolver';
 import { CombatEffects } from '../effects/CombatEffects';
 import { ExplosiveBarrelSystem } from '../systems/ExplosiveBarrelSystem';
@@ -36,6 +36,11 @@ import { RunInventory } from '../systems/RunInventory';
 import { applyEquipmentModifiers, removeEquipmentModifiers, type Equipment } from '../loot/Equipment';
 import { activeBuildSynergy, combatRating, type BuildSynergy } from '../systems/BuildProgression';
 import { SectorObjectiveSystem, type ObjectiveMetric } from '../systems/SectorObjectiveSystem';
+import { shakeCamera } from '../systems/RuntimeSettings';
+import { applyWorkshop } from '../progression/Workshop';
+import { dailyMutator, operationScore } from '../progression/DailyOperation';
+import { PAD, setGamepadConsumer, type PadFrame } from '../input/GamepadBridge';
+import type { VirtualPlayerInput } from '../entities/player/PlayerController';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -46,6 +51,19 @@ export class GameScene extends Phaser.Scene {
     dash: false,
     autoFire: false,
   };
+  /** Analog gamepad input; used instead of `mobileInput` while the pad is the active device. */
+  readonly padInput: VirtualPlayerInput = {
+    active: true,
+    movement: new Phaser.Math.Vector2(),
+    aim: new Phaser.Math.Vector2(1, 0),
+    firing: false,
+    dash: false,
+    autoFire: false,
+    holdAim: true,
+  };
+  private padEngaged = false;
+  /** Set when this run is the daily operation; the date and mutator identify its board. */
+  daily?: { date: string; mutator: string };
   player!: Player;
   projectiles!: ProjectileManager;
   enemies!: Phaser.Physics.Arcade.Group;
@@ -136,6 +154,9 @@ export class GameScene extends Phaser.Scene {
       this.mobileInput.movement.set(0, 0);
       this.mobileInput.firing = false;
       this.mobileInput.dash = false;
+      this.padInput.movement.set(0, 0);
+      this.padInput.firing = false;
+      this.padInput.dash = false;
     } else this.tweens.resumeAll();
   };
   private specialLastUsed: Record<SpecialAbilityId, number> = {
@@ -146,7 +167,9 @@ export class GameScene extends Phaser.Scene {
   constructor() {
     super('Game');
   }
-  init(data: { arenaIndex?: number; weaponId?: StarterWeaponId }) {
+  init(data: { arenaIndex?: number; weaponId?: StarterWeaponId; daily?: { date: string; mutator: string } }) {
+    this.daily = data.daily;
+    this.padEngaged = false;
     this.arenaIndex = (data.arenaIndex ?? this.arenaIndex) % ARENA_THEMES.length;
     this.arenaName = ARENA_THEMES[this.arenaIndex].name;
     this.selectedWeaponId = data.weaponId ?? 'pulse';
@@ -185,7 +208,13 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, ARENA.width, ARENA.height);
     new ArenaPresenter(this).draw(ARENA_THEMES[this.arenaIndex]);
     this.player = new Player(this, ARENA.width / 2, ARENA.height / 2, this.selectedWeaponId);
-    applyWeaponMastery(this.player.stats, this.selectedWeaponId, loadProfile().weaponMastery[this.selectedWeaponId]);
+    const profile = loadProfile();
+    applyWeaponMastery(this.player.stats, this.selectedWeaponId, profile.weaponMastery[this.selectedWeaponId]);
+    applyWorkshop(this.player.stats, profile.workshop);
+    dailyMutator(this.daily?.mutator)?.apply(this.player.stats);
+    // Workshop plating and mutators change max HP after the player was built at base HP.
+    this.player.health.max = this.player.stats.maxHp;
+    this.player.health.current = this.player.stats.maxHp;
     this.telemetry.equipped(this.player.stats.weaponName);
     this.projectiles = new ProjectileManager(this);
     this.enemyProjectiles = new EnemyProjectileManager(this);
@@ -288,7 +317,11 @@ export class GameScene extends Phaser.Scene {
       this.game.events.off(Phaser.Core.Events.BLUR, this.handleFocusLost);
       this.game.events.off(Phaser.Core.Events.HIDDEN, this.handleFocusLost);
       this.events.off(Events.STATE_CHANGED, this.syncGameplayPause);
+      this.input.off('pointermove', this.releasePad);
+      setGamepadConsumer(undefined);
     });
+    setGamepadConsumer(this.consumePad);
+    this.input.on('pointermove', this.releasePad);
     this.scene.launch('UI', { game: this });
     this.events.emit(Events.STATE_CHANGED, this.state);
     this.events.emit(Events.OBJECTIVE_CHANGED, this.objective.snapshot);
@@ -334,9 +367,10 @@ export class GameScene extends Phaser.Scene {
       this.input.activePointer,
       (x, y, a) =>
         this.projectiles.fire(x, y, a, this.player.stats, this.survivalMs, this.player.damageMultiplier),
-      this.mobileInput,
+      this.padEngaged ? this.padInput : this.mobileInput,
     );
     this.mobileInput.dash = false;
+    this.padInput.dash = false;
     this.projectiles.update(this.survivalMs);
     this.enemyProjectiles.update(this.survivalMs);
     if (!this.encounters.hasBossSpawned) this.spawn.update(delta, this.player);
@@ -348,7 +382,7 @@ export class GameScene extends Phaser.Scene {
         if (enemy.enemyType === EnemyType.BOSS && enemy.bossPhase !== this.lastBossPhase) {
           this.lastBossPhase = enemy.bossPhase;
           this.cameras.main.flash(180, 213, 102, 255, false);
-          this.cameras.main.shake(220, 0.008);
+          shakeCamera(this.cameras.main, 220, 0.008);
           this.audio.play('boss_phase');
           this.bossPhases.enter(enemy.bossPhase as 2 | 3, enemy);
         }
@@ -428,7 +462,7 @@ export class GameScene extends Phaser.Scene {
     if (!e.active || !e.canContact || this.survivalMs - e.lastContact < 650) return;
     e.lastContact = this.survivalMs;
     this.player.takeDamage(e.contactDamage);
-    this.cameras.main.shake(90, 0.004);
+    shakeCamera(this.cameras.main, 90, 0.004);
   }
   private spawnOrb(x: number, y: number, value: number) {
     // The pool is capped and orbs never expire on their own, so once the arena holds
@@ -710,7 +744,7 @@ export class GameScene extends Phaser.Scene {
       this.effects.floatingText(x, y - 22, `${damage}`, '#73efff');
     }
     this.audio.play('nova');
-    this.cameras.main.shake(180, 0.006);
+    shakeCamera(this.cameras.main, 180, 0.006);
   }
   togglePause() {
     if (this.victoryPending) return;
@@ -725,7 +759,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   adjustAudioVolume(delta: number) {
-    this.audio.setMasterVolume(this.audio.getMasterVolume() + delta);
+    this.audio.setMasterVolume(Math.round((this.audio.getMasterVolume() + delta) * 10) / 10);
+    // The pause-menu slider and the settings screen are one preference, not two.
+    updateSettings({ masterVolume: this.audio.getMasterVolume() });
     return this.audio.getMasterVolume();
   }
   get audioVolume() { return this.audio.getMasterVolume(); }
@@ -761,12 +797,47 @@ export class GameScene extends Phaser.Scene {
       weaponId: this.selectedWeaponId,
       contracts: this.contracts.summary(),
       summary,
+      facts: {
+        sector: this.arenaIndex,
+        durationMs: this.survivalMs,
+        kills: summary.kills,
+        damageDealt: summary.damageDealt,
+        damageTaken: summary.damageTaken,
+        shotsFired: summary.shotsFired,
+        hits: summary.hits,
+        bossDefeated: summary.bossDefeated,
+      },
+      daily: this.daily && {
+        ...this.daily,
+        score: operationScore({ kills: summary.kills, level: this.xp.level, durationMs: this.survivalMs, victory }),
+      },
       equipment: this.inventory.contents.map(item => item.name),
       synergy: this.activeSynergy?.name,
     });
   }
   /** Single fan-out point for momentum state: keeps `MOMENTUM_CHANGED` and the kill-streak
    * contract in lockstep instead of duplicating this pair at every call site. */
+  /**
+   * Gamepad frames arrive before each step. Live combat consumes them as analog input; any
+   * other state returns false so the bridge replays them as menu keys for the open modal.
+   */
+  private readonly consumePad = (frame: PadFrame) => {
+    if (this.victoryPending || (this.state !== GameState.PLAYING && this.state !== GameState.BOSS)) return false;
+    if (frame.active) this.padEngaged = true;
+    if (!this.padEngaged) return true;
+    this.padInput.movement.set(frame.movement.x, frame.movement.y);
+    if (frame.aiming) this.padInput.aim.set(frame.aim.x, frame.aim.y);
+    this.padInput.firing = frame.firing;
+    if (frame.justPressed.has(PAD.A) || frame.justPressed.has(PAD.LB)) this.padInput.dash = true;
+    if (frame.justPressed.has(PAD.X)) this.activateSpecial('nova');
+    if (frame.justPressed.has(PAD.Y)) this.activateSpecial('shield');
+    if (frame.justPressed.has(PAD.B) || frame.justPressed.has(PAD.RB)) this.activateSpecial('overdrive');
+    return true;
+  };
+  /** A real mouse movement hands aiming back to the cursor. Touch never disengages the pad. */
+  private readonly releasePad = (pointer: Phaser.Input.Pointer) => {
+    if (!pointer.wasTouch) this.padEngaged = false;
+  };
   private applyMomentum(state: MomentumState) {
     this.events.emit(Events.MOMENTUM_CHANGED, state);
     const streakCompleted = this.contracts.onMomentumChanged(state);
@@ -813,7 +884,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (effect === 'cryo') this.enemyProjectiles.group.clear(true, true);
     this.audio.tone(effect === 'emp' ? 180 : effect === 'renewal' ? 740 : 320, 0.3, 0.05);
-    this.cameras.main.shake(180, 0.006);
+    shakeCamera(this.cameras.main, 180, 0.006);
     this.objective.record('devices');
   }
   private completeObjective(metric: ObjectiveMetric) {

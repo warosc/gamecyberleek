@@ -2,9 +2,15 @@ import Phaser from 'phaser';
 import './style.css';
 import { gameConfig } from './game/config/GameConfig';
 import { installDevTelemetry, reportViewport } from './game/systems/DevTelemetry';
+import { loadProfile } from './game/systems/ProfileStore';
+import { applyRuntimeSettings } from './game/systems/RuntimeSettings';
+import { installGamepadBridge } from './game/input/GamepadBridge';
 
 installDevTelemetry();
-new Phaser.Game(gameConfig);
+// Before the game exists: quality, locale and mixer levels are read by the first scene.
+applyRuntimeSettings(loadProfile().settings);
+const game = new Phaser.Game(gameConfig);
+installGamepadBridge(game);
 
 // Measure how much of the screen the canvas covers, on boot and after every rotation.
 setTimeout(() => reportViewport('boot'), 1500);

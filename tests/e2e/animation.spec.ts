@@ -202,7 +202,7 @@ test('BRÓK-9 loads its production art, changes phases and completes the encount
     scene.activateSpecial('nova');
   });
   await page.waitForFunction(() => window.animationTestGame.scene.isActive('GameOver'));
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('leek-ops-profile-v4')!).victories)).toBe(1);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('leek-ops-profile-v5')!).victories)).toBe(1);
   expect(failures).toEqual([]);
 });
 

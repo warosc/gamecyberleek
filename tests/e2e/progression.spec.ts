@@ -1,0 +1,184 @@
+import { test, expect, type Page } from '@playwright/test';
+import type Phaser from 'phaser';
+import type { GameScene } from '../../src/game/scenes/GameScene';
+
+declare global { interface Window { combatGame: Phaser.Game; fakePad?: { axes: number[]; pressed: Set<number> } } }
+
+const PROFILE_KEY = 'leek-ops-profile-v5';
+
+async function boot(page: Page, profile?: object) {
+  await page.route(url => url.pathname === '/src/main.ts', async route => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      body: (await response.text()).replace('new Phaser.Game(gameConfig);', 'window.combatGame = new Phaser.Game(gameConfig);'),
+    });
+  });
+  if (profile) await page.addInitScript(([key, value]) => {
+    // Seed once: later reloads in the same test must see what the game saved.
+    if (!sessionStorage.getItem('seeded')) {
+      localStorage.setItem(key, value);
+      sessionStorage.setItem('seeded', '1');
+    }
+  }, [PROFILE_KEY, JSON.stringify(profile)] as const);
+  await page.goto('/');
+  await page.waitForFunction(() => window.combatGame?.scene.isActive('Menu'));
+}
+
+const tap = (page: Page, scene: string, name: string) => page.evaluate(([sceneKey, objectName]) => {
+  // Menu buttons live inside containers, which take them off the scene's top-level list.
+  type Node = Phaser.GameObjects.GameObject & { list?: Node[] };
+  const find = (list: Node[]): Node | undefined => {
+    for (const child of list) {
+      if (child.name === objectName) return child;
+      const nested = child.list && find(child.list);
+      if (nested) return nested;
+    }
+    return undefined;
+  };
+  const target = find(window.combatGame.scene.getScene(sceneKey).children.list as Node[]);
+  if (!target) throw new Error(`missing ${objectName}`);
+  target.emit('pointerdown');
+  target.emit('pointerup');
+}, [scene, name] as const);
+
+/** Every text in a scene, including those nested in containers such as menu buttons. */
+const sceneTexts = (page: Page, scene: string) => page.evaluate(sceneKey => {
+  type Node = Phaser.GameObjects.GameObject & { list?: Node[]; text?: string };
+  const collect = (list: Node[]): string[] =>
+    list.flatMap(child => [...(child.type === 'Text' ? [child.text!] : []), ...(child.list ? collect(child.list) : [])]);
+  return collect(window.combatGame.scene.getScene(sceneKey).children.list as Node[]);
+}, scene);
+
+const storedProfile = (page: Page) => page.evaluate(key => JSON.parse(localStorage.getItem(key)!), PROFILE_KEY);
+
+test('the workshop spends credits and the next run starts with the upgrade', async ({ page }) => {
+  await boot(page, { bioCredits: 200 });
+  await tap(page, 'Menu', 'menu-workshop');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Workshop'));
+  await tap(page, 'Workshop', 'workshop-buy-plating');
+  await tap(page, 'Workshop', 'workshop-buy-plating');
+  const saved = await storedProfile(page);
+  expect(saved.bioCredits).toBe(200 - 60 - 120);
+  expect(saved.workshop.plating).toBe(2);
+  // Unaffordable: nothing changes.
+  await tap(page, 'Workshop', 'workshop-buy-plating');
+  expect((await storedProfile(page)).bioCredits).toBe(20);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Menu'));
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Game'));
+  const hp = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    return { max: scene.player.health.max, current: scene.player.health.current };
+  });
+  expect(hp).toEqual({ max: 120, current: 120 });
+});
+
+test('an unlocked sector can be chosen from the menu and pays its multiplier', async ({ page }) => {
+  await boot(page, { unlocks: ['sector-2'], bestLevel: 5 });
+  // Phaser reads the keyboard once per frame, so each press waits for the menu to react.
+  const sector = () => page.evaluate(() => (window.combatGame.scene.getScene('Menu') as unknown as { sector: number }).sector);
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(sector).toBe(1);
+  expect(await page.evaluate(() =>
+    (window.combatGame.scene.getScene('Menu').children.getByName('menu-sector-name') as Phaser.GameObjects.Text).text))
+    .toBe('NEON GREENHOUSE');
+  // Sector 3 is locked, so the next step wraps back to sector 1.
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(sector).toBe(0);
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(sector).toBe(1);
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Game'));
+  expect(await page.evaluate(() => (window.combatGame.scene.getScene('Game') as GameScene).arenaIndex)).toBe(1);
+});
+
+test('the daily operation applies its mutator and records a score on the results screen', async ({ page }) => {
+  await boot(page);
+  await tap(page, 'Menu', 'menu-daily');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Game'));
+  const run = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const daily = scene.daily;
+    (scene as unknown as { gameOver: (victory: boolean) => void }).gameOver(false);
+    return { daily, arena: scene.arenaIndex, weapon: scene.selectedWeaponId };
+  });
+  expect(run.daily?.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  await page.waitForFunction(() => window.combatGame.scene.isActive('GameOver'));
+  const scoreText = await page.evaluate(() =>
+    (window.combatGame.scene.getScene('GameOver').children.getByName('results-daily') as Phaser.GameObjects.Text)?.text);
+  expect(scoreText).toBeTruthy();
+  const saved = await storedProfile(page);
+  expect(saved.daily.date).toBe(run.daily!.date);
+  expect(saved.daily.attempts).toBe(1);
+  expect(saved.history.at(-1)).toMatchObject({ sector: run.arena, weaponId: run.weapon, victory: false });
+  // Retrying keeps the same daily identity instead of advancing a sector.
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Game'));
+  expect(await page.evaluate(() => (window.combatGame.scene.getScene('Game') as GameScene).daily?.date)).toBe(run.daily!.date);
+});
+
+test('switching the language to English relabels the menu and persists', async ({ page }) => {
+  await boot(page);
+  await tap(page, 'Menu', 'menu-settings');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Settings'));
+  // Row 7 is the language row.
+  await tap(page, 'Settings', 'setting-next-7');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Settings'));
+  expect((await storedProfile(page)).settings.locale).toBe('en');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Menu'));
+  const texts = await sceneTexts(page, 'Menu');
+  expect(texts).toContain('DEPLOY');
+  expect(texts).toContain('WORKSHOP');
+  await page.reload();
+  await page.waitForFunction(() => window.combatGame?.scene.isActive('Menu'));
+  expect(await page.evaluate(() => document.documentElement.lang)).toBe('en');
+});
+
+test('the records screen lists saved runs and achievements', async ({ page }) => {
+  await boot(page, {
+    runs: 1, victories: 1, achievements: ['first-harvest'],
+    history: [{ at: '2026-09-23T10:00:00.000Z', sector: 0, weaponId: 'arc', level: 9, victory: true, durationMs: 301000, kills: 140, credits: 145 }],
+    lifetime: { kills: 140, playTimeMs: 301000 },
+  });
+  await tap(page, 'Menu', 'menu-records');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Records'));
+  const texts = await sceneTexts(page, 'Records');
+  expect(texts).toContain('LOGROS  1/10');
+  expect(texts.some(text => text.includes('ARC LEEK'))).toBe(true);
+  expect(texts).toContain('140');
+});
+
+test('a standard gamepad moves, dashes, pauses and navigates the pause menu', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.fakePad = { axes: [0, 0, 0, 0], pressed: new Set<number>() };
+    const pad = () => ({
+      id: 'fake', index: 0, connected: true, mapping: 'standard', timestamp: performance.now(),
+      axes: window.fakePad!.axes,
+      buttons: Array.from({ length: 17 }, (_, index) => {
+        const pressed = window.fakePad!.pressed.has(index);
+        return { pressed, touched: pressed, value: pressed ? 1 : 0 };
+      }),
+    });
+    Object.defineProperty(navigator, 'getGamepads', { value: () => [pad()] });
+  });
+  await boot(page);
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Game'));
+  const position = () => page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    return { x: scene.player.x, y: scene.player.y };
+  });
+  const start = await position();
+  await page.evaluate(() => { window.fakePad!.axes = [1, 0, 0, 0]; });
+  await expect.poll(async () => (await position()).x).toBeGreaterThan(start.x + 20);
+  await page.evaluate(() => { window.fakePad!.axes = [0, 0, 0, 0]; window.fakePad!.pressed.add(9); });
+  await expect.poll(() => page.evaluate(() => (window.combatGame.scene.getScene('Game') as GameScene).state)).toBe('PAUSED');
+  // Releasing START and pressing B (replayed as Escape) resumes.
+  await page.evaluate(() => { window.fakePad!.pressed.clear(); });
+  await page.waitForTimeout(100);
+  await page.evaluate(() => { window.fakePad!.pressed.add(1); });
+  await expect.poll(() => page.evaluate(() => (window.combatGame.scene.getScene('Game') as GameScene).state)).toBe('PLAYING');
+});

@@ -17,6 +17,15 @@ const categoryVolumes: Record<AudioCategory, number> = { sfx: 1, ui: 1, ambience
 
 export type AudioCategory = 'sfx' | 'ui' | 'ambience';
 
+/** Persisted mixer levels. `ambience` carries the procedural music; UI follows effects. */
+export function setAudioPreferences(master: number, music: number, sfx: number) {
+  masterVolume = Math.min(1, Math.max(0, master));
+  if (masterGain) masterGain.gain.value = masterVolume;
+  categoryVolumes.ambience = Math.min(1, Math.max(0, music));
+  categoryVolumes.sfx = Math.min(1, Math.max(0, sfx));
+  categoryVolumes.ui = categoryVolumes.sfx;
+}
+
 function unlock() {
   if (context) {
     void context.resume().catch(() => undefined);

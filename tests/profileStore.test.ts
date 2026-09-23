@@ -39,7 +39,7 @@ describe('profile schema migration', () => {
   it('starts a fresh profile with zeroed contract stats', async () => {
     const { loadProfile } = await import('../src/game/systems/ProfileStore');
     const profile = loadProfile();
-    expect(profile.schemaVersion).toBe(4);
+    expect(profile.schemaVersion).toBe(5);
     expect(profile.contractsCompleted).toBe(0);
     expect(profile.perfectContracts).toBe(0);
   });
@@ -61,7 +61,7 @@ describe('profile schema migration', () => {
     );
     const { loadProfile } = await import('../src/game/systems/ProfileStore');
     const profile = loadProfile();
-    expect(profile.schemaVersion).toBe(4);
+    expect(profile.schemaVersion).toBe(5);
     expect(profile.runs).toBe(4);
     expect(profile.bioCredits).toBe(140);
     expect(profile.unlocks).toEqual(['sector-2']);
@@ -70,13 +70,13 @@ describe('profile schema migration', () => {
     expect(profile.contractsCompleted).toBe(0);
     expect(profile.perfectContracts).toBe(0);
     // The migrated profile is persisted back under the current key.
-    expect(JSON.parse(storage.getItem('leek-ops-profile-v4')!).schemaVersion).toBe(4);
+    expect(JSON.parse(storage.getItem('leek-ops-profile-v5')!).schemaVersion).toBe(5);
   });
 
   it('ignores corrupt contract fields rather than failing the whole profile', async () => {
     storage.setItem(
-      'leek-ops-profile-v4',
-      JSON.stringify({ schemaVersion: 4, contractsCompleted: 'not-a-number', perfectContracts: -3 }),
+      'leek-ops-profile-v5',
+      JSON.stringify({ schemaVersion: 5, contractsCompleted: 'not-a-number', perfectContracts: -3 }),
     );
     const { loadProfile } = await import('../src/game/systems/ProfileStore');
     const profile = loadProfile();
@@ -108,5 +108,54 @@ describe('saveRun contract rewards', () => {
     expect(profile.bioCredits).toBe(10);
     expect(profile.contractsCompleted).toBe(0);
     expect(profile.perfectContracts).toBe(0);
+  });
+});
+
+describe('schema v5 progression', () => {
+  it('migrates a v4 profile and defaults the new sections', async () => {
+    storage.setItem('leek-ops-profile-v4', JSON.stringify({ schemaVersion: 4, runs: 9, bioCredits: 300, contractsCompleted: 5 }));
+    const { loadProfile } = await import('../src/game/systems/ProfileStore');
+    const profile = loadProfile();
+    expect(profile).toMatchObject({ schemaVersion: 5, runs: 9, bioCredits: 300, contractsCompleted: 5, achievements: [], history: [] });
+    expect(profile.workshop.plating).toBe(0);
+    expect(profile.settings.locale).toBe('es');
+  });
+
+  it('pays more in later sectors and with the salvage upgrade', async () => {
+    const { runCredits } = await import('../src/game/systems/ProfileStore');
+    const { EMPTY_WORKSHOP } = await import('../src/game/progression/Workshop');
+    expect(runCredits(10, false, 0, 0, EMPTY_WORKSHOP)).toBe(50);
+    expect(runCredits(10, false, 0, 2, EMPTY_WORKSHOP)).toBe(75);
+    expect(runCredits(10, false, 0, 2, { ...EMPTY_WORKSHOP, salvage: 3 })).toBe(98);
+  });
+
+  it('records lifetime stats, a bounded history and one-time achievement bonuses', async () => {
+    const { saveRun } = await import('../src/game/systems/ProfileStore');
+    const run = { sector: 2, durationMs: 290_000, kills: 120, damageDealt: 9000, damageTaken: 40, shotsFired: 100, hits: 60, bossDefeated: true };
+    const first = saveRun(12, true, 'spore', undefined, run);
+    // 12*5 + 100 = 160, x1.5 in sector 3 = 240, plus PRIMERA COSECHA 50, INTOCABLE 120, ROMPEHIELOS 150.
+    expect(first.bioCredits).toBe(240 + 50 + 120 + 150);
+    expect(first.achievements).toEqual(['first-harvest', 'untouchable', 'cryo-breaker']);
+    expect(first.lifetime).toMatchObject({ kills: 120, bossKills: 1, fastestVictoryMs: 290_000, victoriesBySector: [0, 0, 1] });
+    const second = saveRun(12, true, 'spore', undefined, run);
+    expect(second.bioCredits - first.bioCredits).toBe(240);
+    for (let index = 0; index < 20; index++) saveRun(1, false);
+    const { loadProfile } = await import('../src/game/systems/ProfileStore');
+    expect(loadProfile().history).toHaveLength(12);
+  });
+
+  it('spends credits in the workshop only when affordable', async () => {
+    storage.setItem('leek-ops-profile-v5', JSON.stringify({ bioCredits: 70 }));
+    const { purchaseWorkshopRank, loadProfile } = await import('../src/game/systems/ProfileStore');
+    expect(purchaseWorkshopRank('plating')?.bioCredits).toBe(10);
+    expect(purchaseWorkshopRank('plating')).toBeUndefined();
+    expect(loadProfile().workshop.plating).toBe(1);
+  });
+
+  it('keeps the best daily score per date', async () => {
+    const { saveRun, loadProfile } = await import('../src/game/systems/ProfileStore');
+    saveRun(3, false, 'pulse', undefined, undefined, { date: '2026-09-23', score: 900 });
+    saveRun(3, false, 'pulse', undefined, undefined, { date: '2026-09-23', score: 400 });
+    expect(loadProfile().daily).toMatchObject({ date: '2026-09-23', bestScore: 900, attempts: 2, scores: [900, 400] });
   });
 });

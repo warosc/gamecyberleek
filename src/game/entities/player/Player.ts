@@ -8,6 +8,7 @@ import { resolveDamage } from '../../systems/CombatSystem';
 import { LayeredPlayerRig } from './LayeredPlayerRig';
 import { applyStarterWeapon, type StarterWeaponId } from '../../weapons/WeaponRegistry';
 import { WeaponVisual } from './WeaponVisual';
+import { shakeCamera } from '../../systems/RuntimeSettings';
 
 export class Player extends Phaser.GameObjects.Container {
   readonly stats = createPlayerStats();
@@ -114,7 +115,7 @@ export class Player extends Phaser.GameObjects.Container {
       this.animator.dash(time, this.stats.dashDuration);
       // A short impulse along the dash rather than an undirected shake: the camera agrees with
       // where the player just went.
-      this.scene.cameras.main.shake(90, 0.0035);
+      shakeCamera(this.scene.cameras.main, 90, 0.0035);
       this.scene.events.emit(Events.PLAYER_DASHED, v.x, v.y);
     }
     if (time < this.dashingUntil) v.copy(this.dashDirection);
@@ -122,7 +123,7 @@ export class Player extends Phaser.GameObjects.Container {
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(v.x * speed, v.y * speed);
     const mouseFiring = !pointer.wasTouch && pointer.leftButtonDown();
     const virtualAiming = virtual?.active &&
-      (virtual.firing || virtual.autoFire || pointer.wasTouch) && !mouseFiring;
+      (virtual.firing || virtual.autoFire || pointer.wasTouch || virtual.holdAim) && !mouseFiring;
     if (virtualAiming && virtual.aim.lengthSq() > 0.04) this.aim = virtual.aim.angle();
     else {
       const world = pointer.positionToCamera(this.scene.cameras.main) as Phaser.Math.Vector2;

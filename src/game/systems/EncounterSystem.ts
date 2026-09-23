@@ -6,6 +6,7 @@ import { EnemyType } from '../entities/enemies/EnemyTypes';
 import type { Player } from '../entities/player/Player';
 import { BOSS_IDENTITY } from '../entities/enemies/BossVisual';
 import { MINIBOSS_VARIANTS } from '../entities/enemies/MinibossVisual';
+import { shakeCamera } from './RuntimeSettings';
 
 /** Owns encounter milestones; combat and victory resolution remain in GameScene. */
 export class EncounterSystem {
@@ -40,7 +41,7 @@ export class EncounterSystem {
     this.enemies.add(miniboss);
     const identity = MINIBOSS_VARIANTS[Math.min(this.sector, 2)];
     this.scene.events.emit(Events.MINIBOSS_SPAWNED, identity.name, identity.title, identity.accent, miniboss.health.max);
-    this.scene.cameras.main.shake(420, 0.008);
+    shakeCamera(this.scene.cameras.main, 420, 0.008);
     return true;
   }
 
@@ -54,7 +55,7 @@ export class EncounterSystem {
     const boss = new Enemy(this.scene, x, y, EnemyType.BOSS);
     this.enemies.add(boss);
     this.scene.events.emit(Events.BOSS_SPAWNED, BOSS_IDENTITY.name, boss.health.max);
-    this.scene.cameras.main.shake(700, 0.012);
+    shakeCamera(this.scene.cameras.main, 700, 0.012);
     return true;
   }
 }

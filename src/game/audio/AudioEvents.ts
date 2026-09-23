@@ -18,6 +18,9 @@ export type AudioEventId =
   | 'weapon_evolve'
   | 'combo_rise'
   | 'contract_complete'
+  | 'ui_confirm'
+  | 'ui_deny'
+  | 'achievement'
   | 'player_hit'
   | 'weapon_fire'
   | 'spore_fire'
@@ -100,6 +103,15 @@ export const AUDIO_EVENTS: Record<AudioEventId, AudioEventDefinition> = {
       { frequency: 440, durationS: 0.09, volume: 0.032, type: 'triangle' },
       { frequency: 660, durationS: 0.1, volume: 0.03, delayMs: 70, type: 'triangle' },
       { frequency: 880, durationS: 0.15, volume: 0.03, delayMs: 150, type: 'triangle' },
+    ],
+  },
+  ui_confirm: { category: 'ui', tones: [{ frequency: 660, durationS: 0.05, volume: 0.02, type: 'triangle' }] },
+  ui_deny: { category: 'ui', tones: [{ frequency: 140, durationS: 0.09, volume: 0.025, type: 'square' }] },
+  achievement: {
+    category: 'ui',
+    tones: [
+      { frequency: 523, durationS: 0.1, volume: 0.03, type: 'triangle' },
+      { frequency: 784, durationS: 0.16, volume: 0.03, type: 'triangle', delayMs: 110 },
     ],
   },
   player_hit: { category: 'sfx', tones: [{ frequency: 80, durationS: 0.12, volume: 0.04, type: 'triangle' }] },
