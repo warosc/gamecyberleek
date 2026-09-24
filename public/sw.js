@@ -1,4 +1,4 @@
-const CACHE = 'leek-ops-v33';
+const CACHE = 'leek-ops-v34';
 const OFFLINE = '/offline.html';
 const SHELL = ['/', '/manifest.webmanifest', OFFLINE];
 self.addEventListener('install', (event) =>

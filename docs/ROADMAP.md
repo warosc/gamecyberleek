@@ -23,7 +23,7 @@ further down are the original plan and remain for history.
 | 12 | New enemy families | Done — medic, bulwark, brood; art is a colour grade of existing sprites until dedicated sprites exist |
 | 13 | Gamepad support | Done |
 | 14 | Localization | Done — Spanish source, English translation |
-| 15 | Original audio and dynamic mixing | Partial — sector music themes and dynamic intensity/ducking on the procedural score; recorded audio still needs a composer |
+| 15 | Original audio and dynamic mixing | Done — seven-cue MIDI soundtrack (menu, three sectors, boss, victory, defeat) composed with `tools/music/compose.py` and exported through the FL Studio MCP; played by a Web Audio synth with layered dynamic mixing. Optional: render the cues in FL and drop in OGGs ([music README](../public/assets/music/README.md)) |
 | 16 | PWA offline fallback and bundle split | Done |
 | 17 | Physical low-end device profiling | **Needs a device** — [DEVICE_PROFILING.md](DEVICE_PROFILING.md) |
 | 18 | Daily operation with a leaderboard | Done locally — the online board is a port with an offline adapter; it needs a backend decision |

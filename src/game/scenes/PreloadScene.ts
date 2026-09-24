@@ -2,6 +2,9 @@ import Phaser from 'phaser';
 import { PLAYER_RIG_LAYERS, PLAYER_RIG_STATES } from '../entities/player/PlayerRigManifest';
 import { BOSS_IDENTITY } from '../entities/enemies/BossVisual';
 import { VEGETABLE_ART } from '../entities/enemies/VegetableRoster';
+import { parseMidi } from '../audio/MidiFile';
+import type { MusicCue, MusicManifest } from '../audio/MusicDirector';
+import { registerMusic } from '../managers/AudioManager';
 export class PreloadScene extends Phaser.Scene {
   private startedAt = 0;
   private bar?: Phaser.GameObjects.Rectangle;
@@ -75,8 +78,14 @@ export class PreloadScene extends Phaser.Scene {
       this.load.json(`rig-anim-${state}`, `assets/character/leek/rig/animations/${state}.json`);
     this.load.image('lab-floor', 'assets/maps/cyber-vegetable-lab-floor.png');
     this.load.image('menu-backdrop', 'assets/ui/menu-backdrop.png');
+    // The soundtrack is optional: a missing manifest or file leaves the procedural score.
+    this.load.once('filecomplete-json-music-manifest', (_key: string, _type: string, manifest: MusicManifest) => {
+      for (const [cue, entry] of Object.entries(manifest)) if (entry) this.load.binary(`music-${cue}`, `assets/music/${entry.midi}`);
+    });
+    this.load.json('music-manifest', 'assets/music/manifest.json');
   }
   create() {
+    this.registerSoundtrack();
     const actions = this.textures.get('leek-actions');
     actions.add('move', 0, 13, 35, 129, 184);
     actions.add('dash', 0, 150, 5, 125, 135);
@@ -91,7 +100,21 @@ export class PreloadScene extends Phaser.Scene {
     if (remaining > 0) this.time.delayedCall(remaining, enter);
     else enter();
   }
+  private registerSoundtrack() {
+    const manifest = this.cache.json.get('music-manifest') as MusicManifest | undefined;
+    if (!manifest) return;
+    for (const [cue, entry] of Object.entries(manifest)) {
+      const data = this.cache.binary.get(`music-${cue}`) as ArrayBuffer | undefined;
+      if (!data || !entry) continue;
+      try {
+        registerMusic(cue as MusicCue, parseMidi(data), entry);
+      } catch {
+        // A corrupt file loses that cue only; the rest of the soundtrack still plays.
+      }
+    }
+  }
   private loadingMessage(key: string) {
+    if (key.startsWith('music-')) return 'AFINANDO BANDA SONORA';
     if (key.startsWith('rig-') || key.startsWith('leek-')) return 'ENSAMBLANDO OPERADOR CYBERLEEK';
     if (key.startsWith('vegetable-') || key.includes('brok')) return 'ESCANEANDO AMENAZAS VEGETALES';
     if (key.includes('floor')) return 'CARTOGRAFIANDO SECTORES';

@@ -85,7 +85,9 @@ export class GameOverScene extends Phaser.Scene {
     notes.slice(0, 2).forEach((note, index) => this.add.text(GAME_WIDTH / 2, 502 + index * 22, note.text, {
       fontFamily: 'Arial Black', fontSize: '13px', color: note.color, align: 'center', wordWrap: { width: 1040 },
     }).setOrigin(0.5).setName(note.name));
-    if (data.newAchievements?.length) new AudioManager(this).play('achievement');
+    const audio = new AudioManager(this);
+    audio.playStinger(data.victory ? 'victory' : 'defeat');
+    if (data.newAchievements?.length) audio.play('achievement');
 
     const nextArenaIndex = data.victory ? data.arenaIndex + 1 : data.arenaIndex;
     const canAdvance = !data.daily && isSectorUnlocked(nextArenaIndex, loadProfile().unlocks);

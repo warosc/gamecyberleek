@@ -2,7 +2,7 @@
 
 A web-first 2D action roguelite vertical slice built with TypeScript, Phaser 4, Vite, and Docker. Survive neon bio-labs, defeat specialized enemies, collect XP, and build a run from randomized abilities and equipment drops.
 
-A run is completed after surviving five minutes. Temporary Web Audio tones provide feedback without copyrighted external assets.
+A run is completed after surviving five minutes. The original soundtrack is a set of MIDI cues composed in `tools/music/compose.py` and played by a Web Audio synth with a dynamic mix; FL Studio renders can replace any cue (see `public/assets/music/README.md`). Sound effects are synthesised at runtime; no copyrighted assets are used.
 
 ## Quick start
 
@@ -124,7 +124,8 @@ Use **Dev Containers: Reopen in Container** in VS Code. If HMR stalls on Windows
 See [docs/ROADMAP.md](docs/ROADMAP.md). Open items need people or decisions rather than code: a
 human playtest round ([docs/PLAYTEST_PLAN.md](docs/PLAYTEST_PLAN.md)), profiling on physical
 phones ([docs/DEVICE_PROFILING.md](docs/DEVICE_PROFILING.md)), dedicated art for the new enemy
-families and commanders, recorded audio, and a backend choice for online leaderboards and cloud saves.
+families and commanders, optional FL Studio renders of the soundtrack, and a backend choice for
+online leaderboards and cloud saves.
 
 ## Continuous integration
 

@@ -6,7 +6,8 @@ import {
 } from '../progression/Settings';
 import { exportProfileJson, importProfileJson, loadProfile, updateProfile, updateSettings } from '../systems/ProfileStore';
 import { applyRuntimeSettings } from '../systems/RuntimeSettings';
-import { AudioManager } from '../managers/AudioManager';
+import { AudioManager, setMusicLightweight } from '../managers/AudioManager';
+import { detectQualityProfile } from '../config/QualityProfile';
 import { backToMenu, panelButton, subMenuFrame } from '../ui/SceneWidgets';
 
 interface Row {
@@ -31,6 +32,7 @@ export class SettingsScene extends Phaser.Scene {
     const set = (patch: Partial<GameSettings>) => {
       const next = updateSettings(patch).settings;
       applyRuntimeSettings(next);
+      setMusicLightweight(detectQualityProfile().tier === 'low');
       this.audio?.play('ui_confirm');
     };
     const rows: Row[] = [

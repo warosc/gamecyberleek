@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { AUDIO_EVENTS, type AudioEventId } from '../audio/AudioEvents';
 import { musicCue, musicStepDuration, type MusicContext, type MusicState } from '../audio/MusicScore';
+import type { MidiSong } from '../audio/MidiFile';
+import { MusicDirector, SECTOR_CUES, layerFor, type CueManifestEntry, type MusicCue } from '../audio/MusicDirector';
 
 /**
  * One AudioContext for the whole game, created on the first user gesture that reaches any
@@ -11,8 +13,26 @@ import { musicCue, musicStepDuration, type MusicContext, type MusicState } from 
  * "Failed to start the audio device" and lost audio for the rest of the session.
  */
 let context: AudioContext | undefined;
+const audioContext = () => context;
 let masterGain: GainNode | undefined;
 let masterVolume = 0.8;
+/** Music has its own bus so it can be ducked and follow the music volume as a whole. */
+let musicBus: GainNode | undefined;
+let director: MusicDirector | undefined;
+let musicLightweight = false;
+const registeredSongs = new Map<MusicCue, { song: MidiSong; entry?: CueManifestEntry }>();
+const MUSIC_BASE_URL = 'assets/music/';
+
+/** Songs parsed at preload; they reach the director as soon as an AudioContext exists. */
+export function registerMusic(cue: MusicCue, song: MidiSong, entry?: CueManifestEntry) {
+  registeredSongs.set(cue, { song, entry });
+  director?.register(cue, song, entry, MUSIC_BASE_URL);
+}
+
+export function setMusicLightweight(lightweight: boolean) {
+  musicLightweight = lightweight;
+  director?.setLightweight(lightweight);
+}
 const categoryVolumes: Record<AudioCategory, number> = { sfx: 1, ui: 1, ambience: 0.55 };
 
 export type AudioCategory = 'sfx' | 'ui' | 'ambience';
@@ -36,6 +56,12 @@ function unlock() {
     masterGain = context.createGain();
     masterGain.gain.value = masterVolume;
     masterGain.connect(context.destination);
+    musicBus = context.createGain();
+    musicBus.gain.value = categoryVolumes.ambience;
+    musicBus.connect(masterGain);
+    director = new MusicDirector(context, musicBus);
+    director.setLightweight(musicLightweight);
+    for (const [cue, { song, entry }] of registeredSongs) director.register(cue, song, entry, MUSIC_BASE_URL);
   } catch {
     // Audio is optional; a browser refusing a context must never interrupt a run.
     return;
@@ -120,7 +146,23 @@ export class AudioManager {
     this.duckLevel = Math.min(Math.max(level, 0), 1);
   }
 
+  /** Victory / defeat sting over silence; returns false when the soundtrack is not loaded. */
+  playStinger(cue: 'victory' | 'defeat') {
+    if (!context || context.state !== 'running' || !musicBus) return false;
+    musicBus.gain.setTargetAtTime(categoryVolumes.ambience, context.currentTime, 0.02);
+    return director?.playOnce(cue) ?? false;
+  }
+
   updateMusic(gameTime: number, state: MusicState, context: MusicContext = {}) {
+    const cue: MusicCue = state === 'menu' ? 'menu' : state === 'boss' ? 'boss'
+      : SECTOR_CUES[Math.min(Math.max(context.sector ?? 0, 0), SECTOR_CUES.length - 1)];
+    const running = audioContext();
+    if (director?.has(cue) && musicBus && running?.state === 'running') {
+      const duck = performance.now() < this.duckUntil ? this.duckLevel : 1;
+      musicBus.gain.setTargetAtTime(categoryVolumes.ambience * duck, running!.currentTime, 0.06);
+      director.update(gameTime, cue, layerFor(state, context.intensity ?? 0));
+      return;
+    }
     if (this.musicState !== state) {
       this.musicState = state;
       this.musicStep = 0;

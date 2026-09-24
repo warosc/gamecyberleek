@@ -198,3 +198,22 @@ test('an English save plays the whole run in English', async ({ page }) => {
   // Words that only appear in the Spanish strings of this screen.
   expect(texts).not.toMatch(/NIVEL|ALCANZADO|PROTOCOLO|ELIGE|DISPARAR|MOVER|RATÓN/);
 });
+
+test('the soundtrack loads and the results screen plays its stinger without errors', async ({ page }) => {
+  const failures: string[] = [];
+  page.on('pageerror', error => failures.push(error.message));
+  await boot(page);
+  const loaded = await page.evaluate(() =>
+    ['menu', 'lab', 'greenhouse', 'reactor', 'boss', 'victory', 'defeat'].every(cue => window.combatGame.cache.binary.exists(`music-${cue}`)));
+  expect(loaded).toBe(true);
+  // A click unlocks audio, so the director really schedules notes from here on.
+  const canvas = (await page.locator('canvas').boundingBox())!;
+  await page.mouse.click(canvas.x + canvas.width * 0.9, canvas.y + canvas.height * 0.2);
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Game'));
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => (window.combatGame.scene.getScene('Game') as unknown as { gameOver: (victory: boolean) => void }).gameOver(true));
+  await page.waitForFunction(() => window.combatGame.scene.isActive('GameOver'));
+  await page.waitForTimeout(800);
+  expect(failures).toEqual([]);
+});

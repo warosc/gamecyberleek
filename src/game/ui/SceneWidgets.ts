@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { AudioManager } from '../managers/AudioManager';
 
 export const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
 
@@ -31,6 +32,8 @@ export function panelButton(
 /** Full-screen sub-menu frame shared by the workshop, settings and records screens. */
 export function subMenuFrame(scene: Phaser.Scene, width: number, height: number, title: string, subtitle: string, accent: number) {
   scene.cameras.main.setBackgroundColor(0x07111f);
+  const music = new AudioManager(scene);
+  scene.events.on(Phaser.Scenes.Events.UPDATE, (time: number) => music.updateMusic(time, 'menu'));
   if (scene.textures.exists('menu-backdrop'))
     scene.add.image(width / 2, height / 2, 'menu-backdrop').setDisplaySize(width, height).setAlpha(0.28);
   scene.add.rectangle(width / 2, height / 2, width - 60, height - 50, 0x07111f, 0.9).setStrokeStyle(2, accent, 0.45);
