@@ -307,6 +307,14 @@ test('the live board shows who is playing the daily now and calls out being pass
   expect(shown).toContain('RÉCORD HOY  ACE  9000');
   expect(shown).toMatch(/1\. ACE/);
   expect(shown).toMatch(/TÚ · YO-TEST/);
+  // The framed border must enclose every row, not just the fill behind them.
+  const fit = await page.evaluate(() => {
+    const panel = window.combatGame.scene.getScene('UI').children.getByName('live-board') as Phaser.GameObjects.Container;
+    const back = panel.list[0] as Phaser.GameObjects.Rectangle;
+    const rows = panel.list.filter(child => child.type === 'Text' && (child as Phaser.GameObjects.Text).text) as Phaser.GameObjects.Text[];
+    return { border: back.geom.height, rowsBottom: Math.max(...rows.map(row => row.y + row.height)) };
+  });
+  expect(fit.border).toBeGreaterThanOrEqual(fit.rowsBottom);
   // RIVAL overtakes the player live.
   await page.evaluate(() => {
     const state = (window as unknown as { liveTest: { presence: Record<string, { callsign: string; score: number }[]>; emit: () => void } }).liveTest;

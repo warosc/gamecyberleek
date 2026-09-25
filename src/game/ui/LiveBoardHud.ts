@@ -69,7 +69,9 @@ export class LiveBoardHud {
   }
 
   private layout(rows: number) {
-    this.back.height = this.rowsTop + 4 + Math.max(rows, 1) * 18;
+    // setSize, not a plain height assignment: the stroke path is only rebuilt by setSize, so the
+    // border would stay at its first height while rows grew past it.
+    this.back.setSize(330, this.rowsTop + 4 + Math.max(rows, 1) * 18);
   }
 
   destroy() {
