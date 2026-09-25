@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH } from '../config/Constants';
 import {
-  VEGETABLE_ROSTER, vegetableTexture, vegetableTint, type VegetableType,
+  VEGETABLE_ROSTER, resolveVegetableArt, type VegetableType,
 } from '../entities/enemies/VegetableRoster';
 import { t, td } from '../i18n';
 
@@ -35,10 +35,10 @@ export class BestiaryScene extends Phaser.Scene {
       const color = `#${spec.color.toString(16).padStart(6, '0')}`;
       this.add.rectangle(x, 350, pitch - 10, 420, 0x0b1b2b).setStrokeStyle(2, spec.color, 0.65);
       this.add.ellipse(x, 380, 110, 20, 0x000000, 0.45);
-      const sprite = this.add.image(x, 290, vegetableTexture(type));
+      const art = resolveVegetableArt(this.textures, type);
+      const sprite = this.add.image(x, 290, art.key);
       sprite.setScale(Math.min(180 / sprite.height, 140 / sprite.width));
-      const tint = vegetableTint(type);
-      if (tint !== undefined) sprite.setTint(tint);
+      if (art.tint !== undefined) sprite.setTint(art.tint);
       this.add.text(x, 420, spec.name, { fontFamily: 'Arial Black', fontSize: '21px', color }).setOrigin(0.5);
       this.add.text(x, 448, td(spec.role), { fontFamily: 'Arial Black', fontSize: '10px', color: '#eaffff' }).setOrigin(0.5);
       this.add.text(x, 505, td(TACTICS[type]), {

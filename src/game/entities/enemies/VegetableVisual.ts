@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { detectQualityProfile } from '../../config/QualityProfile';
 import { EnemyType } from './EnemyTypes';
-import { VEGETABLE_ROSTER, vegetableTexture, vegetableTint, type VegetableType } from './VegetableRoster';
+import { VEGETABLE_ROSTER, resolveVegetableArt, type VegetableType } from './VegetableRoster';
 
 /** Shared textures, fixed child counts, and gameplay-time animation; no per-enemy timers. */
 export class VegetableVisual extends Phaser.GameObjects.Container {
@@ -19,10 +19,11 @@ export class VegetableVisual extends Phaser.GameObjects.Container {
     const spec = VEGETABLE_ROSTER[enemyKind];
     this.artHeight = spec.height;
     this.name = `vegetable-visual-${spec.id}`;
-    this.sprite = scene.add.image(0, 0, vegetableTexture(enemyKind)).setOrigin(0.5, 0.7);
+    const art = resolveVegetableArt(scene.textures, enemyKind);
+    this.sprite = scene.add.image(0, 0, art.key).setOrigin(0.5, 0.7);
     this.sprite.setScale(spec.height / this.sprite.height);
     this.sprite.name = `${spec.id}-production-sprite`;
-    this.grade = vegetableTint(enemyKind);
+    this.grade = art.tint;
     if (this.grade !== undefined) this.sprite.setTint(this.grade);
     const width = this.sprite.displayWidth;
     this.shadow = scene.add.ellipse(0, spec.height * 0.26, width * 0.65, spec.height * 0.11, 0x000000, 0.45);

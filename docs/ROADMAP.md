@@ -18,15 +18,15 @@ further down are the original plan and remain for history.
 | 7 | Persistent settings: quality, motion, volumes, shake, vibration, language | Done |
 | 8 | Records: lifetime stats, run history, achievements | Done |
 | 9 | Sector-specific mechanics | Done — hazards, devices and objectives from the game-feel branch |
-| 10 | A commander per sector | Done — KOLI-6 (bloom rings) and ROMA-X (chilling cryo lance); art is a colour grade of BRÓK-9 until dedicated sprites exist |
+| 10 | A commander per sector | Done — KOLI-6 (bloom rings) and ROMA-X (chilling cryo lance), each with its own sprite |
 | 11 | Status effects (burn, chill, toxin) | Done — three level-up options; the spore cannon applies toxin |
-| 12 | New enemy families | Done — medic, bulwark, brood; art is a colour grade of existing sprites until dedicated sprites exist |
+| 12 | New enemy families | Done — medic (COL-3), bulwark (PAP-5), brood (CEB-9), each with its own sprite. The five new sprites were generated in Canva from the existing art as reference and imported with `tools/art/import_sprites.py`; see `public/assets/enemies/NEW_ART.md` for replacing them with full-resolution exports |
 | 13 | Gamepad support | Done |
 | 14 | Localization | Done — Spanish source, English translation |
 | 15 | Original audio and dynamic mixing | Done — seven-cue MIDI soundtrack (menu, three sectors, boss, victory, defeat) composed with `tools/music/compose.py` and exported through the FL Studio MCP; played by a Web Audio synth with layered dynamic mixing. Optional: render the cues in FL and drop in OGGs ([music README](../public/assets/music/README.md)) |
 | 16 | PWA offline fallback and bundle split | Done |
 | 17 | Physical low-end device profiling | **Needs a device** — [DEVICE_PROFILING.md](DEVICE_PROFILING.md) |
-| 18 | Daily operation with a leaderboard | Done locally — the online board is a port with an offline adapter; it needs a backend decision |
+| 18 | Daily operation with a leaderboard | Done locally — the online board is a port with an offline adapter; it needs a backend decision (Supabase proposed) |
 | 19 | Save backup | Done as export/import of a save file; cloud sync needs the same backend decision |
 | — | Split `UIScene`; player status controller | Done |
 

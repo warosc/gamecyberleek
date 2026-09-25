@@ -13,7 +13,7 @@ describe('PWA shell', () => {
       expect.objectContaining({ src: '/assets/character/leek/icon-192.png', sizes: '192x192' }),
       expect.objectContaining({ src: '/assets/character/leek/icon-512.png', sizes: '512x512' }),
     ]));
-    expect(readFileSync(resolve(root, 'public/sw.js'), 'utf8')).toContain("leek-ops-v34");
+    expect(readFileSync(resolve(root, 'public/sw.js'), 'utf8')).toContain("leek-ops-v35");
   });
 
   it('serves an offline page for navigations with no network and no cache', () => {

@@ -123,9 +123,9 @@ Use **Dev Containers: Reopen in Container** in VS Code. If HMR stalls on Windows
 
 See [docs/ROADMAP.md](docs/ROADMAP.md). Open items need people or decisions rather than code: a
 human playtest round ([docs/PLAYTEST_PLAN.md](docs/PLAYTEST_PLAN.md)), profiling on physical
-phones ([docs/DEVICE_PROFILING.md](docs/DEVICE_PROFILING.md)), dedicated art for the new enemy
-families and commanders, optional FL Studio renders of the soundtrack, and a backend choice for
-online leaderboards and cloud saves.
+phones ([docs/DEVICE_PROFILING.md](docs/DEVICE_PROFILING.md)), optional FL Studio renders of the
+soundtrack, full-resolution exports of the new sprites, and a backend choice for online
+leaderboards and cloud saves.
 
 ## Continuous integration
 

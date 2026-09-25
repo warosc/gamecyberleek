@@ -23,3 +23,18 @@ describe('Cyberleek enemy roster assets', () => {
     expect(total).toBeLessThan(32 * 1024 * 1024);
   });
 });
+
+describe('dedicated sprite manifest', () => {
+  const manifest = JSON.parse(readFileSync('public/assets/enemies/art-manifest.json', 'utf8')) as { sprites: { key: string; path: string }[] };
+  it.each(manifest.sprites.map(sprite => [sprite.key, sprite.path]))('%s is a bounded RGBA sprite on disk', (_key, path) => {
+    const png = readFileSync(`public/${path}`);
+    expect(png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    expect([3, 6]).toContain(png[25]);
+    expect(png.readUInt32BE(16)).toBeLessThanOrEqual(2048);
+    expect(png.readUInt32BE(20)).toBeLessThanOrEqual(2048);
+    expect(png.length).toBeLessThan(2_000_000);
+  });
+  it('lists unique keys', () => {
+    expect(new Set(manifest.sprites.map(sprite => sprite.key)).size).toBe(manifest.sprites.length);
+  });
+});

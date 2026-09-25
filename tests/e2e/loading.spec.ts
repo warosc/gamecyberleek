@@ -11,16 +11,18 @@ test('shows immediate branded loading progress until the Phaser menu is ready', 
   await expect(splash).toContainText('CYBERLEEK');
   await expect(page.locator('#boot-progress')).toBeVisible();
   await page.waitForFunction(() => document.querySelector('canvas')?.dataset.scene === 'Preload');
+  // The first progress event can land a moment after Preload starts, so wait for the bar to move
+  // while the delayed backdrop still holds the load open.
+  await expect.poll(() => page.evaluate(() => parseFloat((document.querySelector('#boot-progress') as HTMLElement).style.width) || 0))
+    .toBeGreaterThan(3);
   const duringLoad = await page.evaluate(() => ({
     status: document.querySelector('#boot-status')?.textContent,
-    progress: parseFloat((document.querySelector('#boot-progress') as HTMLElement).style.width),
     reducedMotionRule: [...document.styleSheets].some(sheet => {
       try { return [...sheet.cssRules].some(rule => rule.cssText.includes('prefers-reduced-motion')); }
       catch { return false; }
     }),
   }));
   expect(duringLoad.status).toBeTruthy();
-  expect(duringLoad.progress).toBeGreaterThan(3);
   expect(duringLoad.reducedMotionRule).toBe(true);
   await page.waitForFunction(() => document.querySelector('canvas')?.dataset.scene === 'Menu');
   await expect(splash).toHaveAttribute('aria-hidden', 'true');

@@ -61,6 +61,11 @@ export class PreloadScene extends Phaser.Scene {
       if (domStatus) domStatus.textContent = 'BIO-SISTEMAS LISTOS';
     });
     this.load.image(BOSS_IDENTITY.texture, BOSS_IDENTITY.asset);
+    // Dedicated sprites for the later families and commanders; absent entries keep the graded fallback.
+    this.load.once('filecomplete-json-art-manifest', (_key: string, _type: string, manifest: { sprites?: { key: string; path: string }[] }) => {
+      for (const sprite of manifest.sprites ?? []) this.load.image(sprite.key, sprite.path);
+    });
+    this.load.json('art-manifest', 'assets/enemies/art-manifest.json');
     for (const art of VEGETABLE_ART)
       this.load.image(`vegetable-${art}`, `assets/enemies/vegetables/${art}.png`);
     this.load.image(

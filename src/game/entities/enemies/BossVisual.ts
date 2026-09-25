@@ -17,13 +17,20 @@ export type BossSignature = 'none' | 'bloom' | 'cryo-lance';
  * until dedicated art exists; what makes each distinct in play is its signature attack.
  */
 export const BOSS_VARIANTS = [
-  { name: 'BRÓK-9', title: 'COMANDANTE DE LA BRECHA', tint: undefined, healthScale: 1, signature: 'none' },
-  { name: 'KOLI-6', title: 'MATRIARCA DE ESPORAS', tint: 0xfff0c8, healthScale: 1.12, signature: 'bloom' },
-  { name: 'ROMA-X', title: 'NÚCLEO CRIOGÉNICO', tint: 0xa8dcff, healthScale: 1.24, signature: 'cryo-lance' },
-] as const satisfies readonly { name: string; title: string; tint: number | undefined; healthScale: number; signature: BossSignature }[];
+  { name: 'BRÓK-9', title: 'COMANDANTE DE LA BRECHA', texture: 'brok9-commander', tint: undefined, healthScale: 1, signature: 'none' },
+  { name: 'KOLI-6', title: 'MATRIARCA DE ESPORAS', texture: 'koli6-commander', tint: 0xfff0c8, healthScale: 1.12, signature: 'bloom' },
+  { name: 'ROMA-X', title: 'NÚCLEO CRIOGÉNICO', texture: 'romax-commander', tint: 0xa8dcff, healthScale: 1.24, signature: 'cryo-lance' },
+] as const satisfies readonly { name: string; title: string; texture: string; tint: number | undefined; healthScale: number; signature: BossSignature }[];
 
 export function bossVariant(sector: number) {
   return BOSS_VARIANTS[Math.min(Math.max(0, sector), BOSS_VARIANTS.length - 1)];
+}
+
+/** The commander's own sprite when loaded; otherwise BRÓK-9 under the variant's grade. */
+export function resolveBossArt(textures: { exists(key: string): boolean }, sector: number) {
+  const variant = bossVariant(sector);
+  if (textures.exists(variant.texture)) return { key: variant.texture as string, tint: undefined };
+  return { key: BOSS_IDENTITY.texture as string, tint: variant.tint as number | undefined };
 }
 
 /** The production sprite stays upright like Cyberleek; only presentation follows its pose. */
@@ -41,11 +48,12 @@ export class BossVisual extends Phaser.GameObjects.Container {
 
   constructor(scene: Phaser.Scene, variant = 0) {
     super(scene, 0, 0);
-    this.grade = bossVariant(variant).tint;
+    const art = resolveBossArt(scene.textures, variant);
+    this.grade = art.tint;
     this.name = 'brok9-visual';
     this.shadow = scene.add.ellipse(0, 51, 125, 25, 0x000000, 0.55);
     this.ground = scene.add.graphics().setPosition(0, 40).setScale(1, 0.36);
-    this.sprite = scene.add.image(0, 0, BOSS_IDENTITY.texture).setOrigin(0.5, 0.68);
+    this.sprite = scene.add.image(0, 0, art.key).setOrigin(0.5, 0.68);
     this.sprite.setScale(200 / this.sprite.height);
     this.sprite.name = 'brok9-production-sprite';
     if (this.grade !== undefined) this.sprite.setTint(this.grade);
