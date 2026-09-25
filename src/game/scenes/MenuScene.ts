@@ -9,6 +9,7 @@ import { masteryRank, type WeaponMastery } from '../weapons/WeaponMastery';
 import { dailyOperation } from '../progression/DailyOperation';
 import { t, td, type StringKey } from '../i18n';
 import { hex } from '../ui/SceneWidgets';
+import { onlineService } from '../online/OnlinePorts';
 
 /** Last sector chosen in this session, so returning from a sub-menu keeps the selection. */
 const SECTOR_REGISTRY_KEY = 'menu-sector';
@@ -132,10 +133,11 @@ export class MenuScene extends Phaser.Scene {
     })];
     if (profile.daily.date === daily.date && profile.daily.bestScore > 0)
       dailyLines.push(t('menu.dailyBest', { score: profile.daily.bestScore }));
-    this.add.text(GAME_WIDTH - 38, 58, dailyLines.join('\n'), {
+    const dailyInfo = this.add.text(GAME_WIDTH - 38, 58, dailyLines.join('\n'), {
       fontFamily: 'monospace', fontSize: '11px', color: '#ffc857', align: 'right', lineSpacing: 4,
       backgroundColor: '#06101dcc', padding: { x: 8, y: 5 },
     }).setOrigin(1, 0).setDepth(8).setName('menu-daily-info');
+    this.showOnlineStatus(daily.date, dailyInfo, dailyLines, profile.runs, profile.operative?.code);
 
     // Keyboard and gamepad: the gamepad bridge replays pad input as these same keys.
     const keyboard = this.input.keyboard;
@@ -147,6 +149,26 @@ export class MenuScene extends Phaser.Scene {
 
   update(time: number) {
     this.audio?.updateMusic(time, 'menu');
+  }
+
+  /** Online extras for the menu; silently absent offline or on any network failure. */
+  private showOnlineStatus(date: string, info: Phaser.GameObjects.Text, lines: string[], localRuns: number, code?: string) {
+    const online = onlineService();
+    if (!online.online) return;
+    void online.fetchDailyBoard(date).then(board => {
+      const top = board[0];
+      if (!top || !this.sys.isActive()) return;
+      lines.push(t('menu.topToday', { callsign: top.displayName, score: top.score }));
+      info.setText(lines.join('\n'));
+    }).catch(() => undefined);
+    if (!code) return;
+    void online.cloudSaveInfo(code).then(cloud => {
+      if (!cloud || cloud.runs <= localRuns || !this.sys.isActive()) return;
+      this.add.text(GAME_WIDTH - 38, 150, t('menu.cloudAhead', { runs: cloud.runs }), {
+        fontFamily: 'Arial Black', fontSize: '11px', color: '#ff476f', align: 'right',
+        backgroundColor: '#06101dee', padding: { x: 8, y: 5 },
+      }).setOrigin(1, 0).setDepth(8).setName('menu-cloud-ahead');
+    }).catch(() => undefined);
   }
 
   private weaponIndex() {

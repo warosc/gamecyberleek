@@ -7,6 +7,7 @@ import type { RunRecord } from './RunTelemetry';
 import type { RunFacts } from '../progression/Achievements';
 import { ACHIEVEMENTS } from '../progression/Achievements';
 import { onlineService } from '../online/OnlinePorts';
+import { submitDailyRun } from '../online/OnlineSync';
 
 export interface RunEndData {
   time: number;
@@ -37,7 +38,10 @@ export class RunEndSystem {
     const newUnlocks = after.unlocks.filter(id => !before.unlocks.includes(id));
     // Fire and forget: a network outage must never hold up the results screen.
     const online = onlineService();
-    if (data.daily) void online.submitDailyScore(data.daily.date, data.daily.score).catch(() => undefined);
+    if (data.daily) void submitDailyRun(online, data.daily.date, {
+      kills: data.facts.kills, level: data.level, durationMs: data.facts.durationMs, victory: data.victory,
+    });
+    // A 409 means another device is further ahead: the cloud copy is kept and the menu says so.
     if (online.online) void online.uploadProfile(after).catch(() => undefined);
     const newAchievements = ACHIEVEMENTS.filter(achievement =>
       after.achievements.includes(achievement.id) && !before.achievements.includes(achievement.id))

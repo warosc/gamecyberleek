@@ -21,6 +21,8 @@ import { ContractHud } from '../ui/ContractHud';
 import { contractDescription, type ContractProgress } from '../systems/ContractSystem';
 import { MinibossBanner } from '../ui/MinibossBanner';
 import { buildInventoryPanel, buildLootDecision, showLootBanner } from '../ui/LootPanels';
+import { LiveBoardHud } from '../ui/LiveBoardHud';
+import type { LiveEntry } from '../online/LiveRanking';
 import { abilityText, t, td } from '../i18n';
 import type { BuildSynergy, combatRating } from '../systems/BuildProgression';
 import type { SectorObjectiveState } from '../systems/SectorObjectiveSystem';
@@ -138,6 +140,8 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.MOMENTUM_CHANGED, this.onMomentumChanged, this);
     this.gameScene.events.on(Events.CONTRACT_COMPLETED, this.onContractCompleted, this);
     this.gameScene.events.on(Events.OBJECTIVE_CHANGED, this.onObjectiveChanged, this);
+    this.gameScene.events.on(Events.LIVE_BOARD_CHANGED, this.onLiveBoard, this);
+    this.gameScene.events.on('live-board-record', this.onLiveRecord, this);
     this.gameScene.events.on(Events.UPGRADE_APPLIED, this.onUpgradeApplied, this);
     this.events.once('shutdown', () => {
       this.closeModal();
@@ -165,6 +169,10 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.MOMENTUM_CHANGED, this.onMomentumChanged, this);
       this.gameScene.events.off(Events.CONTRACT_COMPLETED, this.onContractCompleted, this);
       this.gameScene.events.off(Events.OBJECTIVE_CHANGED, this.onObjectiveChanged, this);
+      this.gameScene.events.off(Events.LIVE_BOARD_CHANGED, this.onLiveBoard, this);
+      this.gameScene.events.off('live-board-record', this.onLiveRecord, this);
+      this.liveBoard?.destroy();
+      this.liveBoard = undefined;
       this.gameScene.events.off(Events.UPGRADE_APPLIED, this.onUpgradeApplied, this);
       this.phaseBanner.destroy();
       this.minibossBanner.destroy();
@@ -210,6 +218,27 @@ export class UIScene extends Phaser.Scene {
     const banner = this.add.container(0, 20, [plate, title, brief]).setDepth(125).setAlpha(0).setName('xp-discovery');
     this.tweens.add({ targets: banner, y: 0, alpha: 1, duration: 220, hold: 2100, yoyo: true,
       onComplete: () => banner.destroy(true) });
+  }
+  private liveBoard?: LiveBoardHud;
+  private liveRecord?: { callsign: string; score: number };
+  private onLiveRecord(callsign: string, score: number) {
+    this.liveRecord = { callsign, score };
+    this.liveBoard?.setRecord(callsign, score);
+  }
+  private onLiveBoard(entries: LiveEntry[], passedBy?: LiveEntry) {
+    if (!this.liveBoard) {
+      this.liveBoard = new LiveBoardHud(this, this.gameScene.mobileInput.active);
+      if (this.liveRecord) this.liveBoard.setRecord(this.liveRecord.callsign, this.liveRecord.score);
+    }
+    if (entries.length) this.liveBoard.setEntries(entries);
+    if (passedBy) {
+      this.liveBoard.flash();
+      this.phaseBanner.show({
+        title: t('live.overtaken', { callsign: passedBy.callsign }),
+        brief: t('live.overtakenBrief', { score: passedBy.score }),
+        color: 0xff476f,
+      });
+    }
   }
   private onObjectiveChanged(state: SectorObjectiveState) {
     const status = state.status === 'complete' ? t('objective.complete') : state.status === 'failed' ? t('objective.expired') : `${state.progress}/${state.target}`;

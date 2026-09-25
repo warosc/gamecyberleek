@@ -42,6 +42,8 @@ import { applyWorkshop } from '../progression/Workshop';
 import { abilityText, td } from '../i18n';
 import { dailyMutator, operationScore } from '../progression/DailyOperation';
 import { PAD, setGamepadConsumer, type PadFrame } from '../input/GamepadBridge';
+import { onlineService } from '../online/OnlinePorts';
+import { overtakes, type LiveBoardSession, type LiveEntry } from '../online/LiveRanking';
 import type { VirtualPlayerInput } from '../entities/player/PlayerController';
 
 export class GameScene extends Phaser.Scene {
@@ -64,6 +66,11 @@ export class GameScene extends Phaser.Scene {
     holdAim: true,
   };
   private padEngaged = false;
+  /** Live daily board session; only exists during an online daily run. */
+  private live?: LiveBoardSession;
+  private liveEntries: LiveEntry[] = [];
+  private nextLiveUpdateAt = 0;
+  private liveGeneration = 0;
   private musicIntensity = 0;
   /** Set when this run is the daily operation; the date and mutator identify its board. */
   daily?: { date: string; mutator: string };
@@ -328,8 +335,10 @@ export class GameScene extends Phaser.Scene {
       this.events.off(Events.STATE_CHANGED, this.syncGameplayPause);
       this.input.off('pointermove', this.releasePad);
       setGamepadConsumer(undefined);
+      this.leaveLiveBoard();
     });
     setGamepadConsumer(this.consumePad);
+    this.joinLiveBoard();
     this.input.on('pointermove', this.releasePad);
     this.scene.launch('UI', { game: this });
     this.events.emit(Events.STATE_CHANGED, this.state);
@@ -373,6 +382,10 @@ export class GameScene extends Phaser.Scene {
       this.loot.spawnChest();
     }
     this.updateSpecialAbilities(this.survivalMs);
+    if (this.live && this.survivalMs >= this.nextLiveUpdateAt) {
+      this.nextLiveUpdateAt = this.survivalMs + 2000;
+      this.live.update(this.liveScore);
+    }
     this.player.update(
       this.survivalMs,
       this.input.activePointer,
@@ -800,6 +813,7 @@ export class GameScene extends Phaser.Scene {
     if (this.victoryPending && !victory) return;
     if (this.state === GameState.GAME_OVER || this.state === GameState.VICTORY) return;
     this.state = victory ? GameState.VICTORY : GameState.GAME_OVER;
+    this.leaveLiveBoard();
     const summary = this.telemetry.finish(this.survivalMs, this.xp.level, victory ? 'victory' : 'death');
     this.audio.play(victory ? 'victory' : 'game_over');
     this.physics.pause();
@@ -905,6 +919,49 @@ export class GameScene extends Phaser.Scene {
     if (frame.justPressed.has(PAD.B) || frame.justPressed.has(PAD.RB)) this.activateSpecial('overdrive');
     return true;
   };
+  /** The daily score this run would post if it ended now (a defeat), shown on the live board. */
+  get liveScore() {
+    return operationScore({ kills: this.telemetry.kills, level: this.xp.level, durationMs: this.survivalMs, victory: false });
+  }
+  get liveBoardEntries(): readonly LiveEntry[] {
+    return this.liveEntries;
+  }
+  /**
+   * Joins today's live board when this is an online daily run. Failures leave the run exactly
+   * as it is offline; a generation counter drops a join that finishes after the scene has moved on.
+   */
+  private joinLiveBoard() {
+    this.liveEntries = [];
+    this.nextLiveUpdateAt = 0;
+    const generation = ++this.liveGeneration;
+    const online = onlineService();
+    if (!this.daily || !online.online) return;
+    this.events.emit(Events.LIVE_BOARD_CHANGED, [], undefined);
+    void online.fetchDailyBoard(this.daily.date).then(board => {
+      if (generation === this.liveGeneration && board[0]) this.events.emit('live-board-record', board[0].displayName, board[0].score);
+    }).catch(() => undefined);
+    void online.openLiveBoard(this.daily.date).then(session => {
+      if (!session) return;
+      if (generation !== this.liveGeneration) {
+        void session.leave();
+        return;
+      }
+      this.live = session;
+      session.onChange(entries => {
+        if (generation !== this.liveGeneration) return;
+        const passed = overtakes(this.liveEntries, entries);
+        this.liveEntries = entries;
+        this.events.emit(Events.LIVE_BOARD_CHANGED, entries, passed[0]);
+      });
+      session.update(this.liveScore);
+    }).catch(() => undefined);
+  }
+  private leaveLiveBoard() {
+    this.liveGeneration++;
+    const session = this.live;
+    this.live = undefined;
+    if (session) void session.leave().catch(() => undefined);
+  }
   /** A real mouse movement hands aiming back to the cursor. Touch never disengages the pad. */
   private readonly releasePad = (pointer: Phaser.Input.Pointer) => {
     if (!pointer.wasTouch) this.padEngaged = false;

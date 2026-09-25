@@ -140,6 +140,10 @@ export class RunTelemetry {
     this.record.damageTaken += Math.max(0, Math.round(amount));
   }
 
+  /** Kills so far this run; read by the live daily board while the run is still going. */
+  get kills() {
+    return this.record.kills;
+  }
   killed() {
     this.record.kills++;
   }

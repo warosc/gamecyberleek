@@ -267,3 +267,51 @@ test('the cloud screen works offline and, against a server, uploads and restores
   expect(restored.bioCredits).toBe(40);
   expect(restored.operative.code).toBe(code);
 });
+
+test('the live board shows who is playing the daily now and calls out being passed', async ({ page }) => {
+  await boot(page);
+  await page.evaluate(async () => {
+    const ports = await import('/src/game/online/OnlinePorts.ts' as string);
+    const { rankLive } = await import('/src/game/online/LiveRanking.ts' as string);
+    const presence: Record<string, { callsign: string; score: number }[]> = {
+      rival: [{ callsign: 'RIVAL', score: 40 }], ace: [{ callsign: 'ACE', score: 9000 }],
+    };
+    let listener: ((entries: unknown[]) => void) | undefined;
+    const emit = () => listener?.(rankLive(presence, 'me'));
+    const fake = {
+      online: true,
+      async fetchDailyBoard() { return [{ rank: 1, displayName: 'ACE', score: 9000 }]; },
+      async openLiveBoard() {
+        return {
+          update(score: number) { presence.me = [{ callsign: 'YO-TEST', score }]; emit(); },
+          onChange(next: (entries: unknown[]) => void) { listener = next; },
+          async leave() { listener = undefined; },
+        };
+      },
+      async submitDailyRun() { return undefined; },
+      async uploadProfile() {},
+      async cloudSaveInfo() { return undefined; },
+    };
+    ports.setOnlineService(fake);
+    (window as unknown as { liveTest: { presence: typeof presence; emit: () => void } }).liveTest = { presence, emit };
+  });
+  await tap(page, 'Menu', 'menu-daily');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Game'));
+  const board = () => page.evaluate(() => {
+    const ui = window.combatGame.scene.getScene('UI');
+    const panel = ui.children.getByName('live-board') as Phaser.GameObjects.Container | null;
+    return panel ? panel.list.filter(child => child.type === 'Text').map(child => (child as Phaser.GameObjects.Text).text).join(' | ') : null;
+  });
+  await expect.poll(board).toContain('EN VIVO · 3');
+  const shown = (await board())!;
+  expect(shown).toContain('RÉCORD HOY  ACE  9000');
+  expect(shown).toMatch(/1\. ACE/);
+  expect(shown).toMatch(/TÚ · YO-TEST/);
+  // RIVAL overtakes the player live.
+  await page.evaluate(() => {
+    const state = (window as unknown as { liveTest: { presence: Record<string, { callsign: string; score: number }[]>; emit: () => void } }).liveTest;
+    state.presence.rival = [{ callsign: 'RIVAL', score: 5000 }];
+    state.emit();
+  });
+  await expect.poll(() => sceneTexts(page, 'UI')).toContain('RIVAL TE SUPERÓ');
+});

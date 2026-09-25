@@ -3,6 +3,7 @@ import {
   CODE_PATTERN, generateCallsign, generateCode, normalizeCallsign, normalizeCode, normalizeIdentity,
 } from '../src/game/online/OperativeIdentity';
 import { SupabaseOnlineService } from '../src/game/online/SupabaseOnlineService';
+import { OnlineError } from '../src/game/online/OnlinePorts';
 
 class MemoryStorage implements Storage {
   private store = new Map<string, string>();
@@ -53,11 +54,37 @@ describe('supabase adapter', () => {
 
   beforeEach(() => { calls.length = 0; reply = null; status = 200; });
 
-  it('calls the RPC functions with the anon key and the operative identity', async () => {
-    await service().submitDailyScore('2026-09-25', 1234.7);
-    expect(calls[0].url).toBe('https://demo.supabase.co/rest/v1/rpc/leek_submit_daily');
+  it('sends run facts for the server to score, with the key only in apikey for publishable keys', async () => {
+    reply = 3350;
+    const best = await service().submitDailyRun('2026-09-25', { kills: 120.6, level: 9, durationMs: 200000.4, victory: false });
+    expect(best).toBe(3350);
+    expect(calls[0].url).toBe('https://demo.supabase.co/rest/v1/rpc/leek_submit_daily_run');
     expect(calls[0].headers.apikey).toBe('anon-key');
-    expect(calls[0].body).toEqual({ p_code: identity.code, p_callsign: 'PUERRO-1', p_day: '2026-09-25', p_score: 1234 });
+    expect(calls[0].headers.Authorization).toBeUndefined();
+    expect(calls[0].body).toEqual({
+      p_code: identity.code, p_callsign: 'PUERRO-1', p_day: '2026-09-25', p_kills: 120, p_level: 9, p_duration_ms: 200000, p_victory: false,
+    });
+  });
+
+  it('adds the bearer header for legacy JWT anon keys', async () => {
+    await new SupabaseOnlineService('https://demo.supabase.co', 'eyJlegacy', () => identity, fakeFetch).fetchDailyBoard('2026-09-25');
+    expect(calls[0].headers.Authorization).toBe('Bearer eyJlegacy');
+  });
+
+  it('reports conflicts and transient failures as typed errors', async () => {
+    status = 409;
+    reply = { message: 'the cloud save is further ahead (5 runs)' };
+    const conflict = await service().uploadProfile({} as never).catch(error => error);
+    expect(conflict).toBeInstanceOf(OnlineError);
+    expect(conflict.isConflict).toBe(true);
+    expect(conflict.message).toContain('further ahead');
+    status = 429;
+    expect((await service().uploadProfile({} as never).catch(error => error)).isTransient).toBe(true);
+    const offline = new SupabaseOnlineService('https://demo.supabase.co', 'k', () => identity,
+      (async () => { throw new TypeError('Failed to fetch'); }) as unknown as typeof fetch);
+    const network = await offline.fetchDailyBoard('2026-09-25').catch(error => error);
+    expect(network.status).toBe(0);
+    expect(network.isTransient).toBe(true);
   });
 
   it('maps the daily board and cloud saves', async () => {
@@ -72,6 +99,11 @@ describe('supabase adapter', () => {
   it('rejects on server errors so callers can report them', async () => {
     status = 500;
     await expect(service().uploadProfile({} as never)).rejects.toThrow('leek_put_save failed: 500');
+  });
+
+  it('reads cloud save metadata', async () => {
+    reply = [{ runs: 7, updated_at: '2026-09-25T10:00:00Z' }];
+    expect(await service().cloudSaveInfo(identity.code)).toEqual({ runs: 7, updatedAt: '2026-09-25T10:00:00Z' });
   });
 });
 

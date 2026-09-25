@@ -9,6 +9,8 @@ import { setMusicLightweight } from './game/managers/AudioManager';
 import { detectQualityProfile } from './game/config/QualityProfile';
 import { OfflineOnlineService, setOnlineService } from './game/online/OnlinePorts';
 import { SupabaseOnlineService } from './game/online/SupabaseOnlineService';
+import { flushDailyRuns } from './game/online/OnlineSync';
+import { onlineService } from './game/online/OnlinePorts';
 import { ensureOperative } from './game/systems/ProfileStore';
 
 installDevTelemetry();
@@ -22,6 +24,8 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 setOnlineService(supabaseUrl && supabaseKey
   ? new SupabaseOnlineService(supabaseUrl, supabaseKey, ensureOperative)
   : new OfflineOnlineService(() => loadProfile().daily));
+// Scores a dropped connection left behind get another chance at startup.
+void flushDailyRuns(onlineService());
 const game = new Phaser.Game(gameConfig);
 installGamepadBridge(game);
 

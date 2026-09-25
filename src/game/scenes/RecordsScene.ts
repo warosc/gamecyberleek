@@ -7,6 +7,7 @@ import { loadProfile } from '../systems/ProfileStore';
 import { starterWeapon } from '../weapons/WeaponRegistry';
 import { backToMenu, subMenuFrame } from '../ui/SceneWidgets';
 import { onlineService } from '../online/OnlinePorts';
+import { dailyOperation } from '../progression/DailyOperation';
 
 export function formatDuration(ms: number) {
   const seconds = Math.floor(ms / 1000);
@@ -48,18 +49,21 @@ export class RecordsScene extends Phaser.Scene {
       this.add.text(ox + 76, y, t(key), label).setOrigin(0, 0.5);
       this.add.text(ox + 354, y, text, value).setOrigin(1, 0.5).setName(`records-${key}`);
     });
-    if (profile.daily.bestScore > 0) {
-      this.add.text(ox + 70, 520, `${t('records.dailyBest', { date: profile.daily.date })}  ${profile.daily.bestScore}`, {
-        ...label, color: '#ffc857',
-      });
-      // Through the online port: offline it is this device's board, with a backend the world's.
-      void onlineService().fetchDailyBoard(profile.daily.date).then(board => {
-        if (!this.sys.isActive() || !board.length) return;
-        this.add.text(ox + 70, 544, board.map(entry => `${entry.rank}. ${entry.displayName}  ${entry.score}`).join('\n'), {
-          fontFamily: 'monospace', fontSize: '11px', color: '#c7d9e2', lineSpacing: 3,
-        }).setName('records-daily-board');
-      }).catch(() => undefined);
-    }
+    // Today's board is always shown, played or not: seeing the competition is the invitation.
+    // Through the online port: offline it is this device's board, with a backend the world's.
+    const today = dailyOperation().date;
+    const mine = profile.daily.date === today && profile.daily.bestScore > 0
+      ? `   ${t('records.yourBest', { score: profile.daily.bestScore })}` : '';
+    this.add.text(ox + 70, 506, `${t('records.todayBoard', { date: today })}${mine}`, { ...label, color: '#ffc857' });
+    void onlineService().fetchDailyBoard(today).then(board => {
+      if (!this.sys.isActive()) return;
+      const text = board.length
+        ? board.slice(0, 8).map(entry => `${entry.rank}. ${entry.displayName}  ${entry.score}`).join('\n')
+        : t('records.boardEmpty');
+      this.add.text(ox + 70, 528, text, {
+        fontFamily: 'monospace', fontSize: '11px', color: '#c7d9e2', lineSpacing: 3,
+      }).setName('records-daily-board');
+    }).catch(() => undefined);
 
     this.add.text(ox + 410, 140, t('records.history'), { ...label, color: '#21e6ff', fontSize: '14px' });
     const history = [...profile.history].reverse().slice(0, 9);

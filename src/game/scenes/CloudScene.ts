@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { t } from '../i18n';
-import { onlineService } from '../online/OnlinePorts';
+import { OnlineError, onlineService } from '../online/OnlinePorts';
 import { normalizeCode } from '../online/OperativeIdentity';
 import {
   ensureOperative, loadProfile, renameOperative, restoreCloudProfile,
@@ -80,8 +80,11 @@ export class CloudScene extends Phaser.Scene {
     try {
       await onlineService().uploadProfile(loadProfile());
       this.report(t('cloud.uploaded'), true);
-    } catch {
-      this.report(t('cloud.failed'), false);
+    } catch (error) {
+      if (error instanceof OnlineError && error.isConflict) {
+        const info = await onlineService().cloudSaveInfo(ensureOperative().code).catch(() => undefined);
+        this.report(t('cloud.conflict', { runs: info?.runs ?? '?' }), false);
+      } else this.report(t('cloud.failed'), false);
     }
   }
 

@@ -65,6 +65,7 @@ export const Events = {
   LOOT_FOUND: 'loot-found',
   INVENTORY_OPENED: 'inventory-opened',
   OBJECTIVE_CHANGED: 'objective-changed',
+  LIVE_BOARD_CHANGED: 'live-board-changed',
   UPGRADE_APPLIED: 'upgrade-applied',
   EQUIPMENT_CHANGED: 'equipment-changed',
   RUN_PHASE_CHANGED: 'run-phase-changed',
