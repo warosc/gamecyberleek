@@ -43,24 +43,25 @@ let flushing: Promise<void> | undefined;
  */
 export function flushDailyRuns(service: OnlineService, spacingMs = 3200): Promise<void> {
   if (!service.online) return Promise.resolve();
-  flushing ??= (async () => {
-    try {
-      let queue = read();
-      while (queue.length) {
-        const [next, ...rest] = queue;
-        try {
-          await service.submitDailyRun(next.date, next.run);
-        } catch (error) {
-          if (!(error instanceof OnlineError) || error.isTransient) return;
-        }
-        queue = rest;
-        write(queue);
-        if (queue.length) await new Promise(resolve => setTimeout(resolve, spacingMs));
+  if (flushing) return flushing;
+  // The reset is chained after the assignment on purpose: with an empty queue the body finishes
+  // synchronously, and a reset inside it would run first and leave `flushing` stuck forever.
+  flushing = (async () => {
+    let queue = read();
+    while (queue.length) {
+      const [next, ...rest] = queue;
+      try {
+        await service.submitDailyRun(next.date, next.run);
+      } catch (error) {
+        if (!(error instanceof OnlineError) || error.isTransient) return;
       }
-    } finally {
-      flushing = undefined;
+      queue = rest;
+      write(queue);
+      if (queue.length) await new Promise(resolve => setTimeout(resolve, spacingMs));
     }
-  })();
+  })().finally(() => {
+    flushing = undefined;
+  });
   return flushing;
 }
 

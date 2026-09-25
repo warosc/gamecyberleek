@@ -72,6 +72,18 @@ describe('daily run retry queue', () => {
     expect(sync.pendingDailyRuns()).toHaveLength(0);
   });
 
+  it('still sends after a startup flush of an empty queue (regression)', async () => {
+    // Found live in production: the empty startup flush finished synchronously and left the
+    // queue locked, so no daily score of that session was ever sent.
+    const sync = await import('../src/game/online/OnlineSync');
+    const sent: string[] = [];
+    const service = serviceWith(async date => { sent.push(date); return 1; });
+    await sync.flushDailyRuns(service);
+    await sync.submitDailyRun(service, '2026-09-25', run);
+    expect(sent).toEqual(['2026-09-25']);
+    expect(sync.pendingDailyRuns()).toHaveLength(0);
+  });
+
   it('does nothing offline', async () => {
     const sync = await import('../src/game/online/OnlineSync');
     await sync.submitDailyRun({ online: false } as OnlineService, '2026-09-25', run);
