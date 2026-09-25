@@ -27,7 +27,9 @@ export class SupabaseOnlineService implements OnlineService {
         method: 'POST',
         headers: {
           apikey: this.anonKey,
-          Authorization: `Bearer ${this.anonKey}`,
+          // Legacy anon keys are JWTs and also go in Authorization; publishable keys
+          // (sb_publishable_...) are not JWTs and belong in the apikey header only.
+          ...(this.anonKey.startsWith('eyJ') ? { Authorization: `Bearer ${this.anonKey}` } : {}),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
