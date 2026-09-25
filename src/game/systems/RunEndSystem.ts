@@ -35,8 +35,10 @@ export class RunEndSystem {
     const after = saveRun(data.level, data.victory, data.weaponId, data.contracts, data.facts,
       data.daily && { date: data.daily.date, score: data.daily.score });
     const newUnlocks = after.unlocks.filter(id => !before.unlocks.includes(id));
-    // Fire and forget: a leaderboard outage must never hold up the results screen.
-    if (data.daily) void onlineService().submitDailyScore(data.daily.date, data.daily.score).catch(() => undefined);
+    // Fire and forget: a network outage must never hold up the results screen.
+    const online = onlineService();
+    if (data.daily) void online.submitDailyScore(data.daily.date, data.daily.score).catch(() => undefined);
+    if (online.online) void online.uploadProfile(after).catch(() => undefined);
     const newAchievements = ACHIEVEMENTS.filter(achievement =>
       after.achievements.includes(achievement.id) && !before.achievements.includes(achievement.id))
       .map(({ name, reward }) => ({ name, reward }));

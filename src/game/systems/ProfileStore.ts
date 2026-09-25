@@ -11,6 +11,9 @@ import {
   type LifetimeStats, type RunFacts, type RunHistoryEntry,
 } from '../progression/Achievements';
 import { EMPTY_DAILY, normalizeDaily, recordDailyScore, type DailyRecord } from '../progression/DailyOperation';
+import {
+  generateCallsign, generateCode, normalizeCallsign, normalizeIdentity, type OperativeIdentity,
+} from '../online/OperativeIdentity';
 
 export interface PlayerProfile {
   schemaVersion: 5;
@@ -32,6 +35,8 @@ export interface PlayerProfile {
   history: RunHistoryEntry[];
   achievements: string[];
   daily: DailyRecord;
+  /** Online identity; absent until the player first uses an online feature. */
+  operative?: OperativeIdentity;
 }
 
 const KEY = 'leek-ops-profile-v5';
@@ -114,6 +119,7 @@ function normalizeProfile(value: unknown): PlayerProfile {
     history: normalizeHistory(raw.history),
     achievements: idList(raw.achievements),
     daily: normalizeDaily(raw.daily),
+    operative: normalizeIdentity((raw as { operative?: unknown }).operative),
   };
 }
 
@@ -259,4 +265,34 @@ export function importProfileJson(text: string) {
   const profile = normalizeProfile(envelope.profile);
   persist(profile);
   return profile;
+}
+
+/** The operative identity, created and saved the first time something online needs it. */
+export function ensureOperative(): OperativeIdentity {
+  const profile = loadProfile();
+  if (profile.operative) return profile.operative;
+  profile.operative = { code: generateCode(), callsign: generateCallsign() };
+  persist(profile);
+  return profile.operative;
+}
+
+/** Returns the saved callsign, or undefined (and saves nothing) when it is not valid. */
+export function renameOperative(input: string) {
+  const callsign = normalizeCallsign(input);
+  if (!callsign) return undefined;
+  const profile = loadProfile();
+  profile.operative = { ...(profile.operative ?? ensureOperative()), callsign };
+  persist(profile);
+  return callsign;
+}
+
+/**
+ * Replaces the local save with one downloaded from the cloud, re-validating every field, and
+ * adopts the code it was restored with so later uploads keep going to the same cloud slot.
+ */
+export function restoreCloudProfile(profile: unknown, code: string, callsign: string) {
+  const restored = normalizeProfile(profile);
+  restored.operative = normalizeIdentity({ code, callsign }) ?? restored.operative;
+  persist(restored);
+  return restored;
 }

@@ -217,3 +217,53 @@ test('the soundtrack loads and the results screen plays its stinger without erro
   await page.waitForTimeout(800);
   expect(failures).toEqual([]);
 });
+
+test('the cloud screen works offline and, against a server, uploads and restores by code', async ({ page }) => {
+  await boot(page, { runs: 2, bioCredits: 40 });
+  await tap(page, 'Menu', 'menu-settings');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Settings'));
+  await tap(page, 'Settings', 'settings-cloud');
+  await page.waitForFunction(() => window.combatGame.scene.isActive('Cloud'));
+  const code = await page.evaluate(() =>
+    (window.combatGame.scene.getScene('Cloud').children.getByName('cloud-code') as Phaser.GameObjects.Text).text);
+  expect(code).toMatch(/^[A-HJ-NP-Z2-9]{4}(-[A-HJ-NP-Z2-9]{4}){3}$/);
+  expect((await storedProfile(page)).operative.code).toBe(code);
+
+  // A fake Supabase: the real adapter talks to it over fetch exactly as it would in production.
+  const saves = new Map<string, unknown>();
+  await page.route('https://fake-project.supabase.co/rest/v1/rpc/**', async route => {
+    const name = route.request().url().split('/').pop();
+    const body = route.request().postDataJSON() as { p_code: string; p_callsign?: string; p_profile?: unknown };
+    if (route.request().headers().apikey !== 'anon-test') return route.fulfill({ status: 401 });
+    if (name === 'leek_put_save') {
+      saves.set(body.p_code, { profile: body.p_profile, callsign: body.p_callsign });
+      return route.fulfill({ status: 200, body: '"2026-09-25T10:00:00Z"' });
+    }
+    if (name === 'leek_get_save') {
+      const save = saves.get(body.p_code) as { profile: unknown; callsign: string } | undefined;
+      return route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify(save ? [{ ...save, updated_at: '2026-09-25T10:00:00Z' }] : []) });
+    }
+    return route.fulfill({ status: 404 });
+  });
+  await page.evaluate(async () => {
+    const ports = await import('/src/game/online/OnlinePorts.ts' as string);
+    const { SupabaseOnlineService } = await import('/src/game/online/SupabaseOnlineService.ts' as string);
+    const { ensureOperative } = await import('/src/game/systems/ProfileStore.ts' as string);
+    ports.setOnlineService(new SupabaseOnlineService('https://fake-project.supabase.co', 'anon-test', ensureOperative));
+    window.combatGame.scene.getScene('Cloud').scene.restart();
+  });
+  await page.waitForTimeout(300);
+  await tap(page, 'Cloud', 'cloud-upload');
+  await expect.poll(() => saves.has(code)).toBe(true);
+
+  // Another "device": wipe local data, then restore with the code.
+  await page.evaluate(() => { localStorage.clear(); });
+  page.once('dialog', dialog => dialog.accept(code.toLowerCase().replaceAll('-', ' ')));
+  page.on('dialog', dialog => { if (dialog.type() === 'confirm') void dialog.accept(); });
+  await tap(page, 'Cloud', 'cloud-restore');
+  await expect.poll(async () => (await storedProfile(page))?.runs).toBe(2);
+  const restored = await storedProfile(page);
+  expect(restored.bioCredits).toBe(40);
+  expect(restored.operative.code).toBe(code);
+});

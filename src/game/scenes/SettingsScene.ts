@@ -86,6 +86,8 @@ export class SettingsScene extends Phaser.Scene {
     panelButton(this, cx + 300, 630, 240, 50, t('settings.import'), 0xffc857, () => this.importSave(status), 13)
       .box.setName('settings-import');
     backToMenu(this, GAME_WIDTH / 2, 630, t('common.back'));
+    panelButton(this, cx + 360, 104, 170, 40, t('settings.cloud'), 0x21e6ff, () => this.scene.start('Cloud'), 14)
+      .box.setName('settings-cloud');
   }
 
   /** Downloads the save as a file. The browser, not the game, decides where it goes. */

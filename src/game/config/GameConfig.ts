@@ -10,6 +10,7 @@ import { BestiaryScene } from '../scenes/BestiaryScene';
 import { WorkshopScene } from '../scenes/WorkshopScene';
 import { SettingsScene } from '../scenes/SettingsScene';
 import { RecordsScene } from '../scenes/RecordsScene';
+import { CloudScene } from '../scenes/CloudScene';
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.WEBGL,
   parent: 'game',
@@ -27,7 +28,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   scene: [
     BootScene, PreloadScene, MenuScene, GameScene, UIScene, GameOverScene, BestiaryScene,
-    WorkshopScene, SettingsScene, RecordsScene,
+    WorkshopScene, SettingsScene, RecordsScene, CloudScene,
   ],
   render: { antialias: true },
 };

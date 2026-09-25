@@ -13,9 +13,19 @@ export interface LeaderboardEntry {
 }
 
 /** Provider boundary for Phase G. Offline gameplay never calls a network implementation. */
+export interface CloudSave {
+  profile: unknown;
+  callsign: string;
+  updatedAt: string;
+}
+
 export interface OnlineService {
+  /** False for the offline adapter: screens use it to say whether the cloud is reachable. */
+  readonly online: boolean;
   signIn(): Promise<AccountSession | null>;
   uploadProfile(profile: PlayerProfile): Promise<void>;
+  /** The save stored under an operative code, or undefined when there is none. */
+  downloadProfile(code: string): Promise<CloudSave | undefined>;
   fetchLeaderboard(): Promise<readonly LeaderboardEntry[]>;
   /** Daily operation scores are keyed by the local calendar date of the run. */
   submitDailyScore(date: string, score: number): Promise<void>;
@@ -28,9 +38,11 @@ export interface OnlineService {
  * own top scores, read from the profile, so the UI can use one code path online and offline.
  */
 export class OfflineOnlineService implements OnlineService {
+  readonly online = false;
   constructor(private readonly localDaily: () => { date: string; scores: readonly number[] } = () => ({ date: '', scores: [] })) {}
   async signIn() { return null; }
   async uploadProfile(profile: PlayerProfile) { void profile; /* Offline no-op. */ }
+  async downloadProfile(code: string): Promise<CloudSave | undefined> { void code; return undefined; }
   async fetchLeaderboard() { return [] as const; }
   async submitDailyScore(date: string, score: number) { void date; void score; /* Recorded locally by ProfileStore. */ }
   async fetchDailyBoard(date: string): Promise<readonly LeaderboardEntry[]> {

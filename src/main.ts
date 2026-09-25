@@ -8,13 +8,20 @@ import { installGamepadBridge } from './game/input/GamepadBridge';
 import { setMusicLightweight } from './game/managers/AudioManager';
 import { detectQualityProfile } from './game/config/QualityProfile';
 import { OfflineOnlineService, setOnlineService } from './game/online/OnlinePorts';
+import { SupabaseOnlineService } from './game/online/SupabaseOnlineService';
+import { ensureOperative } from './game/systems/ProfileStore';
 
 installDevTelemetry();
 // Before the game exists: quality, locale and mixer levels are read by the first scene.
 applyRuntimeSettings(loadProfile().settings);
 setMusicLightweight(detectQualityProfile().tier === 'low');
-// No backend is configured: the offline adapter serves this device's own daily board.
-setOnlineService(new OfflineOnlineService(() => loadProfile().daily));
+// With a Supabase project configured the game uses it; otherwise the offline adapter serves
+// this device's own daily board. Either way core play never waits on the network.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+setOnlineService(supabaseUrl && supabaseKey
+  ? new SupabaseOnlineService(supabaseUrl, supabaseKey, ensureOperative)
+  : new OfflineOnlineService(() => loadProfile().daily));
 const game = new Phaser.Game(gameConfig);
 installGamepadBridge(game);
 
