@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import type { GameScene } from '../scenes/GameScene';
 import { t } from '../i18n';
+import { UI, framePanel, isCompact, panelButton, uiFont } from './SceneWidgets';
 
 /** Builds the pause overlay. The objects are handed to `ModalOverlay`, which owns their life. */
 export class PauseMenu {
@@ -13,9 +14,9 @@ export class PauseMenu {
       this.scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020710, 0.82),
     );
     parts.push(
-      this.scene.add
-        .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 650, 560, 0x071522, 0.98)
-        .setStrokeStyle(3, 0x21e6ff, 0.8),
+      framePanel(this.scene, GAME_WIDTH / 2, GAME_HEIGHT / 2, 680, 580, UI.cyan, {
+        fill: 0x071522, fillAlpha: 0.98, band: 0.06, strokeAlpha: 0.85, cut: 24, glow: 0.12,
+      }),
     );
     parts.push(
       this.scene.add.circle(GAME_WIDTH / 2, 166, 58, 0x0b2130, 1).setStrokeStyle(4, 0x73ef62, 0.8),
@@ -25,7 +26,7 @@ export class PauseMenu {
       this.scene.add
         .text(GAME_WIDTH / 2, 240, t('pause.title'), {
           fontFamily: 'Arial Black',
-          fontSize: '34px',
+          fontSize: uiFont(this.scene, 34),
           color: '#eaffff',
         })
         .setOrigin(0.5),
@@ -38,7 +39,7 @@ export class PauseMenu {
           `NIVEL ${this.game.xp.level}   ·   ${this.game.player.stats.weaponName}   ·   ARMOR ${Math.round(this.game.player.stats.damageReduction * 100)}%`,
           {
             fontFamily: 'Arial Black',
-            fontSize: '12px',
+            fontSize: uiFont(this.scene, 12),
             color: '#73ef62',
             letterSpacing: 1,
           },
@@ -50,10 +51,10 @@ export class PauseMenu {
     parts.push(...resume, ...menu);
     const volumeLabel = this.scene.add
       .text(GAME_WIDTH / 2, 505, '', {
-        fontFamily: 'monospace',
-        fontSize: '13px',
+        fontFamily: 'Arial Black',
+        fontSize: uiFont(this.scene, 14),
         color: '#eaffff',
-        letterSpacing: 2,
+        letterSpacing: 1,
       })
       .setOrigin(0.5);
     const refreshVolume = () =>
@@ -68,12 +69,13 @@ export class PauseMenu {
     }, 70);
     refreshVolume();
     parts.push(volumeLabel, ...volumeDown, ...volumeUp);
-    parts.push(
+    // Keyboard hints mean nothing on a phone.
+    if (!isCompact(this.scene)) parts.push(
       this.scene.add
-        .text(GAME_WIDTH / 2, 570, t('pause.keys'), {
+        .text(GAME_WIDTH / 2, 575, t('pause.keys'), {
           fontFamily: 'monospace',
-          fontSize: '12px',
-          color: '#7594a8',
+          fontSize: uiFont(this.scene, 12),
+          color: UI.muted,
           letterSpacing: 2,
         })
         .setOrigin(0.5),
@@ -81,24 +83,7 @@ export class PauseMenu {
     return parts;
   }
 
-  private button(x: number, y: number, label: string, color: number, action: () => void, width = 330) {
-    const button = this.scene.add
-      .rectangle(x, y, width, 58, 0x0b1b2b, 1)
-      .setStrokeStyle(3, color, 0.85)
-      .setInteractive({ useHandCursor: true });
-    const text = this.scene.add
-      .text(x, y, label, {
-        fontFamily: 'Arial Black',
-        fontSize: '17px',
-        color: '#eaffff',
-        letterSpacing: 2,
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    button.on('pointerup', action);
-    text.on('pointerup', action);
-    button.on('pointerover', () => button.setFillStyle(color, 0.25));
-    button.on('pointerout', () => button.setFillStyle(0x0b1b2b, 1));
-    return [button, text];
+  private button(x: number, y: number, label: string, color: number, action: () => void, width = 340) {
+    return panelButton(this.scene, x, y, width, 60, label, color, action, 17).parts;
   }
 }

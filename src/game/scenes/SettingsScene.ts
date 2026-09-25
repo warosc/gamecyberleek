@@ -8,7 +8,7 @@ import { exportProfileJson, importProfileJson, loadProfile, updateProfile, updat
 import { applyRuntimeSettings } from '../systems/RuntimeSettings';
 import { AudioManager, setMusicLightweight } from '../managers/AudioManager';
 import { detectQualityProfile } from '../config/QualityProfile';
-import { backToMenu, panelButton, subMenuFrame } from '../ui/SceneWidgets';
+import { UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont } from '../ui/SceneWidgets';
 
 interface Row {
   label: StringKey;
@@ -62,32 +62,32 @@ export class SettingsScene extends Phaser.Scene {
     // Centred on the logical width: phones in landscape are wider than the 1280 design width.
     const cx = GAME_WIDTH / 2;
     rows.forEach((row, index) => {
-      const y = 156 + index * 56;
-      this.add.rectangle(cx, y, 880, 50, 0x0b1b2b, 0.95).setStrokeStyle(1, 0x214c65, 0.9);
-      this.add.text(cx - 420, y, t(row.label), { fontFamily: 'Arial Black', fontSize: '15px', color: '#eaffff' }).setOrigin(0, 0.5);
+      const y = 158 + index * 55;
+      framePanel(this, cx, y, 900, 48, UI.violet, { strokeAlpha: 0.28, band: 0.05, cut: 10, brackets: false });
+      fitText(this.add.text(cx - 425, y, t(row.label), {
+        fontFamily: 'Arial Black', fontSize: uiFont(this, 15), color: UI.text,
+      }).setOrigin(0, 0.5), 420);
       // The whole value cell is a forward tap target, which matters on a phone-sized canvas.
       const cell = this.add.rectangle(cx + 210, y, 240, 48, 0x000000, 0.001).setInteractive({ useHandCursor: true });
       const value = this.add.text(cx + 210, y, row.value(), {
-        fontFamily: 'Arial Black', fontSize: '15px', color: '#d566ff',
+        fontFamily: 'Arial Black', fontSize: uiFont(this, 15), color: '#e59cff',
       }).setOrigin(0.5).setName(`setting-${row.label}`);
-      const change = (step: 1 | -1) => () => { row.change(step); value.setText(row.value()); };
+      const change = (step: 1 | -1) => () => { row.change(step); value.setText(row.value()); fitText(value, 220); };
+      fitText(value, 220);
       cell.on('pointerup', change(1));
-      panelButton(this, cx + 50, y, 76, 46, '<', 0xd566ff, change(-1), 18).box.setName(`setting-prev-${index}`);
-      panelButton(this, cx + 370, y, 76, 46, '>', 0xd566ff, change(1), 18).box.setName(`setting-next-${index}`);
+      panelButton(this, cx + 52, y, 76, 44, '<', UI.violet, change(-1), 18, { name: `setting-prev-${index}` });
+      panelButton(this, cx + 368, y, 76, 44, '>', UI.violet, change(1), 18, { name: `setting-next-${index}` });
     });
-    this.add.text(GAME_WIDTH / 2, 584, t('settings.restartHint'), {
-      fontFamily: 'monospace', fontSize: '11px', color: '#7594a8', letterSpacing: 1,
+    this.add.text(GAME_WIDTH / 2, 588, t('settings.restartHint'), {
+      fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: UI.muted, letterSpacing: 1,
     }).setOrigin(0.5);
-    const status = this.add.text(cx, 660, '', {
-      fontFamily: 'Arial Black', fontSize: '12px', color: '#73ef62',
+    const status = this.add.text(cx, 682, '', {
+      fontFamily: 'Arial Black', fontSize: uiFont(this, 12), color: '#73ef62',
     }).setOrigin(0.5).setName('settings-backup-status');
-    panelButton(this, cx - 300, 630, 240, 50, t('settings.export'), 0x21e6ff, () => this.exportSave(), 13)
-      .box.setName('settings-export');
-    panelButton(this, cx + 300, 630, 240, 50, t('settings.import'), 0xffc857, () => this.importSave(status), 13)
-      .box.setName('settings-import');
-    backToMenu(this, GAME_WIDTH / 2, 630, t('common.back'));
-    panelButton(this, cx + 360, 104, 170, 40, t('settings.cloud'), 0x21e6ff, () => this.scene.start('Cloud'), 14)
-      .box.setName('settings-cloud');
+    panelButton(this, cx - 310, 640, 270, 54, t('settings.export'), UI.cyan, () => this.exportSave(), 14, { name: 'settings-export' });
+    panelButton(this, cx + 310, 640, 270, 54, t('settings.import'), UI.gold, () => this.importSave(status), 14, { name: 'settings-import' });
+    backToMenu(this, GAME_WIDTH / 2, 640, t('common.back'));
+    panelButton(this, cx + 380, 100, 180, 46, t('settings.cloud'), UI.cyan, () => this.scene.start('Cloud'), 15, { name: 'settings-cloud' });
   }
 
   /** Downloads the save as a file. The browser, not the game, decides where it goes. */

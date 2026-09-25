@@ -8,7 +8,7 @@ import {
 } from '../systems/ProfileStore';
 import { applyRuntimeSettings } from '../systems/RuntimeSettings';
 import { AudioManager } from '../managers/AudioManager';
-import { backToMenu, panelButton, subMenuFrame } from '../ui/SceneWidgets';
+import { UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont } from '../ui/SceneWidgets';
 
 /**
  * Cloud save and online identity. The operative code is the only key to a cloud save, so the
@@ -26,45 +26,44 @@ export class CloudScene extends Phaser.Scene {
     subMenuFrame(this, GAME_WIDTH, GAME_HEIGHT, t('cloud.title'), t(online ? 'cloud.online' : 'cloud.offline'), 0x21e6ff);
     const cx = GAME_WIDTH / 2;
     const operative = ensureOperative();
-    const label = { fontFamily: 'Arial Black', fontSize: '13px', color: '#7594a8', letterSpacing: 2 };
+    const label = { fontFamily: 'Arial Black', fontSize: uiFont(this, 13), color: UI.muted, letterSpacing: 2 };
 
-    this.add.text(cx - 420, 170, t('cloud.callsign'), label).setOrigin(0, 0.5);
-    const callsign = this.add.text(cx - 420, 204, operative.callsign, {
-      fontFamily: 'Arial Black', fontSize: '26px', color: '#73ef62',
+    // Identity card: callsign and code on the left, their actions on the right.
+    framePanel(this, cx, 256, 960, 214, UI.cyan, { strokeAlpha: 0.4, band: 0.05, cut: 16 });
+    this.add.text(cx - 440, 178, t('cloud.callsign'), label).setOrigin(0, 0.5);
+    const callsign = this.add.text(cx - 440, 212, operative.callsign, {
+      fontFamily: 'Arial Black', fontSize: uiFont(this, 26), color: '#73ef62',
     }).setOrigin(0, 0.5).setName('cloud-callsign');
-    panelButton(this, cx + 300, 190, 240, 50, t('cloud.rename'), 0x73ef62, () => {
+    panelButton(this, cx + 320, 196, 240, 52, t('cloud.rename'), UI.green, () => {
       const answer = window.prompt(t('cloud.renamePrompt'), loadProfile().operative?.callsign ?? '');
       if (answer === null) return;
       const saved = renameOperative(answer);
       if (!saved) return this.report(t('cloud.renameInvalid'), false);
       callsign.setText(saved);
       this.report(t('cloud.renamed'), true);
-    }, 14).box.setName('cloud-rename');
+    }, 15, { name: 'cloud-rename' });
 
-    this.add.text(cx - 420, 270, t('cloud.code'), label).setOrigin(0, 0.5);
-    this.add.text(cx - 420, 306, operative.code, {
-      fontFamily: 'monospace', fontSize: '30px', color: '#ffc857', letterSpacing: 2,
+    this.add.text(cx - 440, 262, t('cloud.code'), label).setOrigin(0, 0.5);
+    this.add.text(cx - 440, 298, operative.code, {
+      fontFamily: 'monospace', fontSize: uiFont(this, 30), color: '#ffc857', letterSpacing: 2, fontStyle: 'bold',
     }).setOrigin(0, 0.5).setName('cloud-code');
-    this.add.text(cx - 420, 342, t('cloud.codeHint'), { fontFamily: 'Arial', fontSize: '13px', color: '#a9bbc9' }).setOrigin(0, 0.5);
-    panelButton(this, cx + 300, 300, 240, 50, t('cloud.copy'), 0xffc857, () => {
+    fitText(this.add.text(cx - 440, 336, t('cloud.codeHint'), {
+      fontFamily: 'Arial', fontSize: uiFont(this, 13), color: UI.body,
+    }).setOrigin(0, 0.5), 620);
+    panelButton(this, cx + 320, 300, 240, 52, t('cloud.copy'), UI.gold, () => {
       void navigator.clipboard?.writeText(loadProfile().operative?.code ?? operative.code)
         .then(() => this.report(t('cloud.copied'), true))
         .catch(() => this.report(t('cloud.copyFailed'), false));
-    }, 14).box.setName('cloud-copy');
+    }, 15, { name: 'cloud-copy' });
 
-    const upload = panelButton(this, cx - 160, 440, 280, 58, t('cloud.upload'), 0x21e6ff, () => void this.upload(), 15);
-    upload.box.setName('cloud-upload');
-    const restore = panelButton(this, cx + 160, 440, 280, 58, t('cloud.restore'), 0xd566ff, () => void this.restore(), 15);
-    restore.box.setName('cloud-restore');
-    if (!online) for (const button of [upload, restore]) {
-      button.box.disableInteractive().setAlpha(0.4);
-      button.text.setAlpha(0.4);
-    }
-    this.status = this.add.text(cx, 510, '', {
-      fontFamily: 'Arial Black', fontSize: '14px', color: '#73ef62', align: 'center', wordWrap: { width: 860 },
+    const upload = panelButton(this, cx - 165, 434, 300, 60, t('cloud.upload'), UI.cyan, () => void this.upload(), 16, { name: 'cloud-upload' });
+    const restore = panelButton(this, cx + 165, 434, 300, 60, t('cloud.restore'), UI.violet, () => void this.restore(), 16, { name: 'cloud-restore' });
+    if (!online) for (const button of [upload, restore]) button.setEnabled(false);
+    this.status = this.add.text(cx, 504, '', {
+      fontFamily: 'Arial Black', fontSize: uiFont(this, 14), color: '#73ef62', align: 'center', wordWrap: { width: 900 },
     }).setOrigin(0.5).setName('cloud-status');
     this.add.text(cx, 566, t('cloud.autoNote'), {
-      fontFamily: 'monospace', fontSize: '11px', color: '#7594a8', align: 'center', wordWrap: { width: 900 },
+      fontFamily: 'Arial', fontSize: uiFont(this, 12), color: UI.muted, align: 'center', wordWrap: { width: 900 },
     }).setOrigin(0.5);
     backToMenu(this, cx, 640, t('common.back'));
   }

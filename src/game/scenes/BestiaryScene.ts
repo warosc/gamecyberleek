@@ -4,6 +4,7 @@ import {
   VEGETABLE_ROSTER, resolveVegetableArt, type VegetableType,
 } from '../entities/enemies/VegetableRoster';
 import { t, td } from '../i18n';
+import { UI, fitText, framePanel, hex, panelButton, uiFont } from '../ui/SceneWidgets';
 
 const TACTICS: Record<VegetableType, string> = {
   GRUNT: 'Te persigue y prepara un golpe. Al ver el aro rojo, sepárate.',
@@ -21,38 +22,39 @@ export class BestiaryScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.setBackgroundColor(0x07111f);
-    this.add.text(GAME_WIDTH / 2, 55, td('FUERZAS DE LA BRECHA'), {
-      fontFamily: 'Arial Black', fontSize: '34px', color: '#73ef62',
-    }).setOrigin(0.5);
-    this.add.text(GAME_WIDTH / 2, 98, td('CYBERLEEK  //  ARCHIVO DE ENEMIGOS'), {
-      fontFamily: 'monospace', fontSize: '14px', color: '#21e6ff', letterSpacing: 3,
+    if (this.textures.exists('menu-backdrop'))
+      this.add.image(GAME_WIDTH / 2, 360, 'menu-backdrop').setDisplaySize(GAME_WIDTH, 720).setAlpha(0.22);
+    this.add.text(GAME_WIDTH / 2, 52, td('FUERZAS DE LA BRECHA'), {
+      fontFamily: 'Arial Black', fontSize: uiFont(this, 34), color: '#73ef62', stroke: '#020710', strokeThickness: 6,
+    }).setOrigin(0.5).setShadow(0, 0, '#73ef62', 12, false, true);
+    this.add.text(GAME_WIDTH / 2, 96, td('CYBERLEEK  //  ARCHIVO DE ENEMIGOS'), {
+      fontFamily: 'Arial Black', fontSize: uiFont(this, 13), color: '#21e6ff', letterSpacing: 2,
     }).setOrigin(0.5);
     const types = Object.keys(VEGETABLE_ROSTER) as VegetableType[];
-    const pitch = 176;
+    // Wide phone canvases get wider cards, which the larger phone type needs.
+    const pitch = Math.min(212, (GAME_WIDTH - 80) / types.length);
     types.forEach((type, index) => {
       const spec = VEGETABLE_ROSTER[type];
       const x = GAME_WIDTH / 2 + (index - (types.length - 1) / 2) * pitch;
-      const color = `#${spec.color.toString(16).padStart(6, '0')}`;
-      this.add.rectangle(x, 350, pitch - 10, 420, 0x0b1b2b).setStrokeStyle(2, spec.color, 0.65);
-      this.add.ellipse(x, 380, 110, 20, 0x000000, 0.45);
+      const color = hex(spec.color);
+      framePanel(this, x, 360, pitch - 12, 456, spec.color, { strokeAlpha: 0.6, band: 0.08, cut: 14 });
+      this.add.ellipse(x, 350, 110, 20, 0x000000, 0.45);
       const art = resolveVegetableArt(this.textures, type);
-      const sprite = this.add.image(x, 290, art.key);
-      sprite.setScale(Math.min(180 / sprite.height, 140 / sprite.width));
+      const sprite = this.add.image(x, 262, art.key);
+      sprite.setScale(Math.min(180 / sprite.height, (pitch - 36) / sprite.width));
       if (art.tint !== undefined) sprite.setTint(art.tint);
-      this.add.text(x, 420, spec.name, { fontFamily: 'Arial Black', fontSize: '21px', color }).setOrigin(0.5);
-      this.add.text(x, 448, td(spec.role), { fontFamily: 'Arial Black', fontSize: '10px', color: '#eaffff' }).setOrigin(0.5);
-      this.add.text(x, 505, td(TACTICS[type]), {
-        fontFamily: 'Arial', fontSize: '12px', color: '#a9bbc9', align: 'center', lineSpacing: 4,
-        wordWrap: { width: pitch - 28 },
-      }).setOrigin(0.5);
+      fitText(this.add.text(x, 392, spec.name, { fontFamily: 'Arial Black', fontSize: uiFont(this, 21), color }).setOrigin(0.5), pitch - 24);
+      fitText(this.add.text(x, 422, td(spec.role), {
+        fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: UI.text,
+      }).setOrigin(0.5), pitch - 24);
+      this.add.rectangle(x, 442, pitch - 48, 1, spec.color, 0.5);
+      this.add.text(x, 454, td(TACTICS[type]), {
+        fontFamily: 'Arial', fontSize: uiFont(this, 12), color: UI.body, align: 'center', lineSpacing: 2,
+        wordWrap: { width: pitch - 30 },
+      }).setOrigin(0.5, 0);
     });
-    const back = this.add.rectangle(GAME_WIDTH / 2, 635, 300, 56, 0x102535)
-      .setStrokeStyle(2, 0x21e6ff).setInteractive({ useHandCursor: true });
-    this.add.text(GAME_WIDTH / 2, 635, t('common.back'), {
-      fontFamily: 'Arial Black', fontSize: '18px', color: '#eaffff',
-    }).setOrigin(0.5);
     const leave = () => this.scene.start('Menu');
-    back.on('pointerup', leave);
+    panelButton(this, GAME_WIDTH / 2, 636, 300, 56, t('common.back'), UI.cyan, leave, 17);
     this.input.keyboard?.on('keydown-ESC', leave);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.keyboard?.off('keydown-ESC', leave));
   }

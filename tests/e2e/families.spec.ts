@@ -46,7 +46,9 @@ test('a medic pulse heals a wounded ally', async ({ page }) => {
     window.spawnTest('MEDIC', 350, 0);
     (window as unknown as { ally: Enemy }).ally = ally;
   });
-  await expect.poll(() => page.evaluate(() => (window as unknown as { ally: Enemy }).ally.health.current), { timeout: 15_000 })
+  // The first pulse lands 4.3 s of game time in. Emulated mobile WebKit can run the game clock
+  // at a fraction of real time (1.6 game seconds in 12 real ones was measured), so wait longer.
+  await expect.poll(() => page.evaluate(() => (window as unknown as { ally: Enemy }).ally.health.current), { timeout: 45_000 })
     .toBeGreaterThan(20);
 });
 

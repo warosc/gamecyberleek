@@ -20,6 +20,7 @@ export const es = {
   'menu.daily': 'OPERACIÓN DIARIA',
   'menu.controls': 'WASD  MOVER        RATÓN  APUNTAR / DISPARAR\nESPACIO  DASH     Q / E / R  PODERES\nI  INVENTARIO     MANDO  COMPATIBLE',
   'menu.loadout': 'ELIGE EQUIPO  ·  1 / 2 / 3',
+  'menu.loadoutTouch': 'ELIGE EQUIPO',
   'menu.loadoutReady': 'EQUIPO LISTO  ·  {weapon}',
   'menu.mastery': 'MAESTRÍA {rank}  ·  {points} PM',
   'menu.sectorLocked': 'BLOQUEADO — {requirement}',
@@ -276,6 +277,9 @@ export const es = {
   'records.todayBoard': 'TOP HOY ({date})',
   'records.yourBest': 'TU MEJOR  {score}',
   'records.boardEmpty': 'NADIE HA JUGADO LA DIARIA DE HOY',
+  'records.tabHistory': 'OPERACIONES',
+  'records.tabAchievements': 'LOGROS',
+  'records.tabToday': 'DIARIA HOY',
   'offline.title': 'SIN CONEXIÓN',
 } as const;
 

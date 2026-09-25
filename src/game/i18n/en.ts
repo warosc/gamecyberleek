@@ -22,6 +22,7 @@ export const en: Record<StringKey, string> = {
   'menu.daily': 'DAILY OPERATION',
   'menu.controls': 'WASD  MOVE          MOUSE  AIM / FIRE\nSPACE  DASH        Q / E / R  POWERS\nI  INVENTORY       GAMEPAD  SUPPORTED',
   'menu.loadout': 'SELECT LOADOUT  ·  1 / 2 / 3',
+  'menu.loadoutTouch': 'SELECT LOADOUT',
   'menu.loadoutReady': 'LOADOUT READY  ·  {weapon}',
   'menu.mastery': 'MASTERY {rank}  ·  {points} MP',
   'menu.sectorLocked': 'LOCKED — {requirement}',
@@ -278,5 +279,8 @@ export const en: Record<StringKey, string> = {
   'records.todayBoard': 'TOP TODAY ({date})',
   'records.yourBest': 'YOUR BEST  {score}',
   'records.boardEmpty': 'NO ONE HAS PLAYED TODAY\'S DAILY',
+  'records.tabHistory': 'OPERATIONS',
+  'records.tabAchievements': 'ACHIEVEMENTS',
+  'records.tabToday': 'TODAY\'S DAILY',
   'offline.title': 'OFFLINE',
 };
