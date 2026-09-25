@@ -7,31 +7,65 @@
       "timeMs": 0,
       "layers": {
         "torso": {
-          "x": 0
+          "x": 0,
+          "rotation": 0
+        },
+        "head": {
+          "x": 0,
+          "rotation": 0
+        },
+        "arm-left-upper": {
+          "rotation": 0
+        },
+        "arm-right-upper": {
+          "rotation": 0
+        },
+        "hair-leaves": {
+          "rotation": 0
         }
       }
     },
     {
-      "timeMs": 70,
+      "timeMs": 60,
       "layers": {
         "torso": {
-          "x": -5,
-          "rotation": -0.04
+          "x": -4.5,
+          "rotation": -0.13
         },
         "head": {
-          "x": -4
+          "x": -2.4,
+          "rotation": -0.16
+        },
+        "arm-left-upper": {
+          "rotation": -0.3
+        },
+        "arm-right-upper": {
+          "rotation": 0.18
+        },
+        "hair-leaves": {
+          "rotation": -0.3
         }
       }
     },
     {
-      "timeMs": 140,
+      "timeMs": 130,
       "layers": {
         "torso": {
-          "x": 3,
-          "rotation": 0.02
+          "x": 2.4,
+          "rotation": 0.07
         },
         "head": {
-          "x": 2
+          "x": 1.2,
+          "rotation": 0.08
+        },
+        "arm-left-upper": {
+          "rotation": 0.14
+        },
+        "arm-right-upper": {
+          "rotation": -0.08
+        },
+        "hair-leaves": {
+          "rotation": 0.16
         }
       }
     },
@@ -43,7 +77,17 @@
           "rotation": 0
         },
         "head": {
-          "x": 0
+          "x": 0,
+          "rotation": 0
+        },
+        "arm-left-upper": {
+          "rotation": 0
+        },
+        "arm-right-upper": {
+          "rotation": 0
+        },
+        "hair-leaves": {
+          "rotation": 0
         }
       }
     }

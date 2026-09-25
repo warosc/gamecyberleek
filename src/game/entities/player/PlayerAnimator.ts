@@ -11,7 +11,18 @@ export interface PlayerVisualAdapter {
   setAlpha(alpha: number): void;
   setAngle(angle: number): void;
   setAnimationState?(state: PlayerAnimationState, time: number): void;
+  /**
+   * Optional movement signal for renderers that run velocity-driven secondary motion. Purely
+   * presentational: an adapter that ignores it renders the same gameplay.
+   */
+  setMotion?(velocityX: number, velocityY: number, dashing: boolean, moveSpeed: number): void;
 }
+
+/**
+ * Visual tail after the gameplay dash ends, so the dash can play anticipation, travel and a
+ * recovery pose without changing `dashDuration`. Gameplay still ends the dash on its own clock.
+ */
+export const DASH_RECOVERY_MS = 60;
 
 /** Adapter for the current complete reference image. A layered rig can implement the same API. */
 export class ImageVisualAdapter implements PlayerVisualAdapter {
@@ -92,7 +103,9 @@ export class PlayerAnimator {
   }
 
   dash(time: number, duration: number) {
-    this.transition('dash', time + duration);
+    // Held slightly past the gameplay dash so the recovery pose is visible. The physics dash
+    // still ends at `duration`; only the pose lingers.
+    this.transition('dash', time + duration + DASH_RECOVERY_MS);
   }
 
   attack(time: number) {

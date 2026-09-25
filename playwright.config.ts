@@ -27,6 +27,7 @@ export default defineConfig({
     url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
-    env: { VITE_DEBUG_GAME: 'true' },
+    // Empty Supabase settings override .env: automated runs must never write to the real project.
+    env: { VITE_DEBUG_GAME: 'true', VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '' },
   },
 });
