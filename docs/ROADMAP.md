@@ -26,8 +26,8 @@ further down are the original plan and remain for history.
 | 15 | Original audio and dynamic mixing | Done — seven-cue MIDI soundtrack (menu, three sectors, boss, victory, defeat) composed with `tools/music/compose.py` and exported through the FL Studio MCP; played by a Web Audio synth with layered dynamic mixing. Optional: render the cues in FL and drop in OGGs ([music README](../public/assets/music/README.md)) |
 | 16 | PWA offline fallback and bundle split | Done |
 | 17 | Physical low-end device profiling | **Needs a device** — [DEVICE_PROFILING.md](DEVICE_PROFILING.md) |
-| 18 | Daily operation with a leaderboard | Done locally — the online board is a port with an offline adapter; it needs a backend decision (Supabase proposed) |
-| 19 | Save backup | Done as export/import of a save file; cloud sync needs the same backend decision |
+| 18 | Daily operation with a leaderboard | Done — global daily board on Supabase (`supabase/`), live-verified; offline adapter when not configured |
+| 19 | Save backup | Done — file export/import, plus cloud save with restore-by-operative-code on Supabase |
 | — | Split `UIScene`; player status controller | Done |
 
 ## PHASE A — Stabilization
