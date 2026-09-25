@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CODE_PATTERN, generateCallsign, generateCode, normalizeCallsign, normalizeCode, normalizeIdentity,
 } from '../src/game/online/OperativeIdentity';
-import { SupabaseOnlineService } from '../src/game/online/SupabaseOnlineService';
+import { SupabaseOnlineService, livePresenceKey } from '../src/game/online/SupabaseOnlineService';
 import { OnlineError } from '../src/game/online/OnlinePorts';
 
 class MemoryStorage implements Storage {
@@ -104,6 +104,18 @@ describe('supabase adapter', () => {
   it('reads cloud save metadata', async () => {
     reply = [{ runs: 7, updated_at: '2026-09-25T10:00:00Z' }];
     expect(await service().cloudSaveInfo(identity.code)).toEqual({ runs: 7, updatedAt: '2026-09-25T10:00:00Z' });
+  });
+
+  it('makes live presence keys without crypto.randomUUID, which plain-HTTP pages lack', () => {
+    // Found live in production: over HTTP randomUUID is undefined and the live board never opened.
+    vi.stubGlobal('crypto', { getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto) });
+    try {
+      const [a, b] = [livePresenceKey(), livePresenceKey()];
+      expect(a).toMatch(/^[0-9a-f]{32}$/);
+      expect(a).not.toBe(b);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

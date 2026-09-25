@@ -8,6 +8,15 @@ import { rankLive, type LiveBoardSession, type LiveEntry } from './LiveRanking';
 const LIVE_UPDATE_MS = 1500;
 
 /**
+ * A random per-session presence key. crypto.randomUUID exists only in secure contexts, and the
+ * game is also served over plain HTTP, so this uses getRandomValues, which is always there.
+ */
+export function livePresenceKey() {
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
  * Supabase adapter for the online port. It talks to the RPC functions in supabase/migrations
  * over plain fetch with the project's public key: no SDK for data, no auth session, and no table
  * access (the tables are closed by RLS). The live board uses Realtime presence, loaded on demand
@@ -101,7 +110,7 @@ export class SupabaseOnlineService implements OnlineService {
     const { RealtimeClient } = await import('@supabase/realtime-js');
     const client = new RealtimeClient(`${this.url.replace(/\/$/, '')}/realtime/v1`, { params: { apikey: this.anonKey } });
     // A random per-session key: presence is public, so it must never carry the operative code.
-    const selfId = globalThis.crypto.randomUUID();
+    const selfId = livePresenceKey();
     const channel = client.channel(`leek-daily-${date}`, { config: { presence: { key: selfId } } });
     const listeners: ((entries: LiveEntry[]) => void)[] = [];
     const { callsign } = this.identity();
