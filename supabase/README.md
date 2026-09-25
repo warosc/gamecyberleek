@@ -15,7 +15,9 @@ the production deploy. The anon key is public by design; never use the `service_
 
 ## One-time database setup
 
-Apply `migrations/0001_leek_ops_online.sql` once, either:
+**Status:** `0001_leek_ops_online.sql` was applied to project `tawimigwbpwtwwkeaglg` on
+2026-09-25 and smoke-tested as the `anon` role (submit, rate limit, save, restore, board, input
+validation, and denied direct table access). To apply it to another project, either:
 
 - **Dashboard**: SQL Editor → New query → paste the file → Run; or
 - **Supabase MCP** (configured in `.mcp.json`): after authenticating with `claude /mcp` in a
