@@ -2,7 +2,7 @@ import {
   OnlineError, type CloudSaveInfo, type DailyRunFacts, type LeaderboardEntry, type OnlineService,
 } from './OnlinePorts';
 import type { OperativeIdentity } from './OperativeIdentity';
-import { rankLive, type LiveBoardSession, type LiveEntry } from './LiveRanking';
+import { PresenceClock, rankLive, type LiveBoardSession, type LiveEntry } from './LiveRanking';
 
 /** Presence updates are throttled: the live board only needs to feel live, not be exact. */
 const LIVE_UPDATE_MS = 1500;
@@ -115,7 +115,9 @@ export class SupabaseOnlineService implements OnlineService {
     const listeners: ((entries: LiveEntry[]) => void)[] = [];
     const { callsign } = this.identity();
     let subscribed = false;
+    const clock = new PresenceClock();
     let pending: number | undefined;
+    let pendingSeconds = 0;
     let sentScore = -1;
     let lastSentAt = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -125,10 +127,10 @@ export class SupabaseOnlineService implements OnlineService {
       if (!subscribed || pending === undefined || pending === sentScore) return;
       sentScore = pending;
       lastSentAt = Date.now();
-      void channel.track({ callsign, score: pending }).catch(() => undefined);
+      void channel.track({ callsign, score: pending, t: pendingSeconds }).catch(() => undefined);
     };
     channel.on('presence', { event: 'sync' }, () => {
-      const entries = rankLive(channel.presenceState() as Record<string, { callsign?: unknown; score?: unknown }[]>, selfId);
+      const entries = rankLive(channel.presenceState() as Record<string, { callsign?: unknown; score?: unknown; t?: unknown }[]>, selfId, clock);
       for (const listener of listeners) listener(entries);
     });
     channel.subscribe(status => {
@@ -140,8 +142,9 @@ export class SupabaseOnlineService implements OnlineService {
     });
 
     return {
-      update(score: number) {
+      update(score: number, seconds: number) {
         pending = Math.max(0, Math.floor(score));
+        pendingSeconds = Math.max(0, Math.floor(seconds));
         if (timer) return;
         timer = setTimeout(send, Math.max(0, LIVE_UPDATE_MS - (Date.now() - lastSentAt)));
       },

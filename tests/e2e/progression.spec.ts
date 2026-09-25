@@ -273,8 +273,8 @@ test('the live board shows who is playing the daily now and calls out being pass
   await page.evaluate(async () => {
     const ports = await import('/src/game/online/OnlinePorts.ts' as string);
     const { rankLive } = await import('/src/game/online/LiveRanking.ts' as string);
-    const presence: Record<string, { callsign: string; score: number }[]> = {
-      rival: [{ callsign: 'RIVAL', score: 40 }], ace: [{ callsign: 'ACE', score: 9000 }],
+    const presence: Record<string, { callsign: string; score: number; t?: number }[]> = {
+      rival: [{ callsign: 'RIVAL', score: 40, t: 300 }], ace: [{ callsign: 'ACE', score: 9000, t: 300 }],
     };
     let listener: ((entries: unknown[]) => void) | undefined;
     const emit = () => listener?.(rankLive(presence, 'me'));
@@ -317,8 +317,8 @@ test('the live board shows who is playing the daily now and calls out being pass
   expect(fit.border).toBeGreaterThanOrEqual(fit.rowsBottom);
   // RIVAL overtakes the player live.
   await page.evaluate(() => {
-    const state = (window as unknown as { liveTest: { presence: Record<string, { callsign: string; score: number }[]>; emit: () => void } }).liveTest;
-    state.presence.rival = [{ callsign: 'RIVAL', score: 5000 }];
+    const state = (window as unknown as { liveTest: { presence: Record<string, { callsign: string; score: number; t?: number }[]>; emit: () => void } }).liveTest;
+    state.presence.rival = [{ callsign: 'RIVAL', score: 5000, t: 302 }];
     state.emit();
   });
   await expect.poll(() => sceneTexts(page, 'UI')).toContain('RIVAL TE SUPERÓ');

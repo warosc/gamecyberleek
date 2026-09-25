@@ -384,7 +384,7 @@ export class GameScene extends Phaser.Scene {
     this.updateSpecialAbilities(this.survivalMs);
     if (this.live && this.survivalMs >= this.nextLiveUpdateAt) {
       this.nextLiveUpdateAt = this.survivalMs + 2000;
-      this.live.update(this.liveScore);
+      this.live.update(this.liveScore, this.survivalMs / 1000);
     }
     this.player.update(
       this.survivalMs,
@@ -953,7 +953,7 @@ export class GameScene extends Phaser.Scene {
         this.liveEntries = entries;
         this.events.emit(Events.LIVE_BOARD_CHANGED, entries, passed[0]);
       });
-      session.update(this.liveScore);
+      session.update(this.liveScore, this.survivalMs / 1000);
     }).catch(() => undefined);
   }
   private leaveLiveBoard() {

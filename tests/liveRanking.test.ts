@@ -1,23 +1,50 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { overtakes, rankLive } from '../src/game/online/LiveRanking';
+import { liveScoreCeiling, overtakes, PresenceClock, rankLive } from '../src/game/online/LiveRanking';
+import { operationScore } from '../src/game/progression/DailyOperation';
 import type { OnlineService } from '../src/game/online/OnlinePorts';
 
 describe('live ranking', () => {
   it('ranks one entry per player by best score, marks self, and skips malformed presence', () => {
     const entries = rankLive({
       me: [{ callsign: 'ME', score: 400 }],
-      ace: [{ callsign: 'ACE', score: 900 }, { callsign: 'ACE', score: 950 }],
-      bad: [{ callsign: 42, score: 'x' }],
-      neg: [{ callsign: 'NEG', score: -5 }],
+      ace: [{ callsign: 'ACE', score: 900, t: 90 }, { callsign: 'ACE', score: 950, t: 92 }],
+      bad: [{ callsign: 42, score: 'x', t: 10 }],
+      neg: [{ callsign: 'NEG', score: -5, t: 10 }],
+      untimed: [{ callsign: 'OLD', score: 10 }],
     }, 'me');
     expect(entries.map(e => [e.callsign, e.score, e.self])).toEqual([['ACE', 950, false], ['ME', 400, true], ['NEG', 0, false]]);
   });
 
   it('reports only players who moved from at-or-below you to above you', () => {
-    const before = rankLive({ me: [{ callsign: 'ME', score: 500 }], a: [{ callsign: 'A', score: 450 }], b: [{ callsign: 'B', score: 900 }] }, 'me');
-    const after = rankLive({ me: [{ callsign: 'ME', score: 520 }], a: [{ callsign: 'A', score: 600 }], b: [{ callsign: 'B', score: 950 }], c: [{ callsign: 'C', score: 999 }] }, 'me');
+    const before = rankLive({ me: [{ callsign: 'ME', score: 500 }], a: [{ callsign: 'A', score: 450, t: 60 }], b: [{ callsign: 'B', score: 900, t: 60 }] }, 'me');
+    const after = rankLive({ me: [{ callsign: 'ME', score: 520 }], a: [{ callsign: 'A', score: 600, t: 62 }], b: [{ callsign: 'B', score: 950, t: 62 }], c: [{ callsign: 'C', score: 999, t: 62 }] }, 'me');
     expect(overtakes(before, after).map(e => e.callsign)).toEqual(['A']);
     expect(overtakes([], after)).toEqual([]);
+  });
+
+  it('never hides a real run: generous ceilings over real and extreme runs', () => {
+    // A measured 200 s run, and a far stronger one than any playtest produced.
+    expect(liveScoreCeiling(200)).toBeGreaterThan(operationScore({ kills: 120, level: 9, durationMs: 200000, victory: false }));
+    expect(liveScoreCeiling(240)).toBeGreaterThan(operationScore({ kills: 400, level: 22, durationMs: 240000, victory: false }));
+    expect(liveScoreCeiling(0)).toBeGreaterThan(operationScore({ kills: 0, level: 1, durationMs: 0, victory: false }));
+  });
+
+  it('drops a spoofed score no run could have at its claimed time (found live in production)', () => {
+    // A raw realtime client showed 5000 points at 00:07 on everyone's board.
+    const entries = rankLive({ me: [{ callsign: 'ME', score: 200 }], spoof: [{ callsign: 'QA-SPOOF', score: 5000, t: 7 }] }, 'me');
+    expect(entries.map(e => e.callsign)).toEqual(['ME']);
+  });
+
+  it('does not let a fake claim run time faster than real time to lift its ceiling', () => {
+    const clock = new PresenceClock();
+    const at = 1_000_000;
+    rankLive({ me: [{ callsign: 'ME', score: 0 }], fake: [{ callsign: 'FAKE', score: 100, t: 5 }] }, 'me', clock, at);
+    // Five real seconds later it claims an hour of play and a huge score.
+    const jumped = rankLive({ me: [{ callsign: 'ME', score: 0 }], fake: [{ callsign: 'FAKE', score: 150000, t: 3600 }] }, 'me', clock, at + 5000);
+    expect(jumped.map(e => e.callsign)).toEqual(['ME']);
+    // Honest progress, in step with the clock, keeps showing.
+    const honest = rankLive({ me: [{ callsign: 'ME', score: 0 }], fake: [{ callsign: 'FAKE', score: 400, t: 65 }] }, 'me', clock, at + 60000);
+    expect(honest.map(e => e.callsign)).toEqual(['FAKE', 'ME']);
   });
 });
 
