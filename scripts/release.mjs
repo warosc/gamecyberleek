@@ -62,8 +62,10 @@ const stage = join(root, 'release', `leek-ops-${sha}`);
 rmSync(stage, { recursive: true, force: true });
 mkdirSync(stage, { recursive: true });
 cpSync(join(root, 'dist'), join(stage, 'dist'), { recursive: true });
+// Server-side files are written with LF endings whatever the Windows checkout did to them:
+// a CRLF shell script fails on Linux with "set: Illegal option -".
 for (const file of ['Dockerfile.prebuilt', 'docker-compose.vps.yml', 'nginx.conf', 'scripts/vps-install.sh'])
-  cpSync(join(root, file), join(stage, file.split('/').pop()));
+  writeFileSync(join(stage, file.split('/').pop()), read(file).replace(/\r\n/g, '\n'));
 // Relative paths only: GNU tar reads "D:/..." as a remote host.
 const archive = `release/leek-ops-${sha}.tgz`;
 run('tar', ['-czf', archive, '-C', `release/leek-ops-${sha}`, '.']);
