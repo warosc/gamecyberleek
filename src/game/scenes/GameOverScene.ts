@@ -7,6 +7,7 @@ import type { ContractOutcome } from '../systems/ContractSystem';
 import { AudioManager } from '../managers/AudioManager';
 import { t, td } from '../i18n';
 import { UI, fitText, framePanel, hex, isCompact, panelButton, uiFont } from '../ui/SceneWidgets';
+import { backdropTexture, queueSceneArt } from '../config/SceneArt';
 
 const BUTTON_WIDTH = 270;
 const BUTTON_GAP = 20;
@@ -24,15 +25,23 @@ export class GameOverScene extends Phaser.Scene {
   private navigating = false;
   constructor() { super('GameOver'); }
 
+  preload() {
+    // Only the outcome's own backdrop; the data handed to scene.start is already on the settings.
+    const victory = (this.sys.settings.data as Partial<GameOverData> | undefined)?.victory;
+    queueSceneArt(this, { backdrops: [victory ? 'victory' : 'defeat'] });
+  }
+
   create(data: GameOverData) {
     this.game.canvas.dataset.scene = 'GameOver';
     this.input.enabled = true;
     this.navigating = false;
     const accent = data.victory ? 0x73ef62 : 0xff476f;
-    this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'menu-backdrop')
-      .setDisplaySize(GAME_WIDTH, GAME_HEIGHT).setTint(data.victory ? 0xb8ffd0 : 0x8d6070);
-    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020710, 0.68);
-    framePanel(this, GAME_WIDTH / 2, 358, 1140, 640, accent, { fill: 0x07111f, fillAlpha: 0.96, band: 0.06, strokeAlpha: 0.85, cut: 26, glow: 0.12 });
+    const backdrop = backdropTexture(this, data.victory ? 'victory' : 'defeat');
+    const own = backdrop !== 'menu-backdrop';
+    const art = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, backdrop).setDisplaySize(GAME_WIDTH, GAME_HEIGHT);
+    if (!own) art.setTint(data.victory ? 0xb8ffd0 : 0x8d6070);
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020710, own ? 0.3 : 0.68);
+    framePanel(this, GAME_WIDTH / 2, 358, 1140, 640, accent, { fill: 0x07111f, fillAlpha: own ? 0.74 : 0.96, band: 0.06, strokeAlpha: 0.85, cut: 26, glow: 0.12 });
     this.add.text(GAME_WIDTH / 2, 80, t(data.victory ? 'gameover.victory' : 'gameover.defeat'), {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 42), color: hex(accent),
       stroke: '#020710', strokeThickness: 8,

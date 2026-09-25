@@ -8,6 +8,7 @@ import {
 } from '../systems/ProfileStore';
 import { applyRuntimeSettings } from '../systems/RuntimeSettings';
 import { AudioManager } from '../managers/AudioManager';
+import { queueSceneArt } from '../config/SceneArt';
 import { UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont } from '../ui/SceneWidgets';
 
 /**
@@ -19,11 +20,15 @@ export class CloudScene extends Phaser.Scene {
   private status!: Phaser.GameObjects.Text;
   constructor() { super('Cloud'); }
 
+  preload() {
+    queueSceneArt(this, { backdrops: ['systems'] });
+  }
+
   create() {
     this.game.canvas.dataset.scene = 'Cloud';
     this.audio = new AudioManager(this);
     const online = onlineService().online;
-    subMenuFrame(this, GAME_WIDTH, GAME_HEIGHT, t('cloud.title'), t(online ? 'cloud.online' : 'cloud.offline'), 0x21e6ff);
+    subMenuFrame(this, GAME_WIDTH, GAME_HEIGHT, t('cloud.title'), t(online ? 'cloud.online' : 'cloud.offline'), 0x21e6ff, 'systems');
     const cx = GAME_WIDTH / 2;
     const operative = ensureOperative();
     const label = { fontFamily: 'Arial Black', fontSize: uiFont(this, 13), color: UI.muted, letterSpacing: 2 };

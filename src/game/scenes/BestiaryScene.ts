@@ -5,6 +5,7 @@ import {
 } from '../entities/enemies/VegetableRoster';
 import { t, td } from '../i18n';
 import { UI, fitText, framePanel, hex, panelButton, uiFont } from '../ui/SceneWidgets';
+import { backdropTexture, queueSceneArt } from '../config/SceneArt';
 
 const TACTICS: Record<VegetableType, string> = {
   GRUNT: 'Te persigue y prepara un golpe. Al ver el aro rojo, sepárate.',
@@ -20,10 +21,15 @@ const TACTICS: Record<VegetableType, string> = {
 export class BestiaryScene extends Phaser.Scene {
   constructor() { super('Bestiary'); }
 
+  preload() {
+    queueSceneArt(this, { backdrops: ['bestiary'] });
+  }
+
   create() {
     this.cameras.main.setBackgroundColor(0x07111f);
-    if (this.textures.exists('menu-backdrop'))
-      this.add.image(GAME_WIDTH / 2, 360, 'menu-backdrop').setDisplaySize(GAME_WIDTH, 720).setAlpha(0.22);
+    const backdrop = backdropTexture(this, 'bestiary');
+    if (this.textures.exists(backdrop))
+      this.add.image(GAME_WIDTH / 2, 360, backdrop).setDisplaySize(GAME_WIDTH, 720).setAlpha(backdrop === 'menu-backdrop' ? 0.22 : 0.8);
     this.add.text(GAME_WIDTH / 2, 52, td('FUERZAS DE LA BRECHA'), {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 34), color: '#73ef62', stroke: '#020710', strokeThickness: 6,
     }).setOrigin(0.5).setShadow(0, 0, '#73ef62', 12, false, true);

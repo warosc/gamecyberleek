@@ -69,6 +69,15 @@ export class GameScene extends Phaser.Scene {
   /** Live daily board session; only exists during an online daily run. */
   private live?: LiveBoardSession;
   private liveEntries: LiveEntry[] = [];
+  /**
+   * What the live board shows, kept here so the UI scene can read it when it starts: it launches a
+   * frame after this scene, and events emitted in between would otherwise be lost.
+   */
+  liveBoardOpen = false;
+  liveRecord?: { callsign: string; score: number };
+  get liveSnapshot() {
+    return this.liveEntries;
+  }
   private nextLiveUpdateAt = 0;
   private liveGeneration = 0;
   private musicIntensity = 0;
@@ -177,6 +186,11 @@ export class GameScene extends Phaser.Scene {
   };
   constructor() {
     super('Game');
+  }
+  /** Only the floor of the sector being played is fetched, and only the first time it is played. */
+  preload() {
+    const floor = ARENA_THEMES[this.arenaIndex].floor;
+    if (floor && !this.textures.exists(floor.key)) this.load.image(floor.key, floor.path);
   }
   init(data: { arenaIndex?: number; weaponId?: StarterWeaponId; daily?: { date: string; mutator: string } }) {
     this.daily = data.daily;
@@ -935,10 +949,15 @@ export class GameScene extends Phaser.Scene {
     this.nextLiveUpdateAt = 0;
     const generation = ++this.liveGeneration;
     const online = onlineService();
+    this.liveBoardOpen = false;
+    this.liveRecord = undefined;
     if (!this.daily || !online.online) return;
+    this.liveBoardOpen = true;
     this.events.emit(Events.LIVE_BOARD_CHANGED, [], undefined);
     void online.fetchDailyBoard(this.daily.date).then(board => {
-      if (generation === this.liveGeneration && board[0]) this.events.emit('live-board-record', board[0].displayName, board[0].score);
+      if (generation !== this.liveGeneration || !board[0]) return;
+      this.liveRecord = { callsign: board[0].displayName, score: board[0].score };
+      this.events.emit('live-board-record', board[0].displayName, board[0].score);
     }).catch(() => undefined);
     void online.openLiveBoard(this.daily.date).then(session => {
       if (!session) return;
@@ -958,6 +977,7 @@ export class GameScene extends Phaser.Scene {
   }
   private leaveLiveBoard() {
     this.liveGeneration++;
+    this.liveBoardOpen = false;
     const session = this.live;
     this.live = undefined;
     if (session) void session.leave().catch(() => undefined);

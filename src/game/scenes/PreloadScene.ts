@@ -67,13 +67,13 @@ export class PreloadScene extends Phaser.Scene {
     });
     this.load.json('art-manifest', 'assets/enemies/art-manifest.json');
     for (const art of VEGETABLE_ART)
-      this.load.image(`vegetable-${art}`, `assets/enemies/vegetables/${art}.png`);
+      this.load.image(`vegetable-${art}`, `assets/enemies/vegetables/${art}.webp`);
     this.load.image(
       'leek-placeholder-front',
       'assets/character/leek/placeholder-front-reference.png',
     );
     this.load.image('leek-avatar', 'assets/character/leek/avatar.png');
-    this.load.image('leek-hero-clean', 'assets/character/leek/hero-clean-v2.png');
+    this.load.image('leek-hero-clean', 'assets/character/leek/hero-clean-v2.webp');
     this.load.image('leek-actions', 'assets/character/leek/actions-reference.png');
     this.load.image('leek-profile', 'assets/character/leek/turnaround-profile.png');
     this.load.image('leek-back', 'assets/character/leek/turnaround-back.png');
@@ -81,8 +81,8 @@ export class PreloadScene extends Phaser.Scene {
       this.load.image(`rig-${layer}`, `assets/character/leek/rig/layers/${layer}.png`);
     for (const state of PLAYER_RIG_STATES)
       this.load.json(`rig-anim-${state}`, `assets/character/leek/rig/animations/${state}.json`);
-    this.load.image('lab-floor', 'assets/maps/cyber-vegetable-lab-floor.png');
-    this.load.image('menu-backdrop', 'assets/ui/menu-backdrop.png');
+    this.load.image('lab-floor', 'assets/maps/cyber-vegetable-lab-floor.webp');
+    this.load.image('menu-backdrop', 'assets/ui/menu-backdrop.webp');
     // The soundtrack is optional: a missing manifest or file leaves the procedural score.
     this.load.once('filecomplete-json-music-manifest', (_key: string, _type: string, manifest: MusicManifest) => {
       for (const [cue, entry] of Object.entries(manifest)) if (entry) this.load.binary(`music-${cue}`, `assets/music/${entry.midi}`);

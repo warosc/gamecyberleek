@@ -6,6 +6,7 @@ import { loadProfile, purchaseWorkshopRank } from '../systems/ProfileStore';
 import { AudioManager } from '../managers/AudioManager';
 import { UI, backToMenu, framePanel, hex, panelButton, subMenuFrame, uiFont, type PanelButton } from '../ui/SceneWidgets';
 import { shakeCamera } from '../systems/RuntimeSettings';
+import { iconKey, queueSceneArt } from '../config/SceneArt';
 
 /** Spends bio-credits on small permanent upgrades; the only credit sink outside a run. */
 export class WorkshopScene extends Phaser.Scene {
@@ -19,11 +20,15 @@ export class WorkshopScene extends Phaser.Scene {
 
   constructor() { super('Workshop'); }
 
+  preload() {
+    queueSceneArt(this, { backdrops: ['workshop'], icons: WORKSHOP_UPGRADES.map(upgrade => `workshop-${upgrade.id}`) });
+  }
+
   create() {
     this.game.canvas.dataset.scene = 'Workshop';
     this.audio = new AudioManager(this);
     this.rows.clear();
-    subMenuFrame(this, GAME_WIDTH, GAME_HEIGHT, t('workshop.title'), t('workshop.subtitle'), 0xffc857);
+    subMenuFrame(this, GAME_WIDTH, GAME_HEIGHT, t('workshop.title'), t('workshop.subtitle'), 0xffc857, 'workshop');
     this.balance = this.add.text(GAME_WIDTH / 2, 150, '', {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 20), color: '#ffc857', letterSpacing: 2,
     }).setOrigin(0.5).setName('workshop-balance');
@@ -36,11 +41,17 @@ export class WorkshopScene extends Phaser.Scene {
       framePanel(this, GAME_WIDTH / 2, y, 1040, 70, upgrade.color, { strokeAlpha: 0.45, band: 0.07, cut: 12 });
       this.add.rectangle(GAME_WIDTH / 2, y, 1040, 70, 0x000000, 0.001)
         .setInteractive({ useHandCursor: true }).on('pointerup', () => this.buy(upgrade.id));
-      this.add.rectangle(ox + 128, y, 5, 46, upgrade.color, 0.9);
-      this.add.text(ox + 146, y - 14, td(upgrade.name), {
+      // The upgrade's icon when it loaded, else a plain accent bar.
+      const icon = iconKey(`workshop-${upgrade.id}`);
+      if (this.textures.exists(icon)) {
+        this.add.circle(ox + 150, y, 30, upgrade.color, 0.12).setStrokeStyle(2, upgrade.color, 0.5);
+        this.add.image(ox + 150, y, icon).setDisplaySize(56, 56);
+      } else this.add.rectangle(ox + 128, y, 5, 46, upgrade.color, 0.9);
+      const textX = this.textures.exists(icon) ? ox + 194 : ox + 146;
+      this.add.text(textX, y - 14, td(upgrade.name), {
         fontFamily: 'Arial Black', fontSize: uiFont(this, 18), color: hex(upgrade.color),
       }).setOrigin(0, 0.5);
-      this.add.text(ox + 146, y + 16, td(upgrade.effect), {
+      this.add.text(textX, y + 16, td(upgrade.effect), {
         fontFamily: 'Arial', fontSize: uiFont(this, 14), color: UI.body,
       }).setOrigin(0, 0.5);
       const pips = upgrade.costs.map((_, pip) =>

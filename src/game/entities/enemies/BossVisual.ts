@@ -5,7 +5,7 @@ export const BOSS_IDENTITY = {
   name: 'BRÓK-9',
   title: 'COMANDANTE DE LA BRECHA',
   texture: 'brok9-commander',
-  asset: 'assets/enemies/brok9/commander.png',
+  asset: 'assets/enemies/brok9/commander.webp',
   phases: ['CONTENCIÓN', 'SOBRECARGA', 'RUPTURA'],
   colors: [0xd566ff, 0xffb52e, 0xff476f],
 } as const;

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../managers/AudioManager';
+import { backdropTexture, type BackdropId } from '../config/SceneArt';
 
 export const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
 
@@ -199,14 +200,20 @@ export function panelButton(
 }
 
 /** Full-screen sub-menu frame shared by the workshop, settings, records and cloud screens. */
-export function subMenuFrame(scene: Phaser.Scene, width: number, height: number, title: string, subtitle: string, accent: number) {
+export function subMenuFrame(
+  scene: Phaser.Scene, width: number, height: number, title: string, subtitle: string, accent: number, backdrop?: BackdropId,
+) {
   scene.cameras.main.setBackgroundColor(0x07111f);
   const music = new AudioManager(scene);
   scene.events.on(Phaser.Scenes.Events.UPDATE, (time: number) => music.updateMusic(time, 'menu'));
-  if (scene.textures.exists('menu-backdrop'))
-    scene.add.image(width / 2, height / 2, 'menu-backdrop').setDisplaySize(width, height).setAlpha(0.3);
+  // A screen's own backdrop shows through more than the shared one: it is painted for the job,
+  // dark in the middle where the content sits.
+  const texture = backdropTexture(scene, backdrop);
+  const own = texture !== 'menu-backdrop';
+  if (scene.textures.exists(texture))
+    scene.add.image(width / 2, height / 2, texture).setDisplaySize(width, height).setAlpha(own ? 0.85 : 0.3);
   framePanel(scene, width / 2, height / 2, width - 48, height - 36, accent, {
-    fill: 0x07111f, fillAlpha: 0.9, band: 0.05, strokeAlpha: 0.5, cut: 26, glow: 0.08,
+    fill: 0x07111f, fillAlpha: own ? 0.62 : 0.9, band: 0.05, strokeAlpha: 0.5, cut: 26, glow: 0.08,
   });
   scene.add.text(width / 2, 60, title, {
     fontFamily: 'Arial Black', fontSize: uiFont(scene, 36), color: hex(accent), stroke: '#020710', strokeThickness: 6,

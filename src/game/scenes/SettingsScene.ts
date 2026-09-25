@@ -8,6 +8,7 @@ import { exportProfileJson, importProfileJson, loadProfile, updateProfile, updat
 import { applyRuntimeSettings } from '../systems/RuntimeSettings';
 import { AudioManager, setMusicLightweight } from '../managers/AudioManager';
 import { detectQualityProfile } from '../config/QualityProfile';
+import { queueSceneArt } from '../config/SceneArt';
 import { UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont } from '../ui/SceneWidgets';
 
 interface Row {
@@ -24,10 +25,14 @@ export class SettingsScene extends Phaser.Scene {
   private audio?: AudioManager;
   constructor() { super('Settings'); }
 
+  preload() {
+    queueSceneArt(this, { backdrops: ['systems'] });
+  }
+
   create() {
     this.game.canvas.dataset.scene = 'Settings';
     this.audio = new AudioManager(this);
-    subMenuFrame(this, GAME_WIDTH, GAME_HEIGHT, t('settings.title'), t('settings.subtitle'), 0xd566ff);
+    subMenuFrame(this, GAME_WIDTH, GAME_HEIGHT, t('settings.title'), t('settings.subtitle'), 0xd566ff, 'systems');
     const settings = () => loadProfile().settings;
     const set = (patch: Partial<GameSettings>) => {
       const next = updateSettings(patch).settings;

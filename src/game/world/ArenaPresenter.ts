@@ -17,11 +17,14 @@ export class ArenaPresenter {
   draw(theme: ArenaTheme) {
     const random = new Phaser.Math.RandomDataGenerator([theme.name]);
     this.scene.cameras.main.setBackgroundColor(theme.background);
+    // The sector's own floor when it has loaded, else the lab floor graded to the sector.
+    const ownFloor = theme.floor && this.scene.textures.exists(theme.floor.key) ? theme.floor.key : undefined;
     this.scene.add
-      .tileSprite(ARENA.width / 2, ARENA.height / 2, ARENA.width, ARENA.height, 'lab-floor')
-      .setTint(theme.floorTint)
+      .tileSprite(ARENA.width / 2, ARENA.height / 2, ARENA.width, ARENA.height, ownFloor ?? 'lab-floor')
+      .setTint(ownFloor ? 0xffffff : theme.floorTint)
       .setAlpha(0.62)
       .setDepth(-12);
+    // Grid lines only: the cells used to be filled opaque, which hid the floor art entirely.
     this.scene.add
       .grid(
         ARENA.width / 2,
@@ -31,7 +34,7 @@ export class ArenaPresenter {
         80,
         80,
         theme.background,
-        1,
+        0,
         theme.grid,
         0.2,
       )

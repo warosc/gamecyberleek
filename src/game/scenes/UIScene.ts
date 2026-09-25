@@ -142,6 +142,11 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.OBJECTIVE_CHANGED, this.onObjectiveChanged, this);
     this.gameScene.events.on(Events.LIVE_BOARD_CHANGED, this.onLiveBoard, this);
     this.gameScene.events.on('live-board-record', this.onLiveRecord, this);
+    // Catch up on anything the game scene sent before this scene was listening.
+    if (this.gameScene.liveBoardOpen) {
+      if (this.gameScene.liveRecord) this.onLiveRecord(this.gameScene.liveRecord.callsign, this.gameScene.liveRecord.score);
+      this.onLiveBoard(this.gameScene.liveSnapshot);
+    }
     this.gameScene.events.on(Events.UPGRADE_APPLIED, this.onUpgradeApplied, this);
     this.events.once('shutdown', () => {
       this.closeModal();

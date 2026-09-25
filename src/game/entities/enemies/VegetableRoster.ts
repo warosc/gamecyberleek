@@ -17,7 +17,7 @@ export const VEGETABLE_ROSTER = {
 
 export type VegetableType = keyof typeof VEGETABLE_ROSTER;
 export const vegetableTexture = (type: VegetableType) => `vegetable-${VEGETABLE_ROSTER[type].art}`;
-export const vegetableAsset = (type: VegetableType) => `assets/enemies/vegetables/${VEGETABLE_ROSTER[type].art}.png`;
+export const vegetableAsset = (type: VegetableType) => `assets/enemies/vegetables/${VEGETABLE_ROSTER[type].art}.webp`;
 export const vegetableTint = (type: VegetableType): number | undefined =>
   'tint' in VEGETABLE_ROSTER[type] ? (VEGETABLE_ROSTER[type] as { tint: number }).tint : undefined;
 /** One entry per distinct sprite, for the loader. */

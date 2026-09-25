@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('shows immediate branded loading progress until the Phaser menu is ready', async ({ page }) => {
-  await page.route('**/assets/ui/menu-backdrop.png', async route => {
+  await page.route('**/assets/ui/menu-backdrop.webp', async route => {
     await new Promise(resolve => setTimeout(resolve, 700));
     await route.continue();
   });

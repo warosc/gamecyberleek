@@ -9,6 +9,7 @@ import {
   UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont, type PanelButton,
 } from '../ui/SceneWidgets';
 import { onlineService } from '../online/OnlinePorts';
+import { queueSceneArt } from '../config/SceneArt';
 import { dailyOperation } from '../progression/DailyOperation';
 
 export function formatDuration(ms: number) {
@@ -30,9 +31,13 @@ type Layer = Phaser.GameObjects.Container;
 export class RecordsScene extends Phaser.Scene {
   constructor() { super('Records'); }
 
+  preload() {
+    queueSceneArt(this, { backdrops: ['records'] });
+  }
+
   create() {
     this.game.canvas.dataset.scene = 'Records';
-    subMenuFrame(this, GAME_WIDTH, GAME_HEIGHT, t('records.title'), t('records.subtitle'), UI.cyan);
+    subMenuFrame(this, GAME_WIDTH, GAME_HEIGHT, t('records.title'), t('records.subtitle'), UI.cyan, 'records');
     const profile = loadProfile();
     const cx = GAME_WIDTH / 2;
     const tabs: { id: string; label: string; layer: Layer; button?: PanelButton }[] = [

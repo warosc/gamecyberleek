@@ -108,7 +108,9 @@ test('animates a live arena and keeps legs moving while firing, then freezes on 
     scene.mobileInput.autoFire = true;
     scene.player.stats.attackCooldown = 100;
   });
-  await page.waitForTimeout(500);
+  // Wait for the first shot on the game clock, not a fixed real delay: headless WebKit can run the
+  // game at a small fraction of real time, and the sample below needs firing to have started.
+  await expect.poll(() => page.evaluate(() => window.animationTestScene.player.animationState), { timeout: 15_000 }).toBe('attack');
   const sample = () => page.evaluate(() => {
     const scene = window.animationTestScene;
     const rig = scene.player.list.find(child => 'setAnimationState' in child) as unknown as Phaser.GameObjects.Container;

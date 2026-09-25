@@ -10,6 +10,7 @@ import { dailyOperation } from '../progression/DailyOperation';
 import { t, td, type StringKey } from '../i18n';
 import { UI, drawFrame, fitText, framePanel, hex, isCompact, panelButton, uiFont } from '../ui/SceneWidgets';
 import { onlineService } from '../online/OnlinePorts';
+import { iconKey, queueSceneArt } from '../config/SceneArt';
 
 /** Last sector chosen in this session, so returning from a sub-menu keeps the selection. */
 const SECTOR_REGISTRY_KEY = 'menu-sector';
@@ -23,6 +24,11 @@ export class MenuScene extends Phaser.Scene {
   private showcaseX = 0;
   constructor() {
     super('Menu');
+  }
+
+  /** The loadout icons: three small files, cached after the first menu. */
+  preload() {
+    queueSceneArt(this, { icons: STARTER_WEAPONS.map(weapon => `weapon-${weapon.id}`) });
   }
 
   create() {
@@ -241,24 +247,34 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private createWeaponSelector(mastery: WeaponMastery, compact: boolean) {
-    const cards: { frame: Phaser.GameObjects.Graphics; color: number }[] = [];
+    const cards: { frame: Phaser.GameObjects.Graphics; color: number; icon?: Phaser.GameObjects.Image; iconY: number }[] = [];
     const centre = 920 + this.showcaseX;
-    const label = this.add.text(centre, 522, t(compact ? 'menu.loadoutTouch' : 'menu.loadout'), {
+    const cardHeight = compact ? 134 : 130;
+    const cardY = 620;
+    const top = cardY - cardHeight / 2;
+    // With icons the badges stand over the cards' top edge, so the label sits above them.
+    const withIcons = STARTER_WEAPONS.every(weapon => this.textures.exists(iconKey(`weapon-${weapon.id}`)));
+    const label = this.add.text(centre, withIcons ? 488 : 522, t(compact ? 'menu.loadoutTouch' : 'menu.loadout'), {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 12), color: '#eaffff', letterSpacing: 2,
       backgroundColor: '#06101de6', padding: { x: 14, y: 7 },
     }).setOrigin(0.5).setDepth(9);
-    const cardHeight = compact ? 134 : 130;
-    const cardY = 620;
+    let bob: Phaser.Tweens.Tween | undefined;
     const select = (index: number) => {
       const wrapped = (index + STARTER_WEAPONS.length) % STARTER_WEAPONS.length;
       const weapon = STARTER_WEAPONS[wrapped];
       this.selectedWeaponId = weapon.id;
+      bob?.stop();
       cards.forEach((card, cardIndex) => {
         const chosen = cardIndex === wrapped;
         drawFrame(card.frame, 206, cardHeight, card.color, chosen
           ? { fill: card.color, fillAlpha: 0.22, band: 0.14, strokeAlpha: 1, glow: 0.25, cut: 14 }
           : { fill: 0x06101d, fillAlpha: 0.92, band: 0.06, strokeAlpha: 0.45, cut: 14, brackets: false });
+        card.icon?.setY(card.iconY).setAlpha(chosen ? 1 : 0.8);
       });
+      // A gentle bob on the chosen badge: one tween, stopped before the next selection.
+      const chosenIcon = cards[wrapped]?.icon;
+      if (chosenIcon)
+        bob = this.tweens.add({ targets: chosenIcon, y: cards[wrapped].iconY - 5, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       label.setText(t('menu.loadoutReady', { weapon: weapon.name }));
     };
     this.selectWeapon = select;
@@ -270,26 +286,33 @@ export class MenuScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true }).setDepth(9).setName(`weapon-${weapon.id}`);
       // The 1 / 2 / 3 key hint only matters with a keyboard.
       if (!compact)
-        this.add.text(x - 84, cardY - cardHeight / 2 + 16, String(index + 1), {
+        this.add.text(x - 84, top + 16, String(index + 1), {
           fontFamily: 'Arial Black', fontSize: '14px', color,
         }).setOrigin(0.5).setDepth(10);
-      const top = cardY - cardHeight / 2;
-      fitText(this.add.text(x, top + (compact ? 34 : 28), weapon.name, {
+      let icon: Phaser.GameObjects.Image | undefined;
+      const iconY = top - 4;
+      if (withIcons) {
+        this.add.circle(x, iconY, 34, 0x06101d, 0.9).setStrokeStyle(2, weapon.color, 0.8).setDepth(10);
+        icon = this.add.image(x, iconY, iconKey(`weapon-${weapon.id}`)).setDisplaySize(64, 64).setDepth(11);
+      }
+      // Text starts below the badge when there is one.
+      const shift = withIcons ? (compact ? 14 : 16) : 0;
+      fitText(this.add.text(x, top + shift + (compact ? 38 : 30), weapon.name, {
         fontFamily: 'Arial Black', fontSize: uiFont(this, 15), color: '#ffffff', align: 'center',
       }).setOrigin(0.5).setDepth(10), 184);
-      fitText(this.add.text(x, top + (compact ? 66 : 52), t(`weapon.${weapon.id}.role` as StringKey), {
+      fitText(this.add.text(x, top + shift + (compact ? 68 : 52), t(`weapon.${weapon.id}.role` as StringKey), {
         fontFamily: 'Arial Black', fontSize: uiFont(this, 10), color,
       }).setOrigin(0.5).setDepth(10), 184);
-      fitText(this.add.text(x, top + (compact ? 98 : 72), t('menu.mastery', { rank: masteryRank(mastery[weapon.id]), points: mastery[weapon.id] }), {
+      fitText(this.add.text(x, top + shift + (compact ? 96 : 71), t('menu.mastery', { rank: masteryRank(mastery[weapon.id]), points: mastery[weapon.id] }), {
         fontFamily: 'Arial Black', fontSize: uiFont(this, 9), color: '#ffc857',
       }).setOrigin(0.5).setDepth(10), 184);
       // The one-line pitch only fits at desktop type sizes.
       if (!compact)
-        this.add.text(x, top + 102, t(`weapon.${weapon.id}.desc` as StringKey), {
+        this.add.text(x, top + shift + 96, t(`weapon.${weapon.id}.desc` as StringKey), {
           fontFamily: 'Arial', fontSize: '12px', color: UI.body, align: 'center', wordWrap: { width: 184 },
         }).setOrigin(0.5).setDepth(10);
       card.on('pointerup', () => select(index));
-      cards.push({ frame, color: weapon.color });
+      cards.push({ frame, color: weapon.color, icon, iconY });
       this.input.keyboard?.on(`keydown-${index + 1}`, () => select(index));
     });
     select(0);
