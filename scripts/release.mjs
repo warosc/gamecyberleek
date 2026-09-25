@@ -28,8 +28,13 @@ if (dirty) console.warn('warning: working tree has uncommitted changes; the rele
 run('npm', ['run', 'build', '--', '--mode', 'production']);
 
 const assets = join(root, 'dist', 'assets');
-const entry = readdirSync(assets).find(name => /^index-.*\.js$/.test(name));
-const bundle = readFileSync(join(assets, entry), 'utf8');
+// The entry comes from index.html: lazily loaded libraries get index-* chunk names of their own.
+const entry = readFileSync(join(root, 'dist', 'index.html'), 'utf8').match(/assets\/(index-[^"]+\.js)/)?.[1];
+if (!entry) throw new Error('entry script not found in dist/index.html');
+const entryCode = readFileSync(join(assets, entry), 'utf8');
+// The checks scan every chunk, so nothing hides in a lazily loaded one.
+const bundle = readdirSync(assets).filter(name => name.endsWith('.js'))
+  .map(name => readFileSync(join(assets, name), 'utf8')).join('\n');
 // The debug build registers B / C / L cheat keys (boss, chest, level-up). Quoted, so menu keys
 // such as "keydown-LEFT" do not match.
 for (const key of ['B', 'C', 'L']) {
@@ -52,7 +57,7 @@ const release = {
   commit: sha,
   builtUtc: new Date().toISOString(),
   entry,
-  sha256: createHash('sha256').update(bundle).digest('hex'),
+  sha256: createHash('sha256').update(entryCode).digest('hex'),
   debug: false,
   online,
 };
