@@ -1,7 +1,8 @@
 FROM node:22-alpine
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+# Same npm major as the workstation: npm 10 rewrites package-lock.json (drops the libc fields).
+RUN npm install -g npm@11 && npm install
 COPY . .
 EXPOSE 5173
 # node_modules lives in a named volume (docker-compose.yml) that outlives image rebuilds, so a
