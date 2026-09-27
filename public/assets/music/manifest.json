@@ -1,0 +1,44 @@
+{
+  "menu": {
+    "midi": "menu.mid",
+    "bpm": 92,
+    "bars": 16,
+    "loop": true
+  },
+  "lab": {
+    "midi": "lab.mid",
+    "bpm": 128,
+    "bars": 32,
+    "loop": true
+  },
+  "greenhouse": {
+    "midi": "greenhouse.mid",
+    "bpm": 116,
+    "bars": 32,
+    "loop": true
+  },
+  "reactor": {
+    "midi": "reactor.mid",
+    "bpm": 136,
+    "bars": 32,
+    "loop": true
+  },
+  "boss": {
+    "midi": "boss.mid",
+    "bpm": 150,
+    "bars": 32,
+    "loop": true
+  },
+  "victory": {
+    "midi": "victory.mid",
+    "bpm": 120,
+    "bars": 4,
+    "loop": false
+  },
+  "defeat": {
+    "midi": "defeat.mid",
+    "bpm": 80,
+    "bars": 3,
+    "loop": false
+  }
+}

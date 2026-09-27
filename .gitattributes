@@ -1,0 +1,5 @@
+# Files that run or are read on Linux servers must keep LF endings on Windows checkouts.
+*.sh text eol=lf
+nginx.conf text eol=lf
+Dockerfile* text eol=lf
+*.yml text eol=lf

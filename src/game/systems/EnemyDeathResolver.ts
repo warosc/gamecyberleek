@@ -14,6 +14,7 @@ export interface EnemyDefeat {
   y: number;
   xp: number;
   boss: boolean;
+  miniboss: boolean;
   maxHealth: number;
 }
 
@@ -28,6 +29,7 @@ export class EnemyDeathResolver {
       y: enemy.y,
       xp: enemy.xpReward,
       boss: enemy.enemyType === EnemyType.BOSS,
+      miniboss: enemy.enemyType === EnemyType.MINIBOSS,
       maxHealth: enemy.health.max,
     };
     enemy.destroy();

@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { RUN_PHASE_CALLOUTS, runPhase, UPGRADE_MILESTONES } from '../config/RunPacing';
+import { currentViewportShape, mobileWorldZoom } from '../config/ViewportLayout';
 import { ARENA, COLORS, Events, GAMEPLAY, GameState } from '../config/Constants';
 import { Player } from '../entities/player/Player';
 import { ProjectileManager } from '../entities/projectiles/ProjectileManager';
@@ -7,13 +9,13 @@ import { Enemy } from '../entities/enemies/Enemy';
 import { EnemyType } from '../entities/enemies/EnemyTypes';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { ExperienceSystem } from '../systems/ExperienceSystem';
-import { chooseAbilities, getAbilityById } from '../abilities/AbilityRegistry';
+import { chooseAbilities, getAbilityById, isSignatureAbility, signatureAbilityId } from '../abilities/AbilityRegistry';
 import { ExperienceOrb } from '../entities/experience/ExperienceOrb';
 import { AudioManager } from '../managers/AudioManager';
 import { ARENA_THEMES } from '../config/ArenaDefinitions';
 import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
 import { EnemyProjectileManager } from '../entities/projectiles/EnemyProjectileManager';
-import { loadProfile } from '../systems/ProfileStore';
+import { loadProfile, updateSettings } from '../systems/ProfileStore';
 import { EnemyDeathResolver } from '../systems/EnemyDeathResolver';
 import { CombatEffects } from '../effects/CombatEffects';
 import { ExplosiveBarrelSystem } from '../systems/ExplosiveBarrelSystem';
@@ -21,6 +23,28 @@ import { ArenaPresenter } from '../world/ArenaPresenter';
 import { LootSystem } from '../systems/LootSystem';
 import { EncounterSystem } from '../systems/EncounterSystem';
 import { RunEndSystem } from '../systems/RunEndSystem';
+import { ImpactPresenter } from '../presentation/ImpactPresenter';
+import { RunTelemetry } from '../systems/RunTelemetry';
+import { starterWeapon, type StarterWeaponId } from '../weapons/WeaponRegistry';
+import { CombatMomentum, type MomentumState } from '../systems/CombatMomentum';
+import { applyWeaponMastery } from '../weapons/WeaponMastery';
+import { ContractSystem, type ContractProgress } from '../systems/ContractSystem';
+import { SectorHazardSystem } from '../systems/SectorHazardSystem';
+import { SectorDeviceSystem, type SectorDeviceActivation } from '../systems/SectorDeviceSystem';
+import { BossPhaseDirector } from '../systems/BossPhaseDirector';
+import { RunInventory } from '../systems/RunInventory';
+import { applyEquipmentModifiers, removeEquipmentModifiers, type Equipment } from '../loot/Equipment';
+import { activeBuildSynergy, combatRating, type BuildSynergy } from '../systems/BuildProgression';
+import { SectorObjectiveSystem, type ObjectiveMetric } from '../systems/SectorObjectiveSystem';
+import { shakeCamera } from '../systems/RuntimeSettings';
+import { FAMILY_RULES } from '../entities/enemies/EnemyTypes';
+import { applyWorkshop } from '../progression/Workshop';
+import { abilityText, td } from '../i18n';
+import { dailyMutator, operationScore } from '../progression/DailyOperation';
+import { PAD, setGamepadConsumer, type PadFrame } from '../input/GamepadBridge';
+import { onlineService } from '../online/OnlinePorts';
+import { overtakes, type LiveBoardSession, type LiveEntry } from '../online/LiveRanking';
+import type { VirtualPlayerInput } from '../entities/player/PlayerController';
 
 export class GameScene extends Phaser.Scene {
   readonly mobileInput = {
@@ -31,6 +55,34 @@ export class GameScene extends Phaser.Scene {
     dash: false,
     autoFire: false,
   };
+  /** Analog gamepad input; used instead of `mobileInput` while the pad is the active device. */
+  readonly padInput: VirtualPlayerInput = {
+    active: true,
+    movement: new Phaser.Math.Vector2(),
+    aim: new Phaser.Math.Vector2(1, 0),
+    firing: false,
+    dash: false,
+    autoFire: false,
+    holdAim: true,
+  };
+  private padEngaged = false;
+  /** Live daily board session; only exists during an online daily run. */
+  private live?: LiveBoardSession;
+  private liveEntries: LiveEntry[] = [];
+  /**
+   * What the live board shows, kept here so the UI scene can read it when it starts: it launches a
+   * frame after this scene, and events emitted in between would otherwise be lost.
+   */
+  liveBoardOpen = false;
+  liveRecord?: { callsign: string; score: number };
+  get liveSnapshot() {
+    return this.liveEntries;
+  }
+  private nextLiveUpdateAt = 0;
+  private liveGeneration = 0;
+  private musicIntensity = 0;
+  /** Set when this run is the daily operation; the date and mutator identify its board. */
+  daily?: { date: string; mutator: string };
   player!: Player;
   projectiles!: ProjectileManager;
   enemies!: Phaser.Physics.Arcade.Group;
@@ -45,32 +97,88 @@ export class GameScene extends Phaser.Scene {
   arenaIndex = 0;
   arenaName = ARENA_THEMES[0].name;
   private spawn!: SpawnSystem;
-  private pausedByEsc = false;
   private audio!: AudioManager;
   private nextChestAt = GAMEPLAY.chestFirstMs;
   private pendingEquipmentDrop = false;
+  private milestoneIndex = 0;
+  private lastRunPhaseAt = 0;
+  private offeredAbilities: string[] = [];
+  private victoryPending = false;
   private deaths = new EnemyDeathResolver();
+  private momentum = new CombatMomentum();
+  /** Public: UIScene reads this every frame to drive the contract HUD, same as `xp`/`telemetry`. */
+  contracts = new ContractSystem();
   equippedWeapon = 'PULSEGUN-01';
+  selectedWeaponId: StarterWeaponId = 'pulse';
   equippedArmor = 'SIN ARMADURA';
   private effects!: CombatEffects;
+  private impacts!: ImpactPresenter;
+  telemetry = new RunTelemetry();
   private worldProps!: ExplosiveBarrelSystem;
   private loot!: LootSystem;
   private encounters!: EncounterSystem;
   private runEnd!: RunEndSystem;
   private lastBossPhase = 1;
+  private xpIntroduced = false;
+  private sectorHazards!: SectorHazardSystem;
+  private sectorDevices!: SectorDeviceSystem;
+  private bossPhases!: BossPhaseDirector;
+  inventory = new RunInventory();
+  private pendingLoot?: Equipment;
+  activeSynergy?: BuildSynergy;
+  private inventoryReturnState = GameState.PLAYING;
+  private objective!: SectorObjectiveSystem;
   private specialKeys!: Record<SpecialAbilityId, Phaser.Input.Keyboard.Key>;
   private readonly handlePlayerDied = () => this.gameOver(false);
+  private readonly handlePlayerDamaged = (_current: number, _max: number, applied?: number) => {
+    if (applied) {
+      this.telemetry.tookDamage(applied); this.audio.play('player_hit');
+      this.contracts.onPlayerDamaged(this.survivalMs);
+      const reset = this.momentum.break();
+      if (reset) this.applyMomentum(reset);
+    }
+  };
   private readonly handleBossSpawned = () => {
+    this.telemetry.bossSpawned();
+    this.audio.play('boss_spawn');
+    this.audio.duck(1600, 0.2);
     if (this.state === GameState.PLAYING) {
       this.state = GameState.BOSS;
       this.events.emit(Events.STATE_CHANGED, this.state);
     }
   };
+  private readonly handleEnemyWarning = (kind: string) => this.audio.play(kind === 'charge' ? 'charge_warning' : 'shot_warning');
+  private readonly handleEnemyAttack = (kind: string) =>
+    this.audio.play(kind === 'boss' ? 'boss_attack' : kind === 'charge' ? 'enemy_charge' :
+      kind === 'shot' || kind === 'miniboss' ? 'enemy_shot' : 'enemy_melee');
+  private readonly handlePlayerDashed = () => this.audio.play('dash');
   private readonly handleWeaponFired = (x: number, y: number, angle: number) => {
-    this.audio.tone(240, 0.025, 0.015);
-    this.effects.muzzle(x, y, angle);
+    this.telemetry.shotFired();
+    this.audio.play(this.player.stats.weaponMode === 'plasma' ? 'spore_fire' :
+      this.player.stats.weaponMode === 'arc' ? 'arc_fire' :
+        this.player.stats.weaponMode === 'laser' ? 'laser_fire' : 'weapon_fire');
+    this.effects.muzzle(x, y, angle, this.player.stats.weaponMode, this.player.stats.projectileColor);
   };
-  private readonly handleEscape = () => this.togglePause();
+  private readonly handleEscape = (event: KeyboardEvent) => {
+    if (!event.repeat) this.togglePause();
+  };
+  private readonly handleFocusLost = () => {
+    if (this.state === GameState.PLAYING || this.state === GameState.BOSS) this.togglePause();
+  };
+  private readonly syncGameplayPause = () => {
+    const paused = this.state === GameState.PAUSED || this.state === GameState.LEVEL_UP || this.state === GameState.INVENTORY;
+    this.time.paused = paused;
+    if (paused) {
+      this.tweens.pauseAll();
+      this.input.keyboard?.resetKeys();
+      this.mobileInput.movement.set(0, 0);
+      this.mobileInput.firing = false;
+      this.mobileInput.dash = false;
+      this.padInput.movement.set(0, 0);
+      this.padInput.firing = false;
+      this.padInput.dash = false;
+    } else this.tweens.resumeAll();
+  };
   private specialLastUsed: Record<SpecialAbilityId, number> = {
     nova: -99999,
     shield: -99999,
@@ -79,31 +187,61 @@ export class GameScene extends Phaser.Scene {
   constructor() {
     super('Game');
   }
-  init(data: { arenaIndex?: number }) {
+  /** Only the floor of the sector being played is fetched, and only the first time it is played. */
+  preload() {
+    const floor = ARENA_THEMES[this.arenaIndex].floor;
+    if (floor && !this.textures.exists(floor.key)) this.load.image(floor.key, floor.path);
+  }
+  init(data: { arenaIndex?: number; weaponId?: StarterWeaponId; daily?: { date: string; mutator: string } }) {
+    this.daily = data.daily;
+    this.padEngaged = false;
+    this.musicIntensity = 0;
     this.arenaIndex = (data.arenaIndex ?? this.arenaIndex) % ARENA_THEMES.length;
     this.arenaName = ARENA_THEMES[this.arenaIndex].name;
+    this.selectedWeaponId = data.weaponId ?? 'pulse';
     this.state = GameState.PLAYING;
     this.xp = new ExperienceSystem();
     this.abilityLevels = new Map<string, number>();
     this.survivalMs = 0;
-    this.pausedByEsc = false;
+    this.milestoneIndex = 0;
+    this.lastRunPhaseAt = 0;
+    this.offeredAbilities = [];
     this.specialLastUsed = { nova: -99999, shield: -99999, overdrive: -99999 };
     this.nextChestAt = GAMEPLAY.chestFirstMs;
     this.pendingEquipmentDrop = false;
+    this.victoryPending = false;
     this.lastBossPhase = 1;
+    this.xpIntroduced = false;
+    this.inventory = new RunInventory();
+    this.pendingLoot = undefined;
+    this.activeSynergy = undefined;
     this.deaths = new EnemyDeathResolver();
+    this.momentum = new CombatMomentum();
+    this.contracts = new ContractSystem();
+    this.telemetry = new RunTelemetry();
     this.mobileInput.movement.set(0, 0);
     this.mobileInput.aim.set(1, 0);
     this.mobileInput.firing = false;
     this.mobileInput.dash = false;
     this.mobileInput.autoFire = loadProfile().autoFire;
-    this.equippedWeapon = 'PULSEGUN-01';
+    this.equippedWeapon = starterWeapon(this.selectedWeaponId).name;
     this.equippedArmor = 'SIN ARMADURA';
   }
   create() {
+    this.game.canvas.dataset.scene = 'Game';
+    this.time.paused = false;
+    this.tweens.resumeAll();
     this.physics.world.setBounds(0, 0, ARENA.width, ARENA.height);
     new ArenaPresenter(this).draw(ARENA_THEMES[this.arenaIndex]);
-    this.player = new Player(this, ARENA.width / 2, ARENA.height / 2);
+    this.player = new Player(this, ARENA.width / 2, ARENA.height / 2, this.selectedWeaponId);
+    const profile = loadProfile();
+    applyWeaponMastery(this.player.stats, this.selectedWeaponId, profile.weaponMastery[this.selectedWeaponId]);
+    applyWorkshop(this.player.stats, profile.workshop);
+    dailyMutator(this.daily?.mutator)?.apply(this.player.stats);
+    // Workshop plating and mutators change max HP after the player was built at base HP.
+    this.player.health.max = this.player.stats.maxHp;
+    this.player.health.current = this.player.stats.maxHp;
+    this.telemetry.equipped(this.player.stats.weaponName);
     this.projectiles = new ProjectileManager(this);
     this.enemyProjectiles = new EnemyProjectileManager(this);
     this.enemies = this.physics.add.group({ runChildUpdate: false });
@@ -115,24 +253,28 @@ export class GameScene extends Phaser.Scene {
     this.spawn = new SpawnSystem(new EnemyFactory(this), this.enemies, this.arenaIndex);
     this.audio = new AudioManager(this);
     this.effects = new CombatEffects(this);
+    this.impacts = new ImpactPresenter(this, this.effects, this.audio);
     this.loot = new LootSystem(this, {
       player: this.player,
       effects: this.effects,
       audio: this.audio,
       level: () => this.xp.level,
-      onEquipmentChanged: (weapon, armor) => {
-        this.equippedWeapon = weapon;
-        this.equippedArmor = armor;
-      },
     });
     this.chests = this.loot.chests;
     this.lootDrops = this.loot.drops;
-    this.encounters = new EncounterSystem(this, this.enemies, this.player);
+    this.objective = new SectorObjectiveSystem(this.arenaIndex,
+      state => this.events.emit(Events.OBJECTIVE_CHANGED, state),
+      state => this.completeObjective(state.metric));
+    this.encounters = new EncounterSystem(this, this.enemies, this.player, this.arenaIndex);
+    this.bossPhases = new BossPhaseDirector(this, this.enemies, this.arenaIndex);
     this.runEnd = new RunEndSystem(this, () => this.scene.stop('UI'));
     this.worldProps = new ExplosiveBarrelSystem(this, (x, y, damage, radius) =>
-      this.plasmaExplosion(x, y, damage, radius),
+      this.plasmaExplosion(x, y, damage, radius, undefined, 'environment'),
     );
+    this.sectorHazards = new SectorHazardSystem(this, this.player, this.arenaIndex);
+    this.sectorDevices = new SectorDeviceSystem(this, this.arenaIndex, activation => this.activateSectorDevice(activation));
     this.worldProps.bindProjectiles(this.projectiles.group);
+    this.sectorDevices.bindProjectiles(this.projectiles.group);
     this.mobileInput.active =
       navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
     const keyboard = this.input.keyboard!;
@@ -143,6 +285,7 @@ export class GameScene extends Phaser.Scene {
     };
     this.cameras.main
       .setBounds(0, 0, ARENA.width, ARENA.height)
+      .setZoom(mobileWorldZoom(currentViewportShape().coarsePointer))
       .startFollow(this.player, true, 0.1, 0.1);
     this.physics.add.overlap(this.projectiles.group, this.enemies, (a, b) =>
       this.projectileHit(a as Phaser.GameObjects.GameObject, b as Phaser.GameObjects.GameObject),
@@ -157,6 +300,8 @@ export class GameScene extends Phaser.Scene {
       const shot = projectile as Phaser.Physics.Arcade.Image;
       if (!shot.active) return;
       this.player.takeDamage(shot.getData('damage') as number);
+      const chill = shot.getData('chill') as number | undefined;
+      if (chill) this.player.chill(chill);
       shot.disableBody(true, true);
     });
     this.physics.add.overlap(this.player, this.chests, (_, chest) =>
@@ -165,47 +310,110 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.lootDrops, (_, loot) =>
       this.collectEquipment(loot as Phaser.GameObjects.GameObject),
     );
+    this.events.on(Events.PLAYER_DAMAGED, this.handlePlayerDamaged);
     this.events.on(Events.PLAYER_DIED, this.handlePlayerDied);
     this.events.on(Events.BOSS_SPAWNED, this.handleBossSpawned);
     this.events.on('weapon-fired', this.handleWeaponFired);
+    this.events.on('enemy-warning', this.handleEnemyWarning);
+    this.events.on('enemy-attack', this.handleEnemyAttack);
+    this.events.on(Events.PLAYER_DASHED, this.handlePlayerDashed);
+    this.events.on('enemy-support-pulse', this.handleSupportPulse);
     this.input.keyboard!.on('keydown-ESC', this.handleEscape);
+    this.input.keyboard!.on('keydown-I', this.toggleInventory, this);
+    this.game.events.on(Phaser.Core.Events.BLUR, this.handleFocusLost);
+    this.game.events.on(Phaser.Core.Events.HIDDEN, this.handleFocusLost);
+    this.events.on(Events.STATE_CHANGED, this.syncGameplayPause);
     if (import.meta.env.VITE_DEBUG_GAME === 'true') {
       keyboard.on('keydown-B', () => this.encounters.spawnBoss());
       keyboard.on('keydown-C', () => this.loot.spawnChest());
+      // Reaching a level-up by playing takes a competent run; inspecting the modal should not.
+      keyboard.on('keydown-L', () => this.openLevelUp());
     }
     // Remove only the events this scene registers. `this.events` is the scene's system
     // emitter, so a blanket removeAllListeners() also unsubscribes Phaser's own plugins
     // (ArcadePhysics.start among them) and the next run boots with a null physics world.
     // The keyboard plugin clears its own keys and listeners in its shutdown.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Events.PLAYER_DAMAGED, this.handlePlayerDamaged);
       this.events.off(Events.PLAYER_DIED, this.handlePlayerDied);
       this.events.off(Events.BOSS_SPAWNED, this.handleBossSpawned);
       this.events.off('weapon-fired', this.handleWeaponFired);
+      this.events.off('enemy-warning', this.handleEnemyWarning);
+      this.events.off('enemy-attack', this.handleEnemyAttack);
+      this.events.off(Events.PLAYER_DASHED, this.handlePlayerDashed);
+      this.events.off('enemy-support-pulse', this.handleSupportPulse);
       this.input.keyboard?.off('keydown-ESC', this.handleEscape);
+      this.input.keyboard?.off('keydown-I', this.toggleInventory, this);
+      this.game.events.off(Phaser.Core.Events.BLUR, this.handleFocusLost);
+      this.game.events.off(Phaser.Core.Events.HIDDEN, this.handleFocusLost);
+      this.events.off(Events.STATE_CHANGED, this.syncGameplayPause);
+      this.input.off('pointermove', this.releasePad);
+      setGamepadConsumer(undefined);
+      this.leaveLiveBoard();
     });
+    setGamepadConsumer(this.consumePad);
+    this.joinLiveBoard();
+    this.input.on('pointermove', this.releasePad);
     this.scene.launch('UI', { game: this });
     this.events.emit(Events.STATE_CHANGED, this.state);
+    this.events.emit(Events.OBJECTIVE_CHANGED, this.objective.snapshot);
   }
   update(_time: number, delta: number) {
+    if (this.victoryPending) return;
     if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
     this.survivalMs += delta;
     this.encounters.update(this.survivalMs);
+    this.objective.update(this.survivalMs);
+    this.sectorHazards.update(this.survivalMs, !this.encounters.hasBossSpawned);
+    const expiredMomentum = this.momentum.update(this.survivalMs);
+    if (expiredMomentum) this.applyMomentum(expiredMomentum);
+    // O(1) against a 3-entry contract list; only the UNSCATHED clock needs a per-frame check.
+    const unscathedCompleted = this.contracts.update(this.survivalMs);
+    if (unscathedCompleted) this.announceContractCompleted(unscathedCompleted);
+    const phase = runPhase(this.survivalMs);
+    if (phase.at !== this.lastRunPhaseAt) {
+      this.lastRunPhaseAt = phase.at;
+      const callout = RUN_PHASE_CALLOUTS[phase.at as keyof typeof RUN_PHASE_CALLOUTS];
+      if (callout) {
+        this.audio.play('phase_change');
+        this.audio.duck(900);
+        this.events.emit(Events.RUN_PHASE_CHANGED, callout);
+      }
+    }
+    this.audio.updateMusic(
+      this.survivalMs,
+      this.encounters.hasBossSpawned ? 'boss' : this.survivalMs >= 135000 ? 'danger' : 'combat',
+      { sector: this.arenaIndex, intensity: this.musicIntensity },
+    );
+    const milestone = UPGRADE_MILESTONES[this.milestoneIndex];
+    if (milestone !== undefined && this.survivalMs >= milestone && !this.encounters.hasBossSpawned) {
+      this.milestoneIndex++;
+      this.openLevelUp(true);
+      return;
+    }
     if (this.survivalMs >= this.nextChestAt && !this.encounters.hasBossSpawned) {
       this.nextChestAt += GAMEPLAY.chestIntervalMs;
       this.loot.spawnChest();
     }
     this.updateSpecialAbilities(this.survivalMs);
+    if (this.live && this.survivalMs >= this.nextLiveUpdateAt) {
+      this.nextLiveUpdateAt = this.survivalMs + 2000;
+      this.live.update(this.liveScore, this.survivalMs / 1000);
+    }
     this.player.update(
       this.survivalMs,
       this.input.activePointer,
       (x, y, a) =>
         this.projectiles.fire(x, y, a, this.player.stats, this.survivalMs, this.player.damageMultiplier),
-      this.mobileInput,
+      this.padEngaged ? this.padInput : this.mobileInput,
     );
     this.mobileInput.dash = false;
+    this.padInput.dash = false;
     this.projectiles.update(this.survivalMs);
     this.enemyProjectiles.update(this.survivalMs);
     if (!this.encounters.hasBossSpawned) this.spawn.update(delta, this.player);
+    this.updateBulwarkAuras();
+    let attacks = this.enemies.getChildren().filter(object => (object as Enemy).isPreparingAttack).length;
     this.enemies
       .getChildren()
       .forEach((object) => {
@@ -213,21 +421,29 @@ export class GameScene extends Phaser.Scene {
         if (enemy.enemyType === EnemyType.BOSS && enemy.bossPhase !== this.lastBossPhase) {
           this.lastBossPhase = enemy.bossPhase;
           this.cameras.main.flash(180, 213, 102, 255, false);
-          this.cameras.main.shake(220, 0.008);
-          this.audio.tone(enemy.bossPhase === 3 ? 120 : 180, 0.16, 0.035, 'ui');
+          shakeCamera(this.cameras.main, 220, 0.008);
+          this.audio.play('boss_phase');
+          this.bossPhases.enter(enemy.bossPhase as 2 | 3, enemy);
         }
-        enemy.updateBehavior(this.player, this.survivalMs, (x, y, angle, speed, damage) =>
-          this.enemyProjectiles.fire(x, y, angle, speed, damage, this.survivalMs),
+        const preparing = enemy.isPreparingAttack;
+        enemy.updateBehavior(this.player, this.survivalMs, (x, y, angle, speed, damage, chillMs) =>
+          this.enemyProjectiles.fire(x, y, angle, speed, damage, this.survivalMs, chillMs),
+          attacks < GAMEPLAY.maxConcurrentAttacks,
         );
+        if (!preparing && enemy.isPreparingAttack) attacks++;
       });
+    this.tickStatusEffects();
     this.orbs.getChildren().forEach((o) => {
       const orb = o as ExperienceOrb;
-      if (
-        orb.active &&
-        Phaser.Math.Distance.Between(orb.x, orb.y, this.player.x, this.player.y) <
-          this.player.stats.magnetRadius
-      )
-        this.physics.moveToObject(orb, this.player, 300);
+      if (!orb.active) return;
+      orb.syncVisual(this.survivalMs);
+      const radius = this.player.stats.magnetRadius;
+      const distance = Phaser.Math.Distance.Between(orb.x, orb.y, this.player.x, this.player.y);
+      if (distance >= radius) return;
+      // Accelerate as the orb closes. At a constant speed the pickup felt like the orb was
+      // being dragged; ramping it makes the last few pixels snap in, which is the part that
+      // actually reads as a reward.
+      this.physics.moveToObject(orb, this.player, 200 + (1 - distance / radius) ** 2 * 700);
     });
   }
   private projectileHit(
@@ -240,35 +456,54 @@ export class GameScene extends Phaser.Scene {
     p.hitTargets.add(e);
     if (p.hitsRemaining > 0) p.hitsRemaining--;
     else p.disableBody(true, true);
-    this.audio.tone(135, 0.035);
-    this.effects.impact(p.x, p.y);
-    if (e.hit(p.damage)) {
+    const boss = e.enemyType === EnemyType.BOSS;
+    this.telemetry.hitLanded();
+    this.telemetry.dealtDamage(p.damage);
+    const fatal = e.hit(p.damage, p.critical);
+    // One tier drives spark, damage number, camera and audio together, so a critical on an
+    // elite cannot end up feeling identical to chipping a grunt.
+    this.impacts.hit(p.x, p.y, p.damage, {
+      critical: p.critical,
+      boss,
+      elite: e.elite,
+      fatal: false,
+    });
+    if (fatal) {
       this.resolveEnemyDeath(e);
     } else {
-      this.tweens.add({
-        targets: e,
-        x: e.x + (e.x - this.player.x) * 0.06,
-        y: e.y + (e.y - this.player.y) * 0.06,
-        duration: 70,
-      });
+      e.knockback(Phaser.Math.Angle.Between(this.player.x, this.player.y, e.x, e.y), p.critical);
+      this.applyWeaponStatuses(e);
     }
     if (p.mode === 'plasma' && p.splashRadius > 0) this.plasmaExplosion(e.x, e.y, p.damage * 0.55, p.splashRadius, e);
-    if (e.enemyType === EnemyType.BOSS)
-      this.events.emit(Events.BOSS_HEALTH, e.health.current, e.health.max);
-    this.cameras.main.shake(45, 0.0015);
-    this.effects.floatingText(
-      e.x,
-      e.y - 20,
-      `${p.critical ? 'CRIT ' : ''}${p.damage}`,
-      p.critical ? '#fff27a' : '#dffcff',
-    );
+    if (p.mode === 'arc' && this.player.stats.chainTargets > 0)
+      this.arcChain(e, p.damage * 0.72, this.player.stats.chainTargets, this.player.stats.chainRange, p.hitTargets);
+  }
+  private arcChain(origin: Enemy, damage: number, jumps: number, range: number, excluded: Set<object>) {
+    let source = origin;
+    for (let jump = 0; jump < jumps; jump++) {
+      const next = this.enemies.getChildren()
+        .map(object => object as Enemy)
+        .filter(enemy => enemy.active && !excluded.has(enemy) && Phaser.Math.Distance.Between(source.x, source.y, enemy.x, enemy.y) <= range)
+        .sort((a, b) => Phaser.Math.Distance.Squared(source.x, source.y, a.x, a.y) - Phaser.Math.Distance.Squared(source.x, source.y, b.x, b.y))[0];
+      if (!next) break;
+      excluded.add(next);
+      const beam = this.add.graphics().setDepth(18).lineStyle(4, 0x73ef62, 0.9)
+        .lineBetween(source.x, source.y, next.x, next.y).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: beam, alpha: 0, duration: 120, onComplete: () => beam.destroy() });
+      const applied = Math.max(1, Math.round(damage * Math.pow(0.82, jump)));
+      this.telemetry.dealtDamage(applied);
+      const fatal = next.hit(applied);
+      this.impacts.hit(next.x, next.y, applied, { critical: false, boss: next.enemyType === EnemyType.BOSS, elite: next.elite, fatal: false });
+      if (fatal) this.resolveEnemyDeath(next);
+      source = next;
+    }
   }
   private enemyContact(object: Phaser.GameObjects.GameObject) {
     const e = object as Enemy;
-    if (this.time.now - e.lastContact < 650) return;
-    e.lastContact = this.time.now;
+    if (!e.active || !e.canContact || this.survivalMs - e.lastContact < 650) return;
+    e.lastContact = this.survivalMs;
     this.player.takeDamage(e.contactDamage);
-    this.cameras.main.shake(90, 0.004);
+    shakeCamera(this.cameras.main, 90, 0.004);
   }
   private spawnOrb(x: number, y: number, value: number) {
     // The pool is capped and orbs never expire on their own, so once the arena holds
@@ -279,7 +514,10 @@ export class GameScene extends Phaser.Scene {
     // A recycled orb can still carry the pulse tween from its previous life.
     this.tweens.killTweensOf(orb);
     orb.spawn(x, y, value, this.survivalMs);
-    this.tweens.add({ targets: orb, scale: 1.35, duration: 350, yoyo: true, repeat: 2 });
+    if (!this.xpIntroduced) {
+      this.xpIntroduced = true;
+      this.events.emit(Events.XP_DISCOVERED);
+    }
   }
   private stalestOrb() {
     let stalest: ExperienceOrb | null = null;
@@ -290,11 +528,16 @@ export class GameScene extends Phaser.Scene {
     return stalest;
   }
   private collectOrb(object: Phaser.GameObjects.GameObject) {
+    if (this.victoryPending) return;
     const orb = object as ExperienceOrb;
     if (!orb.active) return;
     const amount = orb.value * this.player.stats.xpMultiplier;
+    const orbX = orb.x;
+    const orbY = orb.y;
     orb.collect();
-    this.audio.tone(520, 0.05, 0.018);
+    this.effects.xpPickup(orbX, orbY, orb.value);
+    this.objective.record('shards');
+    this.audio.play('xp_collect');
     const previousLevel = this.xp.level;
     const gainedLevels = this.xp.add(amount);
     if (gainedLevels > 0) {
@@ -304,8 +547,11 @@ export class GameScene extends Phaser.Scene {
     }
     this.events.emit(Events.XP_COLLECTED, this.xp.xp, this.xp.level);
   }
-  private openLevelUp() {
-    const options = chooseAbilities(this.abilityLevels);
+  private openLevelUp(milestone = false) {
+    if (this.victoryPending) return;
+    const options = milestone ? [signatureAbilityId(this.selectedWeaponId), 'fan', 'phase_dash'].map(id => getAbilityById(id)!)
+      .filter(ability => (this.abilityLevels.get(ability.id) ?? 0) < ability.maxLevel) : chooseAbilities(this.abilityLevels);
+    this.offeredAbilities = options.map(ability => ability.id);
     if (options.length === 0) {
       this.player.health.heal(20);
       this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
@@ -313,23 +559,34 @@ export class GameScene extends Phaser.Scene {
     }
     this.state = GameState.LEVEL_UP;
     this.physics.pause();
+    this.audio.play('level_up');
     this.events.emit(Events.STATE_CHANGED, this.state);
     this.events.emit(Events.PLAYER_LEVEL_UP, options);
   }
   selectAbility(id: string) {
+    if (this.state !== GameState.LEVEL_UP || !this.offeredAbilities.includes(id)) return;
     const ability = getAbilityById(id);
     if (!ability) return;
     const level = (this.abilityLevels.get(id) ?? 0) + 1;
     if (level > ability.maxLevel) return;
+    this.offeredAbilities = [];
     this.abilityLevels.set(id, level);
+    this.telemetry.choseUpgrade(id);
     ability.apply(this.player.stats, level);
+    this.events.emit(Events.UPGRADE_APPLIED, abilityText(ability).name, abilityText(ability).description, level,
+      combatRating(this.player.stats));
+    if (isSignatureAbility(id) && level === ability.maxLevel) {
+      this.equippedWeapon = this.player.stats.weaponName;
+      this.audio.play('weapon_evolve');
+      this.events.emit(Events.EQUIPMENT_CHANGED, this.equippedWeapon, this.equippedArmor);
+      this.events.emit(Events.WEAPON_EVOLVED, this.equippedWeapon, this.player.stats.projectileColor);
+    }
     if (id === 'core') {
       this.player.health.max = this.player.stats.maxHp;
       this.player.health.heal(25);
       this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
     }
     if (id === 'overdrive') this.player.activateOverdrive(10000 + level * 2000);
-    this.audio.tone(760, 0.15, 0.04);
     this.state = this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
     this.physics.resume();
     this.events.emit(Events.ABILITY_SELECTED, id);
@@ -341,7 +598,109 @@ export class GameScene extends Phaser.Scene {
   }
 
   private collectEquipment(object: Phaser.GameObjects.GameObject) {
-    this.loot.collectEquipment(object, this.equippedWeapon, this.equippedArmor);
+    const equipment = this.loot.collectEquipment(object);
+    if (!equipment) return;
+    this.pendingLoot = equipment;
+    this.state = GameState.INVENTORY;
+    this.physics.pause();
+    this.events.emit(Events.STATE_CHANGED, this.state);
+    this.events.emit(Events.LOOT_FOUND, equipment, this.inventory.count, this.inventory.full,
+      this.inventory.equippedWeapon);
+  }
+  resolveLoot(install: boolean) {
+    if (this.state !== GameState.INVENTORY || !this.pendingLoot) return;
+    const equipment = this.pendingLoot;
+    this.pendingLoot = undefined;
+    if (install) this.clearBuildSynergy();
+    const weaponSwap = equipment.kind === 'weapon' && install
+      ? this.inventory.equipWeapon(equipment)
+      : undefined;
+    const installed = install && (weaponSwap?.accepted ||
+      (equipment.kind !== 'weapon' && this.inventory.install(equipment)));
+    if (installed) {
+      const oldMaxHp = this.player.stats.maxHp;
+      if (weaponSwap?.replaced)
+        removeEquipmentModifiers(this.player.stats, weaponSwap.replaced.modifiers);
+      applyEquipmentModifiers(this.player.stats, equipment.modifiers);
+      if (equipment.kind === 'weapon') this.equippedWeapon = equipment.name;
+      else if (equipment.kind === 'armor') this.equippedArmor = equipment.name;
+      this.telemetry.equipped(this.equippedWeapon);
+      if (this.player.stats.maxHp > oldMaxHp) {
+        const gainedHp = this.player.stats.maxHp - oldMaxHp;
+        this.player.health.max = this.player.stats.maxHp;
+        this.player.health.heal(gainedHp);
+      }
+      this.events.emit(Events.LOOT_COLLECTED, equipment);
+      this.events.emit(Events.EQUIPMENT_CHANGED, this.equippedWeapon, this.equippedArmor);
+    } else {
+      this.player.health.heal(12);
+      this.effects.floatingText(this.player.x, this.player.y - 55, 'RECICLADO +12 HP', '#73ef62', 15);
+    }
+    if (install) this.refreshBuildSynergy();
+    this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
+    this.state = this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
+    this.physics.resume();
+    this.events.emit(Events.STATE_CHANGED, this.state);
+  }
+  toggleInventory() {
+    if (this.victoryPending) return;
+    if (this.state === GameState.INVENTORY && !this.pendingLoot) {
+      this.state = this.inventoryReturnState;
+      this.physics.resume();
+      this.events.emit(Events.STATE_CHANGED, this.state);
+      return;
+    }
+    if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
+    this.inventoryReturnState = this.state;
+    this.state = GameState.INVENTORY;
+    this.physics.pause();
+    this.events.emit(Events.STATE_CHANGED, this.state);
+    this.emitInventory();
+  }
+  equipInventoryWeapon(index: number) {
+    if (this.state !== GameState.INVENTORY || this.pendingLoot) return false;
+    const swap = this.inventory.activateWeapon(index);
+    if (!swap.accepted || !swap.current) return false;
+    this.clearBuildSynergy();
+    if (swap.previous) removeEquipmentModifiers(this.player.stats, swap.previous.modifiers);
+    applyEquipmentModifiers(this.player.stats, swap.current.modifiers);
+    this.equippedWeapon = swap.current.name;
+    this.refreshBuildSynergy();
+    this.telemetry.equipped(this.equippedWeapon);
+    this.events.emit(Events.EQUIPMENT_CHANGED, this.equippedWeapon, this.equippedArmor);
+    this.emitInventory();
+    return true;
+  }
+  recycleInventoryItem(index: number) {
+    if (this.state !== GameState.INVENTORY || this.pendingLoot) return false;
+    const item = this.inventory.contents[index];
+    if (!item || item === this.inventory.equippedWeapon) return false;
+    this.clearBuildSynergy();
+    const recycled = this.inventory.recycle(index);
+    if (!recycled) return false;
+    if (recycled.kind !== 'weapon') removeEquipmentModifiers(this.player.stats, recycled.modifiers);
+    if (recycled.kind === 'armor')
+      this.equippedArmor = [...this.inventory.contents].reverse().find(entry => entry.kind === 'armor')?.name ?? 'SIN ARMADURA';
+    this.player.health.max = this.player.stats.maxHp;
+    this.player.health.heal(8);
+    this.refreshBuildSynergy();
+    this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
+    this.events.emit(Events.EQUIPMENT_CHANGED, this.equippedWeapon, this.equippedArmor);
+    this.emitInventory();
+    return true;
+  }
+  private emitInventory() {
+    this.events.emit(Events.INVENTORY_OPENED, this.inventory.contents,
+      this.inventory.equippedWeapon, this.activeSynergy, combatRating(this.player.stats));
+  }
+  private clearBuildSynergy() {
+    if (this.activeSynergy) removeEquipmentModifiers(this.player.stats, this.activeSynergy.modifiers);
+    this.activeSynergy = undefined;
+  }
+  private refreshBuildSynergy() {
+    this.activeSynergy = activeBuildSynergy(this.inventory.contents, this.inventory.equippedWeapon);
+    if (this.activeSynergy) applyEquipmentModifiers(this.player.stats, this.activeSynergy.modifiers);
+    this.player.setWeaponTier(this.activeSynergy ? 2 : (this.inventory.equippedWeapon?.rarity === 'LEGENDARY' ? 2 : 1));
   }
   selectChestReward(id: 'repair' | 'charge' | 'weapon') {
     if (id === 'repair') {
@@ -370,13 +729,20 @@ export class GameScene extends Phaser.Scene {
     }
   }
   activateSpecial(id: SpecialAbilityId, time = this.survivalMs) {
+    if (this.victoryPending) return;
     if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
     const ability = SPECIAL_ABILITIES.find((definition) => definition.id === id)!;
     if (time - this.specialLastUsed[id] < ability.cooldown) return;
     this.specialLastUsed[id] = time;
+    this.telemetry.usedAbility(id);
     if (id === 'nova') this.activateNova();
-    else if (id === 'shield') this.player.activateShield(3000);
-    else this.player.activateOverdrive(8000);
+    else if (id === 'shield') {
+      this.player.activateShield(3000);
+      this.audio.play('shield');
+    } else {
+      this.player.activateOverdrive(8000);
+      this.audio.play('overdrive');
+    }
   }
   private activateNova() {
     const radius = 230;
@@ -412,30 +778,35 @@ export class GameScene extends Phaser.Scene {
       const x = enemy.x;
       const y = enemy.y;
       const damage = Math.round(this.player.stats.attackDamage * 1.75);
+      this.telemetry.dealtDamage(damage);
       if (enemy.hit(damage)) {
         this.resolveEnemyDeath(enemy);
       }
       this.effects.floatingText(x, y - 22, `${damage}`, '#73efff');
     }
-    this.audio.tone(95, 0.24, 0.045);
-    this.cameras.main.shake(180, 0.006);
+    this.audio.play('nova');
+    shakeCamera(this.cameras.main, 180, 0.006);
   }
   togglePause() {
-    if (this.state === GameState.LEVEL_UP || this.state === GameState.GAME_OVER) return;
-    this.pausedByEsc = !this.pausedByEsc;
-    this.state = this.pausedByEsc
+    if (this.victoryPending) return;
+    if (![GameState.PLAYING, GameState.BOSS, GameState.PAUSED].includes(this.state)) return;
+    const paused = this.state !== GameState.PAUSED;
+    this.state = paused
       ? GameState.PAUSED
       : this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
-    if (this.pausedByEsc) this.physics.pause();
+    if (paused) this.physics.pause();
     else this.physics.resume();
     this.events.emit(Events.STATE_CHANGED, this.state);
   }
 
   adjustAudioVolume(delta: number) {
-    this.audio.setMasterVolume(this.audio.getMasterVolume() + delta);
+    this.audio.setMasterVolume(Math.round((this.audio.getMasterVolume() + delta) * 10) / 10);
+    // The pause-menu slider and the settings screen are one preference, not two.
+    updateSettings({ masterVolume: this.audio.getMasterVolume() });
     return this.audio.getMasterVolume();
   }
   get audioVolume() { return this.audio.getMasterVolume(); }
+  get objectiveState() { return this.objective.snapshot; }
   resumeGame() {
     if (this.state === GameState.PAUSED) this.togglePause();
   }
@@ -445,6 +816,7 @@ export class GameScene extends Phaser.Scene {
     this.scene.start('Menu');
   }
   private openChest(object: Phaser.GameObjects.GameObject) {
+    if (this.victoryPending) return;
     if (!this.loot.openChest(object)) return;
     this.state = GameState.LEVEL_UP;
     this.physics.pause();
@@ -452,37 +824,275 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(Events.STATE_CHANGED, this.state);
   }
   private gameOver(victory: boolean) {
+    if (this.victoryPending && !victory) return;
     if (this.state === GameState.GAME_OVER || this.state === GameState.VICTORY) return;
     this.state = victory ? GameState.VICTORY : GameState.GAME_OVER;
+    this.leaveLiveBoard();
+    const summary = this.telemetry.finish(this.survivalMs, this.xp.level, victory ? 'victory' : 'death');
+    this.audio.play(victory ? 'victory' : 'game_over');
     this.physics.pause();
     this.runEnd.finish({
       time: this.survivalMs,
       level: this.xp.level,
       victory,
       arenaIndex: this.arenaIndex,
+      weaponId: this.selectedWeaponId,
+      contracts: this.contracts.summary(),
+      summary,
+      facts: {
+        sector: this.arenaIndex,
+        durationMs: this.survivalMs,
+        kills: summary.kills,
+        damageDealt: summary.damageDealt,
+        damageTaken: summary.damageTaken,
+        shotsFired: summary.shotsFired,
+        hits: summary.hits,
+        bossDefeated: summary.bossDefeated,
+      },
+      daily: this.daily && {
+        ...this.daily,
+        score: operationScore({ kills: summary.kills, level: this.xp.level, durationMs: this.survivalMs, victory }),
+      },
+      equipment: this.inventory.contents.map(item => item.name),
+      synergy: this.activeSynergy?.name,
     });
   }
-  private plasmaExplosion(x: number, y: number, damage: number, radius: number, ignored?: Enemy) {
+  /** Direct hits carry the build's statuses; splash and chains stay plain damage. */
+  private applyWeaponStatuses(enemy: Enemy) {
+    const stats = this.player.stats;
+    if (stats.burnDamage > 0) enemy.applyStatus({ kind: 'burn', potency: stats.burnDamage, durationMs: 2000 });
+    if (stats.chillDurationMs > 0) enemy.applyStatus({ kind: 'chill', potency: 0, durationMs: stats.chillDurationMs });
+    if (stats.toxinDamage > 0) enemy.applyStatus({ kind: 'toxin', potency: stats.toxinDamage, durationMs: 3000 });
+  }
+  /** Damage over time, resolved after the behaviour pass so no enemy is destroyed mid-iteration. */
+  private tickStatusEffects() {
+    const dying: Enemy[] = [];
+    for (const object of this.enemies.getChildren()) {
+      const enemy = object as Enemy;
+      if (!enemy.active) continue;
+      const damage = enemy.status.tick(this.survivalMs);
+      if (damage <= 0) continue;
+      this.telemetry.dealtDamage(damage);
+      if (enemy.hit(damage)) dying.push(enemy);
+    }
+    for (const enemy of dying) this.resolveEnemyDeath(enemy);
+  }
+  /** Bulwarks shield the pack around them; neither bosses nor other bulwarks are covered. */
+  private updateBulwarkAuras() {
+    const enemies = this.enemies.getChildren() as Enemy[];
+    const bulwarks = enemies.filter(enemy => enemy.active && enemy.enemyType === EnemyType.BULWARK);
+    if (!bulwarks.length) return;
+    const reach = FAMILY_RULES.bulwark.radius ** 2;
+    const until = this.survivalMs + 250;
+    for (const enemy of enemies) {
+      if (!enemy.active || enemy.enemyType === EnemyType.BOSS || enemy.enemyType === EnemyType.MINIBOSS ||
+        enemy.enemyType === EnemyType.BULWARK) continue;
+      if (bulwarks.some(bulwark => Phaser.Math.Distance.Squared(bulwark.x, bulwark.y, enemy.x, enemy.y) <= reach))
+        enemy.shieldedUntil = until;
+    }
+  }
+  private readonly handleSupportPulse = (medic: Enemy) => {
+    if (!medic.active) return;
+    const { radius, healFraction } = FAMILY_RULES.medic;
+    const ring = this.add.circle(medic.x, medic.y, radius, medic.def.color, 0.06)
+      .setStrokeStyle(3, medic.def.color, 0.8).setScale(0.25).setDepth(4);
+    this.tweens.add({ targets: ring, scale: 1, alpha: 0, duration: 420, ease: 'Quad.Out', onComplete: () => ring.destroy() });
+    for (const object of this.enemies.getChildren()) {
+      const ally = object as Enemy;
+      if (!ally.active || ally === medic || ally.enemyType === EnemyType.BOSS) continue;
+      if (ally.health.current >= ally.health.max) continue;
+      if (Phaser.Math.Distance.Squared(medic.x, medic.y, ally.x, ally.y) > radius * radius) continue;
+      ally.heal(Math.round(ally.health.max * healFraction));
+    }
+    this.audio.tone(620, 0.12, 0.018, 'sfx', 'triangle');
+  };
+  private splitBrood(x: number, y: number) {
+    const { spawns, spread } = FAMILY_RULES.brood;
+    for (let index = 0; index < spawns; index++) {
+      if (this.enemies.countActive(true) >= GAMEPLAY.maxEnemies) return;
+      const angle = (Math.PI * 2 * index) / spawns;
+      this.enemies.add(new Enemy(this, x + Math.cos(angle) * spread, y + Math.sin(angle) * spread, EnemyType.RUNNER));
+    }
+  }
+  /** Single fan-out point for momentum state: keeps `MOMENTUM_CHANGED` and the kill-streak
+   * contract in lockstep instead of duplicating this pair at every call site. */
+  /**
+   * Gamepad frames arrive before each step. Live combat consumes them as analog input; any
+   * other state returns false so the bridge replays them as menu keys for the open modal.
+   */
+  private readonly consumePad = (frame: PadFrame) => {
+    if (this.victoryPending || (this.state !== GameState.PLAYING && this.state !== GameState.BOSS)) return false;
+    if (frame.active) this.padEngaged = true;
+    if (!this.padEngaged) return true;
+    this.padInput.movement.set(frame.movement.x, frame.movement.y);
+    if (frame.aiming) this.padInput.aim.set(frame.aim.x, frame.aim.y);
+    this.padInput.firing = frame.firing;
+    if (frame.justPressed.has(PAD.A) || frame.justPressed.has(PAD.LB)) this.padInput.dash = true;
+    if (frame.justPressed.has(PAD.X)) this.activateSpecial('nova');
+    if (frame.justPressed.has(PAD.Y)) this.activateSpecial('shield');
+    if (frame.justPressed.has(PAD.B) || frame.justPressed.has(PAD.RB)) this.activateSpecial('overdrive');
+    return true;
+  };
+  /** The daily score this run would post if it ended now (a defeat), shown on the live board. */
+  get liveScore() {
+    return operationScore({ kills: this.telemetry.kills, level: this.xp.level, durationMs: this.survivalMs, victory: false });
+  }
+  get liveBoardEntries(): readonly LiveEntry[] {
+    return this.liveEntries;
+  }
+  /**
+   * Joins today's live board when this is an online daily run. Failures leave the run exactly
+   * as it is offline; a generation counter drops a join that finishes after the scene has moved on.
+   */
+  private joinLiveBoard() {
+    this.liveEntries = [];
+    this.nextLiveUpdateAt = 0;
+    const generation = ++this.liveGeneration;
+    const online = onlineService();
+    this.liveBoardOpen = false;
+    this.liveRecord = undefined;
+    if (!this.daily || !online.online) return;
+    this.liveBoardOpen = true;
+    this.events.emit(Events.LIVE_BOARD_CHANGED, [], undefined);
+    void online.fetchDailyBoard(this.daily.date).then(board => {
+      if (generation !== this.liveGeneration || !board[0]) return;
+      this.liveRecord = { callsign: board[0].displayName, score: board[0].score };
+      this.events.emit('live-board-record', board[0].displayName, board[0].score);
+    }).catch(() => undefined);
+    void online.openLiveBoard(this.daily.date).then(session => {
+      if (!session) return;
+      if (generation !== this.liveGeneration) {
+        void session.leave();
+        return;
+      }
+      this.live = session;
+      session.onChange(entries => {
+        if (generation !== this.liveGeneration) return;
+        const passed = overtakes(this.liveEntries, entries);
+        this.liveEntries = entries;
+        this.events.emit(Events.LIVE_BOARD_CHANGED, entries, passed[0]);
+      });
+      session.update(this.liveScore, this.survivalMs / 1000);
+    }).catch(() => undefined);
+  }
+  private leaveLiveBoard() {
+    this.liveGeneration++;
+    this.liveBoardOpen = false;
+    const session = this.live;
+    this.live = undefined;
+    if (session) void session.leave().catch(() => undefined);
+  }
+  /** A real mouse movement hands aiming back to the cursor. Touch never disengages the pad. */
+  private readonly releasePad = (pointer: Phaser.Input.Pointer) => {
+    if (!pointer.wasTouch) this.padEngaged = false;
+  };
+  private applyMomentum(state: MomentumState) {
+    // The score leans in while a chain is alive: a pulse at 3+, a doubled lead at 8+.
+    this.musicIntensity = state.chain >= 8 ? 2 : state.chain >= 3 ? 1 : 0;
+    this.events.emit(Events.MOMENTUM_CHANGED, state);
+    const streakCompleted = this.contracts.onMomentumChanged(state);
+    if (streakCompleted) this.announceContractCompleted(streakCompleted);
+  }
+  /** Single fan-out point for a completed contract: the audio cue and the HUD/haptics event
+   * must never drift apart, so every completion path goes through here. */
+  private announceContractCompleted(contract: ContractProgress) {
+    this.audio.play('contract_complete');
+    this.events.emit(Events.CONTRACT_COMPLETED, contract);
+  }
+  private plasmaExplosion(
+    x: number,
+    y: number,
+    damage: number,
+    radius: number,
+    ignored?: Enemy,
+    cause: 'weapon' | 'environment' = 'weapon',
+  ) {
     this.effects.explosion(x, y, radius);
     this.enemies.getChildren().forEach((object) => {
       const enemy = object as Enemy;
       if (!enemy.active || enemy === ignored || Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y) > radius) return;
+      this.telemetry.dealtDamage(damage);
       if (enemy.hit(Math.round(damage))) {
-        this.resolveEnemyDeath(enemy);
+        this.resolveEnemyDeath(enemy, cause);
       }
     });
     this.audio.tone(65, 0.2, 0.05);
   }
-  private resolveEnemyDeath(enemy: Enemy) {
+  private activateSectorDevice(activation: SectorDeviceActivation) {
+    const { x, y, radius, damage, heal, effect, color, name } = activation;
+    this.effects.explosion(x, y, radius);
+    this.effects.floatingText(x, y - 70, td(name), `#${color.toString(16).padStart(6, '0')}`, 16);
+    this.enemies.getChildren().forEach(object => {
+      const enemy = object as Enemy;
+      if (!enemy.active || Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y) > radius) return;
+      this.telemetry.dealtDamage(damage);
+      if (enemy.hit(damage)) this.resolveEnemyDeath(enemy);
+    });
+    if (heal > 0 && Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y) <= radius) {
+      this.player.health.heal(heal);
+      this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
+    }
+    if (effect === 'cryo') this.enemyProjectiles.group.clear(true, true);
+    this.audio.tone(effect === 'emp' ? 180 : effect === 'renewal' ? 740 : 320, 0.3, 0.05);
+    shakeCamera(this.cameras.main, 180, 0.006);
+    this.objective.record('devices');
+  }
+  private completeObjective(metric: ObjectiveMetric) {
+    if (metric === 'kills') this.player.stats.attackDamage += 6;
+    else if (metric === 'shards') this.player.stats.xpMultiplier += 0.2;
+    else {
+      this.player.stats.maxHp += 18;
+      this.player.health.max = this.player.stats.maxHp;
+      this.player.health.heal(18);
+      this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
+    }
+    this.loot.spawnEquipmentDrop();
+    this.audio.play('level_up');
+  }
+  /** Every kill path (projectile, arc chain, nova, splash) converges here, so it is the one
+   * place contract progress needs to hook into combat. */
+  private resolveEnemyDeath(enemy: Enemy, cause: 'weapon' | 'environment' = 'weapon') {
+    const elite = enemy.elite;
+    const eliteColor = enemy.eliteColor;
+    const brood = enemy.enemyType === EnemyType.BROOD;
     const defeat = this.deaths.resolve(enemy);
     if (!defeat) return;
+    if (brood) this.splitBrood(defeat.x, defeat.y);
     this.events.emit(Events.ENEMY_DIED);
-    this.effects.deathBurst(defeat.x, defeat.y, defeat.boss ? 0xd566ff : 0x21e6ff, defeat.boss);
-    this.spawnOrb(defeat.x, defeat.y, defeat.xp);
-    this.audio.tone(75, 0.09);
+    this.telemetry.killed();
+    const contractCompleted = this.contracts.onEnemyDefeated({
+      elite,
+      boss: defeat.boss,
+      environment: cause === 'environment',
+    });
+    if (contractCompleted) this.announceContractCompleted(contractCompleted);
+    this.objective.record('kills');
+    const momentum = this.momentum.kill(this.survivalMs);
+    if (momentum.tier > 0 && momentum.chain % 3 === 0) this.audio.play('combo_rise');
+    this.applyMomentum(momentum);
+    if (defeat.boss) this.telemetry.bossKilled();
+    this.impacts.death(
+      defeat.x,
+      defeat.y,
+      defeat.boss ? 0xd566ff : eliteColor,
+      { critical: false, boss: defeat.boss, elite, fatal: true },
+    );
+    this.spawnOrb(defeat.x, defeat.y, Math.round(defeat.xp * momentum.xpMultiplier));
+    if (defeat.miniboss) {
+      this.loot.spawnEquipmentDrop();
+      this.events.emit(Events.MINIBOSS_HEALTH, 0, defeat.maxHealth);
+      this.events.emit(Events.MINIBOSS_DEFEATED);
+      this.audio.tone(1180, 0.32, 0.055);
+    }
     if (defeat.boss) {
+      // Freeze combat during the death effect. XP must not open a modal and pause the
+      // victory timer before the result screen is reached.
+      this.victoryPending = true;
+      this.physics.pause();
+      this.enemyProjectiles.group.clear(true, true);
+      this.effects.bossCollapse(defeat.x, defeat.y);
       this.events.emit(Events.BOSS_HEALTH, 0, defeat.maxHealth);
-      this.time.delayedCall(500, () => this.gameOver(true));
+      this.time.delayedCall(900, () => this.gameOver(true));
     }
   }
 }

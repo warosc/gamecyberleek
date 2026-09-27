@@ -6,14 +6,17 @@ export class EnemyProjectileManager {
   constructor(private scene: Phaser.Scene) {
     this.group = scene.physics.add.group({ maxSize: GAMEPLAY.maxEnemyProjectiles });
   }
-  fire(x: number, y: number, angle: number, speed = 280, damage = 10, gameplayTime = 0) {
+  fire(x: number, y: number, angle: number, speed = 280, damage = 10, gameplayTime = 0, chillMs = 0) {
     const projectile = this.group.get(x, y, 'enemy-energy') as Phaser.Physics.Arcade.Image | null;
     if (!projectile) return;
     projectile
       .enableBody(true, x, y, true, true)
       .setData('born', gameplayTime)
-      .setData('damage', damage);
+      .setData('damage', damage)
+      .setData('chill', chillMs);
     projectile.setBlendMode(Phaser.BlendModes.ADD).setScale(damage > 15 ? 1.5 : 1);
+    // Chilling shots read as ice, not as the default energy bolt.
+    if (chillMs > 0) projectile.setTint(0x9fe3ff); else projectile.clearTint();
     this.scene.physics.velocityFromRotation(angle, speed, projectile.body!.velocity);
   }
   update(time: number) {

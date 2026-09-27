@@ -13,6 +13,14 @@ describe('PWA shell', () => {
       expect.objectContaining({ src: '/assets/character/leek/icon-192.png', sizes: '192x192' }),
       expect.objectContaining({ src: '/assets/character/leek/icon-512.png', sizes: '512x512' }),
     ]));
-    expect(readFileSync(resolve(root, 'public/sw.js'), 'utf8')).toContain("leek-ops-v4");
+    expect(readFileSync(resolve(root, 'public/sw.js'), 'utf8')).toContain("leek-ops-v37");
+  });
+
+  it('serves an offline page for navigations with no network and no cache', () => {
+    const worker = readFileSync(resolve(root, 'public/sw.js'), 'utf8');
+    expect(worker).toContain("'/offline.html'");
+    expect(worker).toMatch(/mode === 'navigate'/);
+    const page = readFileSync(resolve(root, 'public/offline.html'), 'utf8');
+    expect(page).toContain('location.reload()');
   });
 });

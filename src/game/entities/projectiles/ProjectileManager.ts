@@ -21,8 +21,8 @@ export class ProjectileManager {
     damageMultiplier = 1,
   ) {
     const p = this.group.get(
-      x + Math.cos(angle) * 38,
-      y + Math.sin(angle) * 38,
+      x,
+      y,
     ) as Projectile | null;
     if (!p) return;
     const hit = resolveDamage({
@@ -35,7 +35,7 @@ export class ProjectileManager {
     p.critical = hit.critical;
     p.born = time;
     p.mode = stats.weaponMode;
-    p.hitsRemaining = stats.projectilePiercing;
+    p.hitsRemaining = stats.projectilePiercing + stats.bonusPiercing;
     p.splashRadius = stats.splashRadius;
     p.hitTargets.clear();
     p.enableBody(true, p.x, p.y, true, true);

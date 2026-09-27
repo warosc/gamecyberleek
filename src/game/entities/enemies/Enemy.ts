@@ -1,6 +1,13 @@
 import Phaser from 'phaser';
 import { HealthComponent } from '../../components/HealthComponent';
-import { ELITE_AFFIX_DEFS, ENEMY_DEFS, EnemyType, type EliteAffix } from './EnemyTypes';
+import { ELITE_AFFIX_DEFS, ENEMY_DEFS, EnemyType, FAMILY_RULES, type EliteAffix } from './EnemyTypes';
+import { GAMEPLAY, Events } from '../../config/Constants';
+import { detectQualityProfile } from '../../config/QualityProfile';
+import { BossVisual, BOSS_IDENTITY, bossVariant } from './BossVisual';
+import { STATUS_COLORS, StatusEffects, type StatusPayload } from '../../systems/StatusEffects';
+import { VegetableVisual } from './VegetableVisual';
+import { isVegetableType, vegetableTexture, VEGETABLE_ROSTER } from './VegetableRoster';
+import { MinibossVisual } from './MinibossVisual';
 
 /** Preserves the original feel: 0.075 rad per frame at 60fps. */
 const PULSE_RADIANS_PER_MS = 0.075 * 0.06;
@@ -9,8 +16,62 @@ export class Enemy extends Phaser.GameObjects.Arc {
   readonly health;
   lastContact = 0;
   private lastAttack = -9999;
+  private melee?: { strike: number; end: number; released: boolean };
+  get isPreparingAttack() { return !!this.pendingAttack || !!this.charge || !!this.melee; }
+  get canContact() {
+    if (this.enemyType === EnemyType.SHOOTER || this.enemyType === EnemyType.MEDIC) return false;
+    if (this.enemyType === EnemyType.RUNNER) return Boolean(this.charge &&
+      this.visualTime >= this.charge.start && this.visualTime < this.charge.end);
+    return this.enemyType !== EnemyType.GRUNT && this.enemyType !== EnemyType.TANK ||
+      Boolean(this.melee && this.visualTime >= this.melee.strike && this.visualTime < this.melee.strike + 180);
+  }
+  private charge?: { angle: number; start: number; end: number; recover: number; launched: boolean };
+  private warning?: Phaser.GameObjects.Graphics;
+  private readonly telegraphs = new Set<Phaser.GameObjects.GameObject>();
+  private knockbackUntil = 0;
+  private knockbackX = 0;
+  private knockbackY = 0;
+
+  /** Bounded impulse; distance from the player never amplifies knockback. */
+  knockback(angle: number, critical: boolean) {
+    if (this.enemyType === EnemyType.BOSS || this.enemyType === EnemyType.MINIBOSS || this.charge || this.pendingAttack || this.melee) return;
+    const speed = (critical ? 170 : 95) * (this.enemyType === EnemyType.TANK ? 0.35 : 1);
+    this.knockbackX = Math.cos(angle) * speed;
+    this.knockbackY = Math.sin(angle) * speed;
+    this.knockbackUntil = this.visualTime + 90;
+  }
+
+  private showLane(angle: number, length: number, width: number, color: number) {
+    this.warning?.destroy();
+    this.warning = this.scene.add.graphics().setPosition(this.x, this.y).setRotation(angle).setDepth(3);
+    this.warning.fillStyle(color, 0.13).fillRect(0, -width / 2, length, width)
+      .lineStyle(2, color, 0.85).strokeRect(0, -width / 2, length, width)
+      .lineBetween(length - 18, -12, length, 0).lineBetween(length, 0, length - 18, 12);
+  }
   private bossAttackSequence = 0;
+  private wardenAttackSequence = 0;
+  /**
+   * A shot that has been telegraphed but not yet fired. Scheduled on gameplay time rather than
+   * through `scene.time`, so a telegraph cannot resolve while the run is paused or a level-up
+   * modal is open.
+   */
+  private pendingAttack?: { at: number; release: () => void };
   private visual: Phaser.GameObjects.Container;
+  private bossVisual?: BossVisual;
+  private vegetableVisual?: VegetableVisual;
+  private minibossVisual?: MinibossVisual;
+  private chassis!: Phaser.GameObjects.Container;
+  private shadow!: Phaser.GameObjects.Ellipse;
+  private feet: Phaser.GameObjects.Ellipse[] = [];
+  private engineGlow?: Phaser.GameObjects.Ellipse;
+  private chargeGlow?: Phaser.GameObjects.Arc;
+  private crownRotor?: Phaser.GameObjects.Graphics;
+  private fins: Phaser.GameObjects.Graphics[] = [];
+  private readonly animateDetails = detectQualityProfile().tier !== 'low';
+  private visualTime = 0;
+  private hitAt = -1000;
+  private hitStrength = 0;
+  private firedAt = -1000;
   private healthBack: Phaser.GameObjects.Rectangle;
   private healthFill: Phaser.GameObjects.Rectangle;
   private eliteLabel?: Phaser.GameObjects.Text;
@@ -20,16 +81,23 @@ export class Enemy extends Phaser.GameObjects.Arc {
   elite = false;
   eliteAffix: EliteAffix = 'OVERCHARGED';
   private eliteMultiplier = 1;
+  /** Burn, chill and toxin on gameplay time; bosses and minibosses resist them. */
+  readonly status: StatusEffects;
+  /** Gameplay time until which a nearby bulwark's aura reduces damage taken. */
+  shieldedUntil = 0;
+  private statusRing?: Phaser.GameObjects.Arc;
   constructor(
     scene: Phaser.Scene,
     x: number,
     y: number,
     public enemyType: EnemyType,
+    private readonly visualVariant = 0,
   ) {
     const d = ENEMY_DEFS[enemyType];
     super(scene, x, y, d.size, 0, 360, false, d.color);
     this.def = d;
     this.health = new HealthComponent(d.hp);
+    this.status = new StatusEffects(enemyType === EnemyType.BOSS || enemyType === EnemyType.MINIBOSS);
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setVisible(false);
@@ -45,72 +113,273 @@ export class Enemy extends Phaser.GameObjects.Arc {
       .setVisible(false)
       .setDepth(13);
   }
+  private get speedScale() {
+    return this.eliteMultiplier * this.status.speedFactor(this.visualTime);
+  }
+  heal(amount: number) {
+    this.health.heal(amount);
+    this.healthFill.setDisplaySize(this.def.size * 2 * (this.health.current / this.health.max), 3);
+  }
+  applyStatus(payload: StatusPayload) {
+    this.status.apply(payload, this.visualTime);
+  }
   chase(target: { x: number; y: number }) {
-    this.scene.physics.moveToObject(this, target, this.def.speed * this.eliteMultiplier);
+    this.scene.physics.moveToObject(this, target, this.def.speed * this.speedScale);
     this.syncVisual(target);
   }
   updateBehavior(
     target: { x: number; y: number },
     time: number,
-    fire: (x: number, y: number, angle: number, speed: number, damage: number) => void,
+    fire: (x: number, y: number, angle: number, speed: number, damage: number, chillMs?: number) => void,
+    allowAttack = true,
   ) {
     // Derived from gameplay time, not incremented per frame: a fixed step made the pulse
     // run at the display refresh rate, so a 165Hz screen animated ~2.75x faster than 60Hz.
     this.visualPhase = this.visualOffset + time * PULSE_RADIANS_PER_MS;
+    this.visualTime = time;
+    this.updateStatusMark(time);
+    if (this.pendingAttack && time >= this.pendingAttack.at) {
+      const release = this.pendingAttack.release;
+      this.pendingAttack = undefined;
+      this.firedAt = time;
+      this.warning?.destroy();
+      this.warning = undefined;
+      release();
+    }
     const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y);
-    if (this.def.behavior === 'kite') {
-      if (distance > 390) this.scene.physics.moveToObject(this, target, this.def.speed * this.eliteMultiplier);
-      else if (distance < 230)
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    if (this.melee) {
+      body.setVelocity(0);
+      if (!this.melee.released && time >= this.melee.strike) {
+        this.melee.released = true;
+        this.scene.events.emit('enemy-attack', 'melee');
+      }
+      if (time >= this.melee.strike && time < this.melee.strike + 180)
+        this.scene.physics.moveToObject(this, target, 240);
+      if (time >= this.melee.end) this.melee = undefined;
+      this.syncVisual(target);
+      return;
+    }
+    if (allowAttack && (this.enemyType === EnemyType.GRUNT || this.enemyType === EnemyType.TANK) && distance < this.def.size + 55) {
+      this.melee = { strike: time + 500, end: time + 1000, released: false };
+      body.setVelocity(0);
+      this.showAttackTelegraph(0xff476f, this.def.size + 24, 500);
+      this.syncVisual(target);
+      return;
+    }
+    if (this.charge) {
+      const charge = this.charge;
+      if (time < charge.start) body.setVelocity(0);
+      else if (time < charge.end) {
+        if (!charge.launched) {
+          charge.launched = true;
+          this.scene.events.emit('enemy-attack', 'charge');
+        }
+        this.warning?.destroy(); this.warning = undefined;
+        body.setVelocity(Math.cos(charge.angle) * 520, Math.sin(charge.angle) * 520);
+      } else body.setVelocity(0);
+      this.syncVisual({ x: this.x + Math.cos(charge.angle) * 100, y: this.y + Math.sin(charge.angle) * 100 });
+      if (time >= charge.recover) this.charge = undefined;
+      return;
+    }
+    if (time < this.knockbackUntil) {
+      body.setVelocity(this.knockbackX, this.knockbackY);
+      this.syncVisual(target);
+      return;
+    }
+    if (allowAttack && this.enemyType === EnemyType.RUNNER && distance < 430 && time - this.lastAttack > 2300) {
+      this.lastAttack = time;
+      const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
+      this.charge = { angle, start: time + 700, end: time + 1250, recover: time + 1900, launched: false };
+      this.showLane(angle, 286, this.def.size * 2 + 14, 0xffc857);
+      this.scene.events.emit('enemy-warning', 'charge');
+      body.setVelocity(0);
+      this.syncVisual(target);
+      return;
+    }
+    if (this.def.behavior === 'support') {
+      // Hangs back at mid range and never shoots: its threat is keeping the pack alive.
+      if (distance > 420) this.scene.physics.moveToObject(this, target, this.def.speed * this.speedScale);
+      else if (distance < 280)
         this.scene.physics.velocityFromRotation(
           Phaser.Math.Angle.Between(target.x, target.y, this.x, this.y),
-          this.def.speed * this.eliteMultiplier,
-          (this.body as Phaser.Physics.Arcade.Body).velocity,
+          this.def.speed * this.speedScale,
+          body.velocity,
         );
-      else (this.body as Phaser.Physics.Arcade.Body).setVelocity(0);
-      if (time - this.lastAttack > 1450 && distance < 560) {
+      else body.setVelocity(0);
+      if (this.pendingAttack) { body.setVelocity(0); this.syncVisual(target); return; }
+      const rules = FAMILY_RULES.medic;
+      if (this.lastAttack < 0) this.lastAttack = time;
+      if (time - this.lastAttack > rules.intervalMs) {
         this.lastAttack = time;
-        this.showAttackTelegraph(0xff9a72, 34);
-        fire(
-          this.x,
-          this.y,
-          Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y),
-          310,
-          10,
-        );
+        body.setVelocity(0);
+        this.showAttackTelegraph(this.def.color, rules.radius * 0.5, rules.leadMs);
+        this.pendingAttack = {
+          at: time + rules.leadMs,
+          release: () => this.scene.events.emit('enemy-support-pulse', this),
+        };
       }
       this.syncVisual(target);
       return;
     }
+    if (this.def.behavior === 'kite') {
+      if (distance > 390) this.scene.physics.moveToObject(this, target, this.def.speed * this.speedScale);
+      else if (distance < 230)
+        this.scene.physics.velocityFromRotation(
+          Phaser.Math.Angle.Between(target.x, target.y, this.x, this.y),
+          this.def.speed * this.speedScale,
+          (this.body as Phaser.Physics.Arcade.Body).velocity,
+        );
+      else (this.body as Phaser.Physics.Arcade.Body).setVelocity(0);
+      if (this.pendingAttack) { body.setVelocity(0); this.syncVisual(target); return; }
+      if (allowAttack && time - this.lastAttack > 1900 && distance < 560) {
+        this.lastAttack = time;
+        const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
+        body.setVelocity(0);
+        this.showLane(angle, 560, 18, 0xff7b55);
+        this.showAttackTelegraph(0xff9a72, 34, GAMEPLAY.telegraphLeadMs.shooter);
+        this.scene.events.emit('enemy-warning', 'shot');
+        // Lock the indicated line: stepping away during the warning reliably avoids the shot.
+        this.pendingAttack = {
+          at: time + GAMEPLAY.telegraphLeadMs.shooter,
+          release: () => {
+            this.scene.events.emit('enemy-attack', 'shot');
+            fire(
+              this.x,
+              this.y,
+              angle,
+              280,
+              10,
+            );
+          },
+        };
+      }
+      this.syncVisual(target);
+      return;
+    }
+    if (this.def.behavior === 'warden') {
+      if (this.pendingAttack) { body.setVelocity(0); this.syncVisual(target); return; }
+      if (distance > 330) this.scene.physics.moveToObject(this, target, this.def.speed * this.speedScale);
+      else body.setVelocity(0);
+      if (allowAttack && time - this.lastAttack > 2100 && distance < 620) {
+        this.lastAttack = time;
+        body.setVelocity(0);
+        const lockedAim = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
+        const radial = ++this.wardenAttackSequence % 2 === 0;
+        this.showAttackTelegraph(0xff3b76, radial ? 92 : 72, GAMEPLAY.telegraphLeadMs.miniboss,
+          radial ? undefined : lockedAim);
+        if (!radial) this.showLane(lockedAim, 600, 42, 0xff3b76);
+        this.scene.events.emit('enemy-warning', 'miniboss');
+        this.pendingAttack = {
+          at: time + GAMEPLAY.telegraphLeadMs.miniboss,
+          release: () => {
+            this.scene.events.emit('enemy-attack', 'miniboss');
+            if (radial) {
+              for (let index = 0; index < 10; index++)
+                fire(this.x, this.y, (Math.PI * 2 * index) / 10, 225, 11);
+            } else {
+              for (let index = -1; index <= 1; index++)
+                fire(this.x, this.y, lockedAim + index * 0.16, 315, 14);
+            }
+          },
+        };
+      }
+      this.syncVisual(target);
+      return;
+    }
+    if (this.pendingAttack) { body.setVelocity(0); this.syncVisual(target); return; }
     this.chase(target);
     if (this.def.behavior === 'commander' && time - this.lastAttack > this.bossAttackCooldown) {
       this.lastAttack = time;
+      body.setVelocity(0);
+      const lockedAim = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
       const phase = this.bossPhase;
-      this.showAttackTelegraph(phase === 3 ? 0xff476f : 0xd566ff, phase === 3 ? 104 : 86);
-      const base = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
       this.bossAttackSequence++;
-      const radialPhaseTwo = phase === 2 && this.bossAttackSequence % 2 === 0;
-      if (radialPhaseTwo) {
-        for (let index = 0; index < 8; index++)
-          fire(this.x, this.y, (Math.PI * 2 * index) / 8, 240, 13);
-      } else {
-        const spread = phase === 1 ? 2 : phase === 2 ? 3 : 4;
-        for (let index = -spread; index <= spread; index++)
-          fire(this.x, this.y, base + index * 0.2, phase === 3 ? 290 : 260, phase === 3 ? 16 : 14);
+      const signature = bossVariant(this.visualVariant).signature;
+      const signatureTurn = signature !== 'none' && this.bossAttackSequence % 3 === 0;
+      if (signatureTurn) {
+        this.prepareSignature(signature, lockedAim, time, fire);
+        return;
       }
+      const radialPhaseTwo = phase === 2 && this.bossAttackSequence % 2 === 0;
+      const spiralPhaseThree = phase === 3 && this.bossAttackSequence % 2 === 0;
+      // The two patterns are told apart before they land: the radial burst rings the boss,
+      // the spread cone points at where it is about to shoot.
+      this.showAttackTelegraph(
+        phase === 3 ? 0xff476f : 0xd566ff,
+        phase === 3 ? 104 : 86,
+        GAMEPLAY.telegraphLeadMs.boss,
+        radialPhaseTwo || spiralPhaseThree ? undefined : lockedAim,
+      );
+      this.pendingAttack = {
+        at: time + GAMEPLAY.telegraphLeadMs.boss,
+        release: () => {
+          this.scene.events.emit('enemy-attack', 'boss');
+          const base = lockedAim;
+          if (radialPhaseTwo) {
+            for (let index = 0; index < 8; index++)
+              fire(this.x, this.y, (Math.PI * 2 * index) / 8, 240, 13);
+          } else if (spiralPhaseThree) {
+            const offset = (this.bossAttackSequence % 6) * 0.13;
+            for (let index = 0; index < 12; index++)
+              fire(this.x, this.y, offset + (Math.PI * 2 * index) / 12, 255 + (index % 2) * 45, 15);
+          } else {
+            const spread = phase === 1 ? 2 : phase === 2 ? 3 : 4;
+            for (let index = -spread; index <= spread; index++)
+              fire(this.x, this.y, base + index * 0.2, phase === 3 ? 290 : 260, phase === 3 ? 16 : 14);
+          }
+        },
+      };
     }
   }
-  hit(amount: number) {
+  hit(amount: number, critical = false) {
+    if (this.shieldedUntil > this.visualTime)
+      amount = Math.max(1, Math.round(amount * FAMILY_RULES.bulwark.damageTaken));
     this.health.damage(amount);
-    this.healthBack.setVisible(true);
+    this.healthBack.setVisible(!this.bossVisual);
     this.healthFill
-      .setVisible(true)
+      .setVisible(!this.bossVisual)
       .setDisplaySize(this.def.size * 2 * (this.health.current / this.health.max), 3);
-    this.visual.setAlpha(0.35);
-    this.scene.time.delayedCall(60, () => this.active && this.visual.setAlpha(1));
+    this.flashHit(critical);
+    if (this.enemyType === EnemyType.BOSS)
+      this.scene.events.emit(Events.BOSS_HEALTH, this.health.current, this.health.max);
+    else if (this.enemyType === EnemyType.MINIBOSS)
+      this.scene.events.emit(Events.MINIBOSS_HEALTH, this.health.current, this.health.max);
     return this.health.dead;
   }
+
+  /**
+   * Hit reaction on the enemy itself. Without a punch on the body the only sign a shot landed
+   * was the damage number, which is easy to lose in a crowd; the scale pop is what makes a hit
+   * feel connected. Criticals also get a ring, so they read from across the arena.
+   */
+  flashHit(critical = false) {
+    if (!this.active) return;
+    // Evaluated with locomotion instead of fighting a scale tween on the same object.
+    this.hitAt = this.visualTime;
+    this.hitStrength = critical ? 0.24 : 0.12;
+    if (!critical) return;
+    const ring = this.scene.add
+      .circle(this.x, this.y, this.def.size + 6, 0xfff27a, 0)
+      .setStrokeStyle(3, 0xfff27a, 0.9)
+      .setDepth(14);
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 1.8,
+      alpha: 0,
+      duration: 220,
+      ease: 'Quad.Out',
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  /** Affix colour when elite, base colour otherwise. Used so a death burst keeps its identity. */
+  get eliteColor() {
+    return this.elite ? ELITE_AFFIX_DEFS[this.eliteAffix].color :
+      isVegetableType(this.enemyType) ? VEGETABLE_ROSTER[this.enemyType].color : this.def.color;
+  }
   makeElite() {
-    if (this.enemyType === EnemyType.BOSS || this.elite) return this;
+    if (this.enemyType === EnemyType.BOSS || this.enemyType === EnemyType.MINIBOSS || this.elite) return this;
     this.elite = true;
     const affix = ELITE_AFFIX_DEFS[this.eliteAffix];
     this.eliteMultiplier = affix.speedMultiplier;
@@ -140,15 +409,87 @@ export class Enemy extends Phaser.GameObjects.Arc {
     return this.bossPhase === 3 ? 780 : this.bossPhase === 2 ? 1000 : 1300;
   }
   destroy(fromScene?: boolean) {
+    this.warning?.destroy();
+    for (const telegraph of this.telegraphs) {
+      this.scene.tweens.killTweensOf(telegraph);
+      telegraph.destroy();
+    }
+    this.telegraphs.clear();
+    this.pendingAttack = undefined;
     this.visual?.destroy();
     this.healthBack?.destroy();
     this.healthFill?.destroy();
     this.eliteLabel?.destroy();
+    this.statusRing?.destroy();
     super.destroy(fromScene);
   }
 
+  /**
+   * Sector commanders' signature attacks, telegraphed with their own colour so they are never
+   * confused with the standard spread and ring patterns.
+   */
+  private prepareSignature(
+    signature: 'bloom' | 'cryo-lance',
+    lockedAim: number,
+    time: number,
+    fire: (x: number, y: number, angle: number, speed: number, damage: number, chillMs?: number) => void,
+  ) {
+    const lead = GAMEPLAY.telegraphLeadMs.boss + 150;
+    if (signature === 'bloom') {
+      this.showAttackTelegraph(0xb8ff70, 124, lead);
+      this.pendingAttack = {
+        at: time + lead,
+        release: () => {
+          this.scene.events.emit('enemy-attack', 'boss');
+          // Two offset rings at different speeds open staggered gaps to walk through.
+          for (let ring = 0; ring < 2; ring++)
+            for (let index = 0; index < 10; index++)
+              fire(this.x, this.y, (Math.PI * 2 * (index + ring * 0.5)) / 10, 165 + ring * 55, 11);
+        },
+      };
+      return;
+    }
+    this.showAttackTelegraph(0x9fe3ff, 96, lead, lockedAim);
+    this.showLane(lockedAim, 620, 74, 0x9fe3ff);
+    this.pendingAttack = {
+      at: time + lead,
+      release: () => {
+        this.scene.events.emit('enemy-attack', 'boss');
+        for (let index = -2; index <= 2; index++)
+          fire(this.x, this.y, lockedAim + index * 0.07, 430, 12, 1400);
+      },
+    };
+  }
+
+  /** One lazily created ring per enemy; shield takes precedence over a status colour. */
+  private updateStatusMark(time: number) {
+    const shielded = this.shieldedUntil > time;
+    const status = this.status.dominant(time);
+    if (!shielded && !status) {
+      this.statusRing?.setVisible(false);
+      return;
+    }
+    this.statusRing ??= this.scene.add.circle(this.x, this.y, this.def.size + 8)
+      .setFillStyle(0x000000, 0).setDepth(5);
+    const color = shielded ? 0x7fb2ff : STATUS_COLORS[status!];
+    this.statusRing.setPosition(this.x, this.y).setVisible(true).setStrokeStyle(shielded ? 3 : 2, color, 0.85);
+  }
+
   private createVisual(scene: Phaser.Scene, size: number, color: number) {
+    if (this.enemyType === EnemyType.MINIBOSS) {
+      this.minibossVisual = new MinibossVisual(scene, this.visualVariant);
+      return scene.add.container(this.x, this.y, [this.minibossVisual]).setDepth(6);
+    }
+    if (this.enemyType === EnemyType.BOSS && scene.textures.exists(BOSS_IDENTITY.texture)) {
+      this.bossVisual = new BossVisual(scene, this.visualVariant);
+      return scene.add.container(this.x, this.y, [this.bossVisual]).setDepth(6);
+    }
+    if (isVegetableType(this.enemyType) && scene.textures.exists(vegetableTexture(this.enemyType))) {
+      this.vegetableVisual = new VegetableVisual(scene, this.enemyType);
+      return scene.add.container(this.x, this.y, [this.vegetableVisual]).setDepth(6);
+    }
     const shadow = scene.add.ellipse(0, size * 0.45, size * 1.9, size * 0.75, 0x000000, 0.4);
+    this.shadow = shadow;
     const body = scene.add.graphics();
     const halo = scene.add.graphics();
     halo.lineStyle(2, color, 0.28).strokeCircle(0, 0, size + 8);
@@ -230,32 +571,182 @@ export class Enemy extends Phaser.GameObjects.Arc {
       }
     }
 
-    return scene.add.container(this.x, this.y, [shadow, halo, body]).setDepth(6);
+    if (this.enemyType === EnemyType.BOSS) {
+      // A broccoli canopy distinguishes the commander from an enlarged tank.
+      for (let index = -2; index <= 2; index++) {
+        const x = index * size * 0.3;
+        const y = -size * (0.67 + (2 - Math.abs(index)) * 0.12);
+        body.fillStyle(0x113c30).fillCircle(x, y, size * 0.3)
+          .fillStyle(0x49ac63).fillCircle(x, y - 3, size * 0.23)
+          .fillStyle(0x9af58a, 0.65).fillCircle(x - 3, y - 8, size * 0.09);
+      }
+    }
+    const attachments: Phaser.GameObjects.GameObject[] = [];
+    if (this.enemyType === EnemyType.GRUNT || this.enemyType === EnemyType.SHOOTER) {
+      for (const side of [-1, 1]) {
+        const fin = scene.add.graphics().setPosition(side * size * 0.8, 0);
+        fin.fillStyle(this.enemyType === EnemyType.GRUNT ? 0x2d8055 : 0x51283a)
+          .fillTriangle(0, -8, side * 18, -14, side * 12, 14)
+          .lineStyle(2, color, 0.85).lineBetween(0, 0, side * 14, -7);
+        this.fins.push(fin);
+        attachments.push(fin);
+      }
+    }
+    if (this.enemyType === EnemyType.RUNNER) {
+      this.engineGlow = scene.add.ellipse(0, size + 8, 10, 25, 0xffc857, 0.8)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      attachments.push(this.engineGlow);
+    } else if (this.enemyType !== EnemyType.SHOOTER) {
+      for (const side of [-1, 1]) {
+        const foot = scene.add.ellipse(side * size * 0.65, size * 0.7, size * 0.58, size * 0.8, 0x15283a)
+          .setStrokeStyle(2, color, 0.75);
+        this.feet.push(foot);
+        attachments.push(foot);
+      }
+    }
+    if (this.enemyType === EnemyType.SHOOTER || this.enemyType === EnemyType.BOSS) {
+      this.chargeGlow = scene.add.circle(0, -size * 0.45, size * 0.35, 0xffb979, 0.15)
+        .setStrokeStyle(2, 0xffe5bf, 0.6).setBlendMode(Phaser.BlendModes.ADD);
+    }
+    this.chassis = scene.add.container(0, 0, [...attachments, halo, body]);
+    this.chassis.name = `enemy-chassis-${this.enemyType.toLowerCase()}`;
+    if (this.chargeGlow) this.chassis.add(this.chargeGlow);
+    if (this.enemyType === EnemyType.BOSS) {
+      this.crownRotor = scene.add.graphics();
+      this.crownRotor.lineStyle(3, 0xd566ff, 0.8);
+      for (let index = 0; index < 4; index++) {
+        const a = index * Math.PI / 2;
+        this.crownRotor.beginPath().arc(0, 0, size + 18, a, a + 0.7).strokePath();
+        this.crownRotor.fillStyle(0xffc857).fillCircle(Math.cos(a) * (size + 18), Math.sin(a) * (size + 18), 4);
+      }
+      this.chassis.add(this.crownRotor);
+    }
+    // The shadow stays on the floor while the chassis turns, recoils and hovers.
+    return scene.add.container(this.x, this.y, [shadow, this.chassis]).setDepth(6);
   }
 
   private syncVisual(target: { x: number; y: number }) {
     this.visual.setPosition(this.x, this.y);
-    const pulse = 1 + Math.sin(this.visualPhase) * (this.enemyType === EnemyType.RUNNER ? 0.07 : 0.025);
-    this.visual.setScale(pulse, 2 - pulse);
-    this.visual.rotation =
-      Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y) + Math.PI / 2;
+    const phase = this.visualPhase;
+    const moving = (this.body as Phaser.Physics.Arcade.Body).velocity.lengthSq() > 1;
+    const detail = this.animateDetails ? 1 : 0;
+    const gait = Math.sin(phase * (this.enemyType === EnemyType.TANK ? 0.75 : 1.8));
+    const hit = Math.max(0, 1 - (this.visualTime - this.hitAt) / 160);
+    const recoil = Math.max(0, 1 - (this.visualTime - this.firedAt) / 220);
+    if (this.vegetableVisual) {
+      this.vegetableVisual.updatePose(this.visualTime, this.visualOffset, moving, target.x < this.x,
+        !!this.pendingAttack || !!this.charge || !!this.melee, recoil, hit);
+      const top = this.y - this.vegetableVisual.artHeight * 0.7 - 5;
+      this.healthBack.setPosition(this.x, top);
+      this.healthFill.setPosition(this.x - this.def.size, top);
+      this.eliteLabel?.setPosition(this.x, top - 13);
+      return;
+    }
+    if (this.bossVisual) {
+      this.bossVisual.updatePose(this.visualTime, this.bossPhase, !!this.pendingAttack,
+        recoil, hit, moving, target.x < this.x);
+      // The global boss panel carries its health; a miniature bar would cut through the face.
+      this.healthBack.setVisible(false);
+      this.healthFill.setVisible(false);
+      return;
+    }
+    if (this.minibossVisual) {
+      this.minibossVisual.updatePose(this.visualTime, moving, !!this.pendingAttack, recoil, hit, target.x < this.x);
+      this.healthBack.setVisible(false);
+      this.healthFill.setVisible(false);
+      return;
+    }
+    const pulse = 1 + Math.sin(phase) * 0.025 * detail;
+    this.chassis.setScale(pulse + hit * this.hitStrength, 2 - pulse - hit * this.hitStrength * 0.45);
+    this.chassis.setAlpha(hit > 0.65 ? 0.5 : 1);
+    this.chassis.rotation = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y) + Math.PI / 2;
+    this.chassis.y = 0;
+    if (this.enemyType === EnemyType.GRUNT || this.enemyType === EnemyType.TANK) {
+      this.chassis.rotation += gait * 0.075 * detail * Number(moving);
+      this.chassis.y = -Math.abs(gait) * 2.5 * detail * Number(moving);
+    } else if (this.enemyType === EnemyType.SHOOTER) {
+      this.chassis.y = (-4 + Math.sin(phase) * 3) * detail;
+    }
+    // Recoil is translated backwards along the firing direction in world coordinates.
+    this.chassis.x = -Math.sin(this.chassis.rotation) * recoil * 5 * detail;
+    this.chassis.y += Math.cos(this.chassis.rotation) * recoil * 5 * detail;
+    for (let index = 0; index < this.feet.length; index++) {
+      this.feet[index].y = this.def.size * 0.7 + gait * (index ? -1 : 1) * 5 * detail * Number(moving);
+    }
+    for (let index = 0; index < this.fins.length; index++) {
+      this.fins[index].rotation = (index ? -1 : 1) *
+        (Math.sin(phase * 1.8) * 0.2 * detail + (this.pendingAttack ? 0.35 : 0));
+    }
+    this.shadow.setScale(1 - Math.abs(Math.sin(phase)) * 0.08 * detail, 1);
+    this.engineGlow?.setScale(1 + Math.sin(phase * 3) * 0.16 * detail,
+      moving ? 1.1 + Math.sin(phase * 4) * 0.3 * detail : 0.35);
+    this.chargeGlow?.setScale(this.pendingAttack ? 1.6 : 0.65 + recoil)
+      .setAlpha(this.pendingAttack ? 0.9 : 0.2 + recoil * 0.6);
+    this.crownRotor?.setRotation(this.animateDetails ? this.visualTime * 0.0005 * this.bossPhase : 0);
     this.healthBack.setPosition(this.x, this.y - this.def.size - 10);
     this.healthFill.setPosition(this.x - this.def.size, this.y - this.def.size - 10);
     if (this.eliteLabel) this.eliteLabel.setPosition(this.x, this.y - this.def.size - 24);
   }
 
-  private showAttackTelegraph(color: number, radius: number) {
+  /**
+   * Warning drawn before the shot is released. The ring contracts inward over the lead time so
+   * its collapse marks the moment of the attack, which is readable at a glance; a ring that
+   * expanded and faded gave the player no way to time the release.
+   */
+  private showAttackTelegraph(color: number, radius: number, leadMs: number, aim?: number) {
     const ring = this.scene.add
       .circle(this.x, this.y, radius, color, 0.08)
       .setStrokeStyle(3, color, 0.95)
+      .setScale(1.6)
       .setDepth(14);
+    this.telegraphs.add(ring);
+    ring.once('destroy', () => this.telegraphs.delete(ring));
     this.scene.tweens.add({
       targets: ring,
-      scale: 1.35,
-      alpha: 0,
-      duration: 220,
-      ease: 'Quad.Out',
-      onComplete: () => ring.destroy(),
+      scale: 0.85,
+      alpha: { from: 0.35, to: 1 },
+      duration: leadMs,
+      ease: 'Quad.In',
+      onComplete: () => {
+        if (!this.scene?.sys?.isActive()) {
+          ring.destroy();
+          return;
+        }
+        this.scene.tweens.add({
+          targets: ring,
+          scale: 1.35,
+          alpha: 0,
+          duration: 180,
+          ease: 'Quad.Out',
+          onComplete: () => ring.destroy(),
+        });
+      },
+    });
+    if (aim === undefined) return;
+    // A cone along the firing line, so a directed volley is distinguishable from a radial one.
+    const cone = this.scene.add
+      .triangle(this.x, this.y, 0, -radius * 0.42, 0, radius * 0.42, radius * 2.1, 0, color, 0.16)
+      .setRotation(aim)
+      .setDepth(13);
+    this.telegraphs.add(cone);
+    cone.once('destroy', () => this.telegraphs.delete(cone));
+    this.scene.tweens.add({
+      targets: cone,
+      alpha: 0.42,
+      duration: leadMs,
+      ease: 'Quad.In',
+      onComplete: () => {
+        if (!this.scene?.sys?.isActive()) {
+          cone.destroy();
+          return;
+        }
+        this.scene.tweens.add({
+          targets: cone,
+          alpha: 0,
+          duration: 150,
+          onComplete: () => cone.destroy(),
+        });
+      },
     });
   }
 }

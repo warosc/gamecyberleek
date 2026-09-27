@@ -1,0 +1,24 @@
+{
+  "sprites": [
+    {
+      "key": "koli6-commander",
+      "path": "assets/enemies/koli6/commander.png"
+    },
+    {
+      "key": "romax-commander",
+      "path": "assets/enemies/romax/commander.png"
+    },
+    {
+      "key": "vegetable-cabbage",
+      "path": "assets/enemies/vegetables/cabbage.png"
+    },
+    {
+      "key": "vegetable-onion",
+      "path": "assets/enemies/vegetables/onion.png"
+    },
+    {
+      "key": "vegetable-potato",
+      "path": "assets/enemies/vegetables/potato.png"
+    }
+  ]
+}

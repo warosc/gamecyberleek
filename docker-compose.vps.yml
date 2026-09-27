@@ -3,7 +3,8 @@ services:
     container_name: leek-ops-game
     build:
       context: .
-      dockerfile: Dockerfile.prod
+      dockerfile: Dockerfile.prebuilt
+    image: leek-ops-game:current
     restart: unless-stopped
     ports:
       - "8090:80"

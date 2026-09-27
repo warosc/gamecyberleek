@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createPlayerStats } from '../src/game/entities/player/PlayerStats';
-import { applyEquipmentModifiers, rollEquipment } from '../src/game/loot/Equipment';
+import { applyEquipmentModifiers, removeEquipmentModifiers, rollEquipment } from '../src/game/loot/Equipment';
 
 function sequence(values: number[]) {
   let index = 0;
@@ -36,5 +36,15 @@ describe('equipment progression', () => {
     applyEquipmentModifiers(stats, item.modifiers);
     expect(stats.attackDamage).toBeGreaterThan(20);
     expect(stats.weaponName).toBe(item.name.replace(/ MK-\d+$/, ''));
+  });
+
+  it('removes the numeric contribution of a replaced weapon', () => {
+    const stats = createPlayerStats();
+    const initialDamage = stats.attackDamage;
+    const item = rollEquipment(3, sequence([0.1, 0.1, 0.1]));
+    applyEquipmentModifiers(stats, item.modifiers);
+    removeEquipmentModifiers(stats, item.modifiers);
+    expect(stats.attackDamage).toBeCloseTo(initialDamage);
+    expect(stats.criticalChance).toBeCloseTo(0.05);
   });
 });
