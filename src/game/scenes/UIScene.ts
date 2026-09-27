@@ -22,6 +22,7 @@ import { contractDescription, type ContractProgress } from '../systems/ContractS
 import { MinibossBanner } from '../ui/MinibossBanner';
 import { buildInventoryPanel, buildLootDecision, showLootBanner } from '../ui/LootPanels';
 import { LiveBoardHud } from '../ui/LiveBoardHud';
+import { rightColumn } from '../ui/HudLayout';
 import type { LiveEntry } from '../online/LiveRanking';
 import { abilityText, t, td } from '../i18n';
 import type { BuildSynergy, combatRating } from '../systems/BuildProgression';
@@ -78,6 +79,8 @@ export class UIScene extends Phaser.Scene {
       () => this.gameScene.toggleInventory(),
       this.gameScene.mobileInput.active,
     );
+    // The weapon tag starts on the weapon actually deployed, not a fixed placeholder.
+    this.statusHud.setEquipment(this.gameScene.equippedWeapon, this.gameScene.equippedArmor);
     this.bossBanner = new BossBanner(this, this.gameScene.arenaIndex);
     this.abilityBar = new AbilityBar(
       this,
@@ -98,7 +101,7 @@ export class UIScene extends Phaser.Scene {
     this.objectiveProgress = this.add.text(-148, 4, '', {
       fontFamily: 'monospace', fontSize: '11px', color: '#c7d9e2',
     });
-    this.objectivePanel = this.add.container(GAME_WIDTH - 185, this.gameScene.mobileInput.active ? 155 : 202,
+    this.objectivePanel = this.add.container(GAME_WIDTH - 185, rightColumn(this.gameScene.mobileInput.active).objectiveY,
       [objectiveBack, this.objectiveTitle, this.objectiveProgress]).setDepth(58).setName('objective-panel');
     this.onObjectiveChanged(this.gameScene.objectiveState);
     if (this.gameScene.mobileInput.active) {
@@ -115,8 +118,15 @@ export class UIScene extends Phaser.Scene {
           backgroundColor: '#06101dcc',
           padding: { x: 8, y: 6 },
         })
-        .setOrigin(1, 0);
-    if (this.debug) this.debugOverlay = new DebugOverlay(this.game, this.gameScene, this.debug);
+        .setOrigin(1, 0)
+        // Dev builds only, and hidden until F3: it sat over the right-hand HUD column.
+        .setVisible(false);
+    if (this.debug) {
+      this.debugOverlay = new DebugOverlay(this.game, this.gameScene, this.debug);
+      const toggle = () => this.debug?.setVisible(!this.debug.visible);
+      this.input.keyboard?.on('keydown-F3', toggle);
+      this.events.once('shutdown', () => this.input.keyboard?.off('keydown-F3', toggle));
+    }
     this.hints = new OnboardingHints(this);
     this.hints.create(loadProfile().runs, this.gameScene.mobileInput.active);
     this.gameScene.events.on('weapon-fired', this.onWeaponFired, this);
@@ -454,7 +464,8 @@ export class UIScene extends Phaser.Scene {
   private showContractBriefing() {
     const contracts = this.gameScene.contracts.list;
     const lines = contracts.map((contract) => `${td(contract.title)} — ${contractDescription(contract)}`);
-    const width = this.gameScene.mobileInput.active ? 640 : 720;
+    // Kept clear of the right-hand HUD column (objective, chain, live board: 350 px wide).
+    const width = Math.min(this.gameScene.mobileInput.active ? 640 : 720, GAME_WIDTH - 2 * 370);
     const height = 74 + lines.length * 28;
     const parts: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(0, 0, width, height, 0x06101d, 0.95).setStrokeStyle(3, 0x21e6ff, 0.75),

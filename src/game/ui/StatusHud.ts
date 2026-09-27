@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { runPhase } from '../config/RunPacing';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { xpForLevel } from '../systems/ExperienceSystem';
+import { fitText } from './SceneWidgets';
 import { t, td } from '../i18n';
 
 /** Owns the always-visible run status UI and its frame-rate-independent bar animation. */
@@ -37,7 +38,7 @@ export class StatusHud {
       .setOrigin(0, 0).setStrokeStyle(4, 0x73ef62, 0.8);
     scene.add.image(68, 66, 'leek-avatar').setDisplaySize(80, 80);
     scene.add.circle(104, 104, 20, 0x07111f, 1).setStrokeStyle(3, 0x73ef62, 0.9);
-    const operationPanel = scene.add.rectangle(GAME_WIDTH - 16, 14, 290, 64, 0x06101d, 0.86)
+    const operationPanel = scene.add.rectangle(GAME_WIDTH - 16, 14, 290, 72, 0x06101d, 0.86)
       .setOrigin(1, 0).setStrokeStyle(2, 0x73ef62, 0.45).setVisible(!mobile).setName('hud-operation-panel');
     this.hp = scene.add.text(126, 29, t('hud.hp', { current: 100, max: 100 }), {
       fontFamily: 'Arial Black', fontSize: '16px', color: '#eaffff',
@@ -54,12 +55,12 @@ export class StatusHud {
     this.level = scene.add.text(104, 104, '1', {
       fontFamily: 'Arial Black', fontSize: '18px', color: '#eaffff',
     }).setOrigin(0.5);
-    const arena = scene.add.text(GAME_WIDTH - 28, 25, arenaName, {
+    const arena = scene.add.text(GAME_WIDTH - 28, 22, arenaName, {
       fontFamily: 'Arial Black', fontSize: '16px', color: '#73ef62',
     }).setOrigin(1, 0).setVisible(!mobile).setName('hud-arena-name');
     const operation = scene.add.text(GAME_WIDTH - 28, 51, t('hud.activeOperation'), {
       fontSize: '11px', color: '#8ba5b8', letterSpacing: 2,
-    }).setOrigin(1, 0).setVisible(!mobile).setName('hud-operation-state');
+    }).setOrigin(1, 0).setVisible(false).setName('hud-operation-state');
     // On phone landscape the logical canvas is scaled down to as little as half size
     // (shortest edge / 720), so a 52px button rendered barely 26 CSS px wide — well under the
     // ~44px minimum touch target. 90px logical stays >=44px CSS even on the narrowest phones.
@@ -88,14 +89,14 @@ export class StatusHud {
     this.weaponText = scene.add.text(GAME_WIDTH / 2, 55, weaponName, {
       fontFamily: 'Arial Black', fontSize: '11px', color: '#a9bbc9', letterSpacing: 2,
     }).setOrigin(0.5, 0);
-    this.weaponSlot = scene.add.text(GAME_WIDTH - 300, 94, '⚡ PULSEGUN-01', {
-      fontFamily: 'Arial Black', fontSize: '11px', color: '#21e6ff',
-      backgroundColor: '#06101ddd', padding: { x: 10, y: 7 },
-    }).setOrigin(0, 0).setVisible(!mobile).setName('hud-weapon-slot');
-    this.armorSlot = scene.add.text(GAME_WIDTH - 300, 130, '◆ SIN ARMADURA', {
-      fontFamily: 'Arial Black', fontSize: '11px', color: '#73ef62',
-      backgroundColor: '#06101ddd', padding: { x: 10, y: 7 },
-    }).setOrigin(0, 0).setVisible(!mobile).setName('hud-armor-slot');
+    // Weapon and armor share the sector card's second line; as separate tags below it they ran
+    // under the objective and chain panels.
+    this.weaponSlot = scene.add.text(GAME_WIDTH - 294, 62, '⚡ PULSEGUN-01', {
+      fontFamily: 'Arial Black', fontSize: '12px', color: '#21e6ff',
+    }).setOrigin(0, 0.5).setVisible(!mobile).setName('hud-weapon-slot');
+    this.armorSlot = scene.add.text(GAME_WIDTH - 28, 62, '◆ SIN ARMADURA', {
+      fontFamily: 'Arial Black', fontSize: '12px', color: '#73ef62',
+    }).setOrigin(1, 0.5).setVisible(!mobile).setName('hud-armor-slot');
     // Keep references alive for Phaser's scene ownership while documenting the intentionally
     // omitted mobile operation panel.
     void operationPanel; void arena; void operation;
@@ -150,8 +151,10 @@ export class StatusHud {
   }
 
   setEquipment(weapon: string, armor: string) {
-    this.weaponSlot.setText(`⚡ ${weapon}`);
-    this.armorSlot.setText(`◆ ${armor}`);
+    this.weaponSlot.setFontSize(12).setText(`⚡ ${weapon}`);
+    this.armorSlot.setFontSize(12).setText(`◆ ${armor}`);
+    fitText(this.weaponSlot, 128, 9);
+    fitText(this.armorSlot, 128, 9);
   }
 
   setLootSummary(text: string) {

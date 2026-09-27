@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_WIDTH } from '../config/Constants';
 import { t } from '../i18n';
 import type { LiveEntry } from '../online/LiveRanking';
+import { rightColumn } from './HudLayout';
 
 /**
  * Live daily board: who else is playing today's daily right now, and their live score. Sits
@@ -19,7 +20,7 @@ export class LiveBoardHud {
 
   constructor(private readonly scene: Phaser.Scene, mobile: boolean) {
     this.maxRows = mobile ? 4 : 6;
-    const top = mobile ? 200 : 250;
+    const top = rightColumn(mobile).liveTop;
     this.back = scene.add.rectangle(0, 0, 330, 60, 0x06101d, 0.9).setOrigin(0.5, 0).setStrokeStyle(2, 0xff476f, 0.6);
     this.title = scene.add.text(-150, 8, t('live.connecting'), {
       fontFamily: 'Arial Black', fontSize: '12px', color: '#ff476f', letterSpacing: 1,

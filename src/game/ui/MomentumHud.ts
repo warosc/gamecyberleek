@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_WIDTH } from '../config/Constants';
 import { MOMENTUM_WINDOW_MS, type MomentumState } from '../systems/CombatMomentum';
 import { t } from '../i18n';
+import { RIGHT_EDGE_INSET, rightColumn } from './HudLayout';
 
 export class MomentumHud {
   private readonly panel: Phaser.GameObjects.Container;
@@ -11,10 +12,9 @@ export class MomentumHud {
   private expiresAt = 0;
 
   constructor(scene: Phaser.Scene, mobile: boolean) {
-    const x = GAME_WIDTH - (mobile ? 118 : 145);
-    // On mobile the pause button now grows to a 90px hit target anchored at the same top-right
-    // corner (see StatusHud); 110 sat directly under it, so the panel is nudged down to clear it.
-    const y = mobile ? 142 : 205;
+    // Its own slot in the right-hand stack (HudLayout): it used to open over the objective panel.
+    const x = GAME_WIDTH - RIGHT_EDGE_INSET - 110;
+    const y = rightColumn(mobile).momentumY;
     const back = scene.add.rectangle(0, 0, 220, 68, 0x06101d, 0.88).setStrokeStyle(2, 0xffc857, 0.75);
     this.count = scene.add.text(-92, -20, t('hud.chain', { chain: 2 }), {
       fontFamily: 'Arial Black', fontSize: '16px', color: '#ffffff',
