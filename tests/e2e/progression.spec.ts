@@ -290,6 +290,7 @@ test('the live board shows who is playing the daily now and calls out being pass
           async leave() { listener = undefined; },
         };
       },
+      async startDailyRun() { return 'ticket-test'; },
       async submitDailyRun() { return undefined; },
       async uploadProfile() {},
       async cloudSaveInfo() { return undefined; },

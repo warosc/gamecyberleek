@@ -39,6 +39,7 @@ export class SupabaseOnlineService implements OnlineService {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     let response: Response;
+    let text: string;
     try {
       response = await this.fetchImpl(`${this.url.replace(/\/$/, '')}/rest/v1/rpc/${name}`, {
         method: 'POST',
@@ -52,12 +53,14 @@ export class SupabaseOnlineService implements OnlineService {
         body: JSON.stringify(body),
         signal: controller.signal,
       });
+      // The body is read under the same timeout: a response whose body never arrives would
+      // otherwise leave the caller waiting forever, and OnlineSync's queue with it.
+      text = await response.text();
     } catch (error) {
       throw new OnlineError(0, `${name}: ${error instanceof Error ? error.message : 'network error'}`);
     } finally {
       clearTimeout(timer);
     }
-    const text = await response.text();
     if (!response.ok) {
       let message = `${name} failed: ${response.status}`;
       try { message = (JSON.parse(text) as { message?: string }).message ?? message; } catch { /* keep default */ }
@@ -73,7 +76,11 @@ export class SupabaseOnlineService implements OnlineService {
 
   async uploadProfile(profile: object) {
     const { code, callsign } = this.identity();
-    await this.rpc('leek_put_save', { p_code: code, p_callsign: callsign, p_profile: profile });
+    // The code is the key to the cloud slot; it must never travel inside the stored save, where
+    // anyone who could read the table would get every player's key.
+    const stored: Record<string, unknown> = { ...profile };
+    delete stored.operative;
+    await this.rpc('leek_put_save', { p_code: code, p_callsign: callsign, p_profile: stored });
   }
 
   async downloadProfile(code: string) {
@@ -92,9 +99,20 @@ export class SupabaseOnlineService implements OnlineService {
     return [] as const;
   }
 
+  async startDailyRun(date: string) {
+    try {
+      return await this.rpc<string>('leek_start_daily_run', { p_code: this.identity().code, p_day: date }) ?? undefined;
+    } catch (error) {
+      // 404: the server predates run tickets (migration 0003); the run is posted the old way.
+      if (error instanceof OnlineError && error.status === 404) return undefined;
+      throw error;
+    }
+  }
+
   async submitDailyRun(date: string, run: DailyRunFacts) {
     const { code, callsign } = this.identity();
     return this.rpc<number>('leek_submit_daily_run', {
+      ...(run.ticket ? { p_ticket: run.ticket } : {}),
       p_code: code, p_callsign: callsign, p_day: date,
       p_kills: Math.max(0, Math.floor(run.kills)), p_level: Math.max(1, Math.floor(run.level)),
       p_duration_ms: Math.max(0, Math.floor(run.durationMs)), p_victory: run.victory,

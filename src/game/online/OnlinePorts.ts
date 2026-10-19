@@ -30,6 +30,8 @@ export interface DailyRunFacts {
   level: number;
   durationMs: number;
   victory: boolean;
+  /** Server ticket issued when the run started; the server refuses a result without one. */
+  ticket?: string;
 }
 
 /** An online failure with its HTTP status (0 when the network itself failed). */
@@ -55,6 +57,8 @@ export interface OnlineService {
   /** Run count and time of the cloud save, without downloading it. */
   cloudSaveInfo(code: string): Promise<CloudSaveInfo | undefined>;
   fetchLeaderboard(): Promise<readonly LeaderboardEntry[]>;
+  /** Asks the server for the ticket a daily run's result must carry; undefined when unavailable. */
+  startDailyRun(date: string): Promise<string | undefined>;
   /** Daily runs are keyed by the local calendar date; resolves with the day's best score. */
   submitDailyRun(date: string, run: DailyRunFacts): Promise<number | undefined>;
   fetchDailyBoard(date: string): Promise<readonly LeaderboardEntry[]>;
@@ -75,6 +79,7 @@ export class OfflineOnlineService implements OnlineService {
   async downloadProfile(code: string): Promise<CloudSave | undefined> { void code; return undefined; }
   async cloudSaveInfo(code: string): Promise<CloudSaveInfo | undefined> { void code; return undefined; }
   async fetchLeaderboard() { return [] as const; }
+  async startDailyRun(date: string): Promise<string | undefined> { void date; return undefined; }
   async submitDailyRun(date: string, run: DailyRunFacts) { void date; void run; return undefined; /* Recorded locally by ProfileStore. */ }
   async fetchDailyBoard(date: string): Promise<readonly LeaderboardEntry[]> {
     const local = this.localDaily();

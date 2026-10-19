@@ -66,6 +66,41 @@ describe('supabase adapter', () => {
     });
   });
 
+  it('carries the run ticket the server issued when the daily started', async () => {
+    reply = '5b1f6a7e-0000-4000-8000-000000000001';
+    const ticket = await service().startDailyRun('2026-09-25');
+    expect(ticket).toBe('5b1f6a7e-0000-4000-8000-000000000001');
+    expect(calls[0].url).toBe('https://demo.supabase.co/rest/v1/rpc/leek_start_daily_run');
+    expect(calls[0].body).toEqual({ p_code: identity.code, p_day: '2026-09-25' });
+    reply = 4100;
+    await service().submitDailyRun('2026-09-25', { kills: 50, level: 6, durationMs: 90000, victory: false, ticket });
+    expect(calls[1].body).toMatchObject({ p_ticket: ticket, p_code: identity.code, p_kills: 50 });
+  });
+
+  // The client ships before migration 0003 is applied; until then the ticket function is missing.
+  it('runs without a ticket against a server that predates them', async () => {
+    status = 404;
+    reply = { message: 'Could not find the function public.leek_start_daily_run' };
+    expect(await service().startDailyRun('2026-09-25')).toBeUndefined();
+    status = 503;
+    await expect(service().startDailyRun('2026-09-25')).rejects.toBeInstanceOf(OnlineError);
+  });
+
+  it('never uploads the operative code inside the cloud save', async () => {
+    await service().uploadProfile({ runs: 4, operative: identity } as never);
+    expect(calls[0].body).toEqual({ p_code: identity.code, p_callsign: 'PUERRO-1', p_profile: { runs: 4 } });
+  });
+
+  it('times out a response whose body never arrives', async () => {
+    const stalled = (async (_url: string, init: RequestInit) => new Response(new ReadableStream({
+      start(controller) { init.signal?.addEventListener('abort', () => controller.error(new Error('aborted'))); },
+    }))) as unknown as typeof fetch;
+    const slow = new SupabaseOnlineService('https://demo.supabase.co', 'k', () => identity, stalled, 20);
+    const error = await slow.fetchDailyBoard('2026-09-25').catch(caught => caught);
+    expect(error).toBeInstanceOf(OnlineError);
+    expect(error.isTransient).toBe(true);
+  });
+
   it('adds the bearer header for legacy JWT anon keys', async () => {
     await new SupabaseOnlineService('https://demo.supabase.co', 'eyJlegacy', () => identity, fakeFetch).fetchDailyBoard('2026-09-25');
     expect(calls[0].headers.Authorization).toBe('Bearer eyJlegacy');

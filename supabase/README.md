@@ -21,6 +21,11 @@ Migrations in `migrations/`, applied in order:
 |---|---|---|
 | `0001_leek_ops_online.sql` | 2026-09-25 | Tables, RLS, cloud saves, daily board |
 | `0002_run_scoring_and_guards.sql` | 2026-09-25 | Server-side scoring, implausible-run checks, stale-save guard (409), per-IP limit on new operatives, 429 rate limits |
+| `0003_run_tickets_and_private_codes.sql` | **pending** | Daily results need a ticket issued at run start (one use, run time must fit in real time since issue); kill and level ceilings from the live board; cloud saves never store the operative code (existing rows cleaned) |
+
+Order for 0003: deploy a client with run-ticket support first (any build after `29820eb`; it works with and
+without the migration), then apply 0003. Clients older than that stop posting daily scores once
+0003 is in, because their submit signature is dropped.
 
 Both were smoke-tested over REST with the publishable key. To apply them elsewhere: SQL
 Editor -> paste each file in order -> Run, or the Supabase MCP configured in `.mcp.json`.
@@ -29,7 +34,8 @@ Tables are closed by RLS with no policies; the key can only call these functions
 
 | Function | Purpose |
 |---|---|
-| `leek_submit_daily_run(code, callsign, day, kills, level, duration_ms, victory)` | Scores the run on the server (same formula as the client), rejects impossible runs (a win before 4:00, more than 8 kills/s, out-of-range level or duration) and keeps the best per operative per day |
+| `leek_start_daily_run(code, day)` | Issues the ticket a daily run's result must carry; at most 60 per code per hour |
+| `leek_submit_daily_run(ticket, code, callsign, day, kills, level, duration_ms, victory)` | Accepts each ticket once, for its own code and day, if the run time fits in the real time since the ticket; scores the run on the server (same formula as the client), rejects impossible runs (a win before 4:00, more than 40 + 3 kills per second, a level those kills cannot reach) and keeps the best per operative per day |
 | `leek_daily_board(day, limit)` | Top scores for a day (callsign and score) |
 | `leek_put_save(code, callsign, profile)` | Stores the cloud save; **409** if the stored save has more completed runs |
 | `leek_get_save(code)` / `leek_save_info(code)` | The save, or just its run count and time |

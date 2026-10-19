@@ -84,6 +84,8 @@ export class GameScene extends Phaser.Scene {
   private musicIntensity = 0;
   /** Set when this run is the daily operation; the date and mutator identify its board. */
   daily?: { date: string; mutator: string };
+  /** Server ticket for an online daily run; its result is refused without one. */
+  private dailyTicket?: Promise<string | undefined>;
   player!: Player;
   projectiles!: ProjectileManager;
   enemies!: Phaser.Physics.Arcade.Group;
@@ -365,6 +367,12 @@ export class GameScene extends Phaser.Scene {
       this.leaveLiveBoard();
     });
     setGamepadConsumer(this.consumePad);
+    // Requested as the run starts: the server only accepts a result whose run time fits in the
+    // real time since the ticket was issued.
+    const online = onlineService();
+    this.dailyTicket = this.daily && online.online
+      ? online.startDailyRun(this.daily.date).catch(() => undefined)
+      : undefined;
     this.joinLiveBoard();
     this.input.on('pointermove', this.releasePad);
     this.scene.launch('UI', { game: this });
@@ -875,6 +883,7 @@ export class GameScene extends Phaser.Scene {
         ...this.daily,
         score: operationScore({ kills: summary.kills, level: this.xp.level, durationMs: this.survivalMs, victory }),
       },
+      dailyTicket: this.dailyTicket,
       equipment: this.inventory.contents.map(item => item.name),
       synergy: this.activeSynergy?.name,
     });

@@ -21,6 +21,8 @@ export interface RunEndData {
   synergy?: string;
   facts: RunFacts;
   daily?: { date: string; mutator: string; score: number };
+  /** The server ticket for this daily run, requested when it started. */
+  dailyTicket?: Promise<string | undefined>;
 }
 
 /** Owns the one-way handoff from gameplay into the result screen. */
@@ -38,9 +40,10 @@ export class RunEndSystem {
     const newUnlocks = after.unlocks.filter(id => !before.unlocks.includes(id));
     // Fire and forget: a network outage must never hold up the results screen.
     const online = onlineService();
-    if (data.daily) void submitDailyRun(online, data.daily.date, {
-      kills: data.facts.kills, level: data.level, durationMs: data.facts.durationMs, victory: data.victory,
-    });
+    const daily = data.daily;
+    if (daily) void (data.dailyTicket ?? Promise.resolve(undefined)).then(ticket => submitDailyRun(online, daily.date, {
+      kills: data.facts.kills, level: data.level, durationMs: data.facts.durationMs, victory: data.victory, ticket,
+    }));
     // A 409 means another device is further ahead: the cloud copy is kept and the menu says so.
     if (online.online) void online.uploadProfile(after).catch(() => undefined);
     const newAchievements = ACHIEVEMENTS.filter(achievement =>
