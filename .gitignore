@@ -20,3 +20,4 @@ debug.log
 
 # Packed production releases (scripts/release.mjs)
 release/
+.opencode
