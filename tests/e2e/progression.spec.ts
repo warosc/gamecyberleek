@@ -114,7 +114,9 @@ test('the daily operation applies its mutator and records a score on the results
   expect(saved.daily.date).toBe(run.daily!.date);
   expect(saved.daily.attempts).toBe(1);
   expect(saved.history.at(-1)).toMatchObject({ sector: run.arena, weaponId: run.weapon, victory: false });
-  // Retrying keeps the same daily identity instead of advancing a sector.
+  // Retrying keeps the same daily identity instead of advancing a sector. The results screen
+  // ignores input for its first 600 ms, so a key still held from combat cannot skip it.
+  await page.waitForTimeout(700);
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.combatGame.scene.isActive('Game'));
   expect(await page.evaluate(() => (window.combatGame.scene.getScene('Game') as GameScene).daily?.date)).toBe(run.daily!.date);

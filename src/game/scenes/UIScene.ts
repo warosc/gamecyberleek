@@ -214,9 +214,11 @@ export class UIScene extends Phaser.Scene {
   private onDashed() {
     this.hints?.satisfy('dash');
   }
-  private onHealth(current: number, max: number) {
-    if (current < max && loadProfile().vibration) pulseHaptics(35);
-    this.statusHud.setHealth(current, max, this.damageFlash);
+  /** `applied` is only sent for real hits; heals emit the same event without it. */
+  private onHealth(current: number, max: number, applied?: number) {
+    const hit = (applied ?? 0) > 0;
+    if (hit && loadProfile().vibration) pulseHaptics(35);
+    this.statusHud.setHealth(current, max, this.damageFlash, hit);
   }
   private onXp(xp: number, level: number) {
     this.statusHud.setExperience(xp, level);
@@ -299,6 +301,8 @@ export class UIScene extends Phaser.Scene {
     parts.unshift(levelGlow);
     this.tweens.add({ targets: levelGlow, scale: 2.4, alpha: 0, duration: 700, ease: 'Cubic.Out' });
     const accents = [0x21e6ff, 0x73ef62, 0xd566ff];
+    // A modal can replace another one; the old chooser would keep answering 1/2/3 and ENTER.
+    this.chooser?.destroy();
     this.chooser = new RewardChooser(this, (index) => {
       const chosen = abilities[index];
       this.closeModal();
@@ -369,6 +373,8 @@ export class UIScene extends Phaser.Scene {
         fontFamily: 'Arial Black', fontSize: '12px', color: '#8ba5b8', letterSpacing: 3,
       }).setOrigin(0.5),
     ];
+    // A modal can replace another one; the old chooser would keep answering 1/2/3 and ENTER.
+    this.chooser?.destroy();
     this.chooser = new RewardChooser(this, (index) => {
       const reward = rewards[index];
       this.closeModal();
@@ -422,6 +428,7 @@ export class UIScene extends Phaser.Scene {
       this.closeModal();
       this.gameScene.resolveLoot(install);
     });
+    this.chooser?.destroy();
     this.chooser = chooser;
     this.modal.replace(parts, 115);
   }

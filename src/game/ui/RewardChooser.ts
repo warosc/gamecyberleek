@@ -16,6 +16,13 @@ export interface RewardCardSpec {
 const CARD_WIDTH = 264;
 const CARD_HEIGHT = 292;
 const HOTKEYS = ['ONE', 'TWO', 'THREE'] as const;
+/**
+ * A modal opens mid-combat, while the player is still clicking to fire or pressing the pad's A
+ * to dash (the gamepad bridge replays A as ENTER outside combat). For this long after opening,
+ * a click or ENTER is taken as that combat input and ignored. The number keys are never combat
+ * input, so they work at once.
+ */
+export const REWARD_ARM_MS = 450;
 
 /**
  * The level-up and supply-chest choices, as one component.
@@ -32,6 +39,7 @@ export class RewardChooser {
   private readonly glows: Phaser.GameObjects.Rectangle[] = [];
   private focus = 0;
   private resolved = false;
+  private armedAt = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -39,6 +47,7 @@ export class RewardChooser {
   ) {}
 
   build(specs: RewardCardSpec[], centerX: number, centerY: number) {
+    this.armedAt = this.scene.time.now + REWARD_ARM_MS;
     const parts: Phaser.GameObjects.GameObject[] = [];
     specs.forEach((spec, index) => {
       const x = centerX + (index - (specs.length - 1) / 2) * 300;
@@ -116,7 +125,9 @@ export class RewardChooser {
         .setOrigin(0.5);
       parts.push(badge, badgeLabel);
 
-      card.on('pointerdown', () => this.select(index));
+      card.on('pointerdown', () => {
+        if (this.armed) this.select(index);
+      });
       card.on('pointerover', () => this.setFocus(index));
       this.cards.push(card);
       this.glows.push(glow);
@@ -137,11 +148,17 @@ export class RewardChooser {
     handlers.push(['keydown-RIGHT', () => this.setFocus((this.focus + 1) % count)]);
     // Enter only. SPACE is the dash key, so confirming with it would fire a dash the instant
     // the modal closed and the run resumed.
-    handlers.push(['keydown-ENTER', () => this.select(this.focus)]);
-    for (const [event, handler] of handlers) {
+    const confirm = (event?: KeyboardEvent) => {
+      if (this.armed && !event?.repeat) this.select(this.focus);
+    };
+    for (const [event, handler] of [...handlers, ['keydown-ENTER', confirm] as const]) {
       keyboard.on(event, handler);
       this.disposers.push(() => keyboard.off(event, handler));
     }
+  }
+
+  private get armed() {
+    return this.scene.time.now >= this.armedAt;
   }
 
   private setFocus(index: number) {

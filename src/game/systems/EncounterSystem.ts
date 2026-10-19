@@ -48,6 +48,13 @@ export class EncounterSystem {
   spawnBoss() {
     if (this.bossSpawned) return false;
     this.bossSpawned = true;
+    // A miniboss still alive withdraws with the wave. It was not defeated, so it drops nothing,
+    // but its health bar listens for 0 to hide and would otherwise stay up for the whole fight.
+    for (const object of this.enemies.getChildren()) {
+      const enemy = object as Enemy;
+      if (enemy.active && enemy.enemyType === EnemyType.MINIBOSS)
+        this.scene.events.emit(Events.MINIBOSS_HEALTH, 0, enemy.health.max);
+    }
     // Clear the teaching wave so the finale can be read without a crowd of old warnings.
     this.enemies.clear(true, true);
     const x = Phaser.Math.Clamp(this.player.x + 520, 100, ARENA.width - 100);

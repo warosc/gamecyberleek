@@ -28,4 +28,17 @@ describe('ability registry', () => {
     );
     expect(chooseAbilities(levels)).toHaveLength(2);
   });
+
+  // AGUJA DE PLASMA was a milestone option; when the weapon protocol took its milestone slot it
+  // stayed excluded from the random draw too, so it could never be offered again.
+  it('can offer every ability that is not reserved for the timed milestones', () => {
+    const milestoneOnly = ['fan', 'phase_dash', 'pulse_protocol', 'spore_protocol', 'arc_protocol'];
+    const maxed = new Map(ABILITIES.map((ability) => [ability.id, ability.maxLevel]));
+    for (const ability of ABILITIES) {
+      const levels = new Map(maxed);
+      levels.set(ability.id, 0);
+      const offered = chooseAbilities(levels).map((option) => option.id);
+      expect(offered, ability.id).toEqual(milestoneOnly.includes(ability.id) ? [] : [ability.id]);
+    }
+  });
 });

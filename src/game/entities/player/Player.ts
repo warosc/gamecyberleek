@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { Events } from '../../config/Constants';
+import { Events, GAMEPLAY } from '../../config/Constants';
 import { HealthComponent } from '../../components/HealthComponent';
 import { createPlayerStats } from './PlayerStats';
 import { PlayerAnimator } from './PlayerAnimator';
@@ -284,7 +284,7 @@ export class Player extends Phaser.GameObjects.Container {
       baseAmount: amount,
       type: 'kinetic',
       source: 'enemy',
-      armorReduction: this.stats.damageReduction,
+      armorReduction: Math.min(GAMEPLAY.playerArmorCap, this.stats.damageReduction),
     });
     const applied = Math.max(1, hit.amount);
     if (this.health.damage(applied)) {

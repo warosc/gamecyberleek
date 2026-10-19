@@ -4,6 +4,8 @@ export class ExperienceOrb extends Phaser.GameObjects.Arc {
   value = 0;
   /** Gameplay time this orb was last spawned, used to recycle the stalest orb first. */
   spawnedAt = 0;
+  /** Set once the orb enters the magnet radius; it then homes on the player until collected. */
+  captured = false;
   private readonly visual: Phaser.GameObjects.Container;
   private readonly halo: Phaser.GameObjects.Arc;
   private readonly badge: Phaser.GameObjects.Arc;
@@ -26,6 +28,7 @@ export class ExperienceOrb extends Phaser.GameObjects.Arc {
     this.scene.tweens.killTweensOf(this.visual);
     this.value = value;
     this.spawnedAt = gameplayTime;
+    this.captured = false;
     const tier = value >= 50 ? 3 : value >= 25 ? 2 : 1;
     const color = tier === 3 ? 0xffd166 : tier === 2 ? 0x21e6ff : COLORS.green;
     this.setPosition(x, y).setScale(1).setAlpha(1);
@@ -34,7 +37,10 @@ export class ExperienceOrb extends Phaser.GameObjects.Arc {
     this.badge.setRadius(10 + tier * 2).setStrokeStyle(tier === 3 ? 3 : 2, color, 0.95);
     this.glyph.setColor(`#${color.toString(16).padStart(6, '0')}`).setFontSize(11 + tier * 2);
     this.scene.tweens.add({ targets: this.visual, scale: 1, duration: 220, ease: 'Back.Out' });
-    (this.body as Phaser.Physics.Arcade.Body).enable = true;
+    // reset() also zeroes velocity: a recycled orb that was mid-flight must not shoot off from here.
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.enable = true;
+    body.reset(x, y);
     this.setActive(true).setVisible(true);
   }
   collect() {

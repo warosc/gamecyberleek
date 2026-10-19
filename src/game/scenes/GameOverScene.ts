@@ -103,8 +103,12 @@ export class GameOverScene extends Phaser.Scene {
 
     const nextArenaIndex = data.victory ? data.arenaIndex + 1 : data.arenaIndex;
     const canAdvance = !data.daily && isSectorUnlocked(nextArenaIndex, loadProfile().unlocks);
-    const go = (key: string, sceneData?: object) => () => {
-      if (this.navigating) return;
+    // The run ends mid-combat, often with ENTER, a click or the pad's A (replayed as ENTER) still
+    // being pressed. Until this passes, input is that leftover combat input, not a choice: it
+    // would skip the results unread and count as a restart.
+    const armedAt = this.time.now + 600;
+    const go = (key: string, sceneData?: object) => (event?: KeyboardEvent) => {
+      if (this.navigating || this.time.now < armedAt || event?.repeat) return;
       this.navigating = true;
       this.scene.start(key, sceneData);
     };
@@ -114,14 +118,18 @@ export class GameOverScene extends Phaser.Scene {
       weaponId: data.weaponId,
       daily: data.daily && { date: data.daily.date, mutator: data.daily.mutator },
     });
-    const redeploy = () => { recordRestart(); start(); };
+    const redeploy = (event?: KeyboardEvent) => {
+      if (this.navigating || this.time.now < armedAt || event?.repeat) return;
+      recordRestart();
+      start();
+    };
     const mainMenu = go('Menu');
     const offset = (BUTTON_WIDTH + BUTTON_GAP) / 2;
     const againLabel = data.daily ? t('gameover.retryDaily') : data.victory && canAdvance ? t('gameover.next') : t('gameover.again');
     panelButton(this, GAME_WIDTH / 2 - offset, 580, BUTTON_WIDTH, 64, againLabel, UI.green, redeploy, 18, { primary: true });
     panelButton(this, GAME_WIDTH / 2 + offset, 580, BUTTON_WIDTH, 64, t('gameover.menu'), UI.cyan, mainMenu, 18);
+    // Not SPACE: it is the dash key, and players are still holding it when the run ends.
     this.input.keyboard?.on('keydown-ENTER', redeploy);
-    this.input.keyboard?.on('keydown-SPACE', redeploy);
     this.input.keyboard?.on('keydown-ESC', mainMenu);
     // Keyboard hints mean nothing on a phone.
     if (!isCompact(this)) this.add.text(GAME_WIDTH / 2, 646, t('gameover.keys'), {

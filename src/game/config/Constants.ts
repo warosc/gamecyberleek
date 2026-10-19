@@ -10,6 +10,9 @@ export const GAMEPLAY = {
   equipmentEveryLevels: 3,
   maxEnemies: 32,
   maxConcurrentAttacks: 3,
+  // Highest damage reduction any rule grants (the daily FORTIFIED mutator). Equipment modifiers
+  // add without a cap of their own, so this bounds every stacking path in one place.
+  playerArmorCap: 0.75,
   maxPlayerProjectiles: 90,
   maxEnemyProjectiles: 100,
   maxXpOrbs: 160,

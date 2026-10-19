@@ -124,14 +124,17 @@ export class StatusHud {
     this.energyText.setText(dashCharge >= 1 ? t('hud.dashReady') : t('hud.dashCharge', { percent: Math.round(dashCharge * 100) }));
   }
 
-  setHealth(current: number, max: number, damageFlash: Phaser.GameObjects.Rectangle) {
+  /** `hit` is false for repairs: they refresh the bar and pulse the frame green, with no red flash. */
+  setHealth(current: number, max: number, damageFlash: Phaser.GameObjects.Rectangle, hit: boolean) {
     const ratio = current / max;
     this.hp.setText(t('hud.hp', { current: Math.ceil(current), max })).setColor(ratio < 0.3 ? '#ff476f' : '#eaffff');
     this.hpTargetWidth = 240 * Phaser.Math.Clamp(ratio, 0, 1);
     this.hpFill.setFillStyle(ratio < 0.3 ? 0xff214f : 0xd83952);
-    this.frame.setStrokeStyle(4, 0xff476f, 1);
-    damageFlash.setAlpha(0.18);
-    this.scene.tweens.add({ targets: damageFlash, alpha: 0, duration: 180, ease: 'Quad.Out' });
+    this.frame.setStrokeStyle(4, hit ? 0xff476f : 0x73ef62, 1);
+    if (hit) {
+      damageFlash.setAlpha(0.18);
+      this.scene.tweens.add({ targets: damageFlash, alpha: 0, duration: 180, ease: 'Quad.Out' });
+    }
     this.scene.tweens.add({
       targets: this.frame, alpha: { from: 0.55, to: 1 }, duration: 90, yoyo: true,
       onComplete: () => this.frame.setStrokeStyle(3, 0x21e6ff, 0.7),

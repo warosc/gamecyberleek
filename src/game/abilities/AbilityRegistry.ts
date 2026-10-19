@@ -130,7 +130,9 @@ function shuffled<T>(items: readonly T[]): T[] {
   }
   return result;
 }
+/** Offered only at the timed milestones (see GameScene.openLevelUp), never in the random draw. */
+const MILESTONE_ONLY = ['fan', 'phase_dash', ...Object.values(SIGNATURE_ABILITIES)];
 export function chooseAbilities(levels: Map<string, number>, count = 3) {
-  return shuffled(ABILITIES.filter((a) => !['breach', 'fan', 'phase_dash', ...Object.values(SIGNATURE_ABILITIES)].includes(a.id) && (levels.get(a.id) ?? 0) < a.maxLevel)).slice(0, count);
+  return shuffled(ABILITIES.filter((a) => !MILESTONE_ONLY.includes(a.id) && (levels.get(a.id) ?? 0) < a.maxLevel)).slice(0, count);
 }
 export const getAbilityById = (id: string) => ABILITIES.find((ability) => ability.id === id);

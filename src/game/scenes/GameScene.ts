@@ -11,6 +11,7 @@ import { SpawnSystem } from '../systems/SpawnSystem';
 import { ExperienceSystem } from '../systems/ExperienceSystem';
 import { chooseAbilities, getAbilityById, isSignatureAbility, signatureAbilityId } from '../abilities/AbilityRegistry';
 import { ExperienceOrb } from '../entities/experience/ExperienceOrb';
+import { orbPullSpeed } from '../systems/OrbMagnet';
 import { AudioManager } from '../managers/AudioManager';
 import { ARENA_THEMES } from '../config/ArenaDefinitions';
 import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
@@ -165,6 +166,16 @@ export class GameScene extends Phaser.Scene {
   private readonly handleFocusLost = () => {
     if (this.state === GameState.PLAYING || this.state === GameState.BOSS) this.togglePause();
   };
+  /**
+   * Same query as the CSS that covers the canvas with "rotate your device". Turning a phone
+   * fires neither BLUR nor HIDDEN, so without this the run kept going behind the overlay.
+   */
+  private readonly portrait = typeof window !== 'undefined' && window.matchMedia
+    ? window.matchMedia('(orientation: portrait) and (pointer: coarse)')
+    : undefined;
+  private readonly handleOrientation = () => {
+    if (this.portrait?.matches) this.handleFocusLost();
+  };
   private readonly syncGameplayPause = () => {
     const paused = this.state === GameState.PAUSED || this.state === GameState.LEVEL_UP || this.state === GameState.INVENTORY;
     this.time.paused = paused;
@@ -298,7 +309,7 @@ export class GameScene extends Phaser.Scene {
     );
     this.physics.add.overlap(this.player, this.enemyProjectiles.group, (_, projectile) => {
       const shot = projectile as Phaser.Physics.Arcade.Image;
-      if (!shot.active) return;
+      if (!shot.active || !this.acceptsContact()) return;
       this.player.takeDamage(shot.getData('damage') as number);
       const chill = shot.getData('chill') as number | undefined;
       if (chill) this.player.chill(chill);
@@ -322,6 +333,7 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-I', this.toggleInventory, this);
     this.game.events.on(Phaser.Core.Events.BLUR, this.handleFocusLost);
     this.game.events.on(Phaser.Core.Events.HIDDEN, this.handleFocusLost);
+    this.portrait?.addEventListener('change', this.handleOrientation);
     this.events.on(Events.STATE_CHANGED, this.syncGameplayPause);
     if (import.meta.env.VITE_DEBUG_GAME === 'true') {
       keyboard.on('keydown-B', () => this.encounters.spawnBoss());
@@ -346,6 +358,7 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-I', this.toggleInventory, this);
       this.game.events.off(Phaser.Core.Events.BLUR, this.handleFocusLost);
       this.game.events.off(Phaser.Core.Events.HIDDEN, this.handleFocusLost);
+      this.portrait?.removeEventListener('change', this.handleOrientation);
       this.events.off(Events.STATE_CHANGED, this.syncGameplayPause);
       this.input.off('pointermove', this.releasePad);
       setGamepadConsumer(undefined);
@@ -437,13 +450,11 @@ export class GameScene extends Phaser.Scene {
       const orb = o as ExperienceOrb;
       if (!orb.active) return;
       orb.syncVisual(this.survivalMs);
-      const radius = this.player.stats.magnetRadius;
       const distance = Phaser.Math.Distance.Between(orb.x, orb.y, this.player.x, this.player.y);
-      if (distance >= radius) return;
-      // Accelerate as the orb closes. At a constant speed the pickup felt like the orb was
-      // being dragged; ramping it makes the last few pixels snap in, which is the part that
-      // actually reads as a reward.
-      this.physics.moveToObject(orb, this.player, 200 + (1 - distance / radius) ** 2 * 700);
+      const speed = orbPullSpeed(distance, this.player.stats.magnetRadius, orb.captured, this.player.stats.moveSpeed);
+      if (speed === 0) return;
+      orb.captured = true;
+      this.physics.moveToObject(orb, this.player, speed);
     });
   }
   private projectileHit(
@@ -452,7 +463,7 @@ export class GameScene extends Phaser.Scene {
   ) {
     const p = projectileObject as import('../entities/projectiles/Projectile').Projectile;
     const e = enemyObject as Enemy;
-    if (!p.active || !e.active || p.hitTargets.has(e)) return;
+    if (!p.active || !e.active || p.hitTargets.has(e) || !this.acceptsContact()) return;
     p.hitTargets.add(e);
     if (p.hitsRemaining > 0) p.hitsRemaining--;
     else p.disableBody(true, true);
@@ -498,8 +509,18 @@ export class GameScene extends Phaser.Scene {
       source = next;
     }
   }
+  /**
+   * Gate for every overlap callback. `physics.pause()` does not stop the collider pass already
+   * running, and Arcade runs extra whole steps on a slow frame, so a level-up opened by one orb
+   * would otherwise let a chest in the same step replace its modal, or let enemies keep hitting
+   * the player behind it.
+   */
+  private acceptsContact() {
+    return !this.victoryPending && (this.state === GameState.PLAYING || this.state === GameState.BOSS);
+  }
   private enemyContact(object: Phaser.GameObjects.GameObject) {
     const e = object as Enemy;
+    if (!this.acceptsContact()) return;
     if (!e.active || !e.canContact || this.survivalMs - e.lastContact < 650) return;
     e.lastContact = this.survivalMs;
     this.player.takeDamage(e.contactDamage);
@@ -528,7 +549,7 @@ export class GameScene extends Phaser.Scene {
     return stalest;
   }
   private collectOrb(object: Phaser.GameObjects.GameObject) {
-    if (this.victoryPending) return;
+    if (!this.acceptsContact()) return;
     const orb = object as ExperienceOrb;
     if (!orb.active) return;
     const amount = orb.value * this.player.stats.xpMultiplier;
@@ -598,6 +619,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private collectEquipment(object: Phaser.GameObjects.GameObject) {
+    if (!this.acceptsContact()) return;
     const equipment = this.loot.collectEquipment(object);
     if (!equipment) return;
     this.pendingLoot = equipment;
@@ -816,7 +838,7 @@ export class GameScene extends Phaser.Scene {
     this.scene.start('Menu');
   }
   private openChest(object: Phaser.GameObjects.GameObject) {
-    if (this.victoryPending) return;
+    if (!this.acceptsContact()) return;
     if (!this.loot.openChest(object)) return;
     this.state = GameState.LEVEL_UP;
     this.physics.pause();

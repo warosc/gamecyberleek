@@ -205,7 +205,11 @@ export function subMenuFrame(
 ) {
   scene.cameras.main.setBackgroundColor(0x07111f);
   const music = new AudioManager(scene);
-  scene.events.on(Phaser.Scenes.Events.UPDATE, (time: number) => music.updateMusic(time, 'menu'));
+  const playMusic = (time: number) => music.updateMusic(time, 'menu');
+  // `scene.events` outlives the visit: without the off, every return to this screen added
+  // another listener, each with its own fallback synth playing the menu cue out of step.
+  scene.events.on(Phaser.Scenes.Events.UPDATE, playMusic);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.UPDATE, playMusic));
   // A screen's own backdrop shows through more than the shared one: it is painted for the job,
   // dark in the middle where the content sits.
   const texture = backdropTexture(scene, backdrop);
