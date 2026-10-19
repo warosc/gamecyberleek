@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { ARENA_THEMES, sectorRewardMultiplier } from '../config/ArenaDefinitions';
-import { loadProfile } from '../systems/ProfileStore';
+import { loadProfile, storageHealthy } from '../systems/ProfileStore';
 import { isSectorUnlocked } from '../systems/UnlockRegistry';
 import { AudioManager } from '../managers/AudioManager';
 import { STARTER_WEAPONS, starterWeapon, type StarterWeaponId } from '../weapons/WeaponRegistry';
@@ -155,6 +155,12 @@ export class MenuScene extends Phaser.Scene {
     const dailyInfo = this.add.text(GAME_WIDTH - 50, 72, '', {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: '#ffc857', align: 'right', lineSpacing: 5,
     }).setOrigin(1, 0).setDepth(8).setName('menu-daily-info');
+    // Private browsing or a full quota: runs still count this session but vanish on reload,
+    // which a player would otherwise only discover after losing them.
+    const storageNote = storageHealthy() ? undefined : fitText(this.add.text(GAME_WIDTH - 50, 0, t('menu.storageWarning'), {
+      fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: '#ffc857', align: 'right',
+      backgroundColor: '#06101dee', padding: { x: 10, y: 6 },
+    }).setOrigin(1, 0).setDepth(8).setName('menu-storage-warning'), GAME_WIDTH - 700);
     const setDaily = (lines: string[]) => {
       dailyInfo.setFontSize(uiFont(this, 11)).setText(lines.join('\n'));
       fitText(dailyInfo, GAME_WIDTH - 700);
@@ -162,9 +168,12 @@ export class MenuScene extends Phaser.Scene {
       const height = dailyInfo.height + 18;
       dailyChip.setPosition(GAME_WIDTH - 50 - dailyInfo.width / 2, 72 + dailyInfo.height / 2);
       drawFrame(dailyChip, width, height, UI.gold, { fill: 0x06101d, fillAlpha: 0.88, band: 0.08, strokeAlpha: 0.6, cut: 10 });
+      // Follows the chip down when the online top score adds a line to it.
+      storageNote?.setY(72 + dailyInfo.height + 26);
     };
     setDaily(dailyLines);
-    this.showOnlineStatus(daily.date, setDaily, dailyLines, profile.runs, profile.operative?.code, () => 72 + dailyInfo.height + 26);
+    this.showOnlineStatus(daily.date, setDaily, dailyLines, profile.runs, profile.operative?.code,
+      () => 72 + dailyInfo.height + 26 + (storageNote ? storageNote.height + 8 : 0));
 
     // Keyboard and gamepad: the gamepad bridge replays pad input as these same keys.
     const keyboard = this.input.keyboard;

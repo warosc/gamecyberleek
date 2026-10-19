@@ -208,6 +208,8 @@ export const en: Record<StringKey, string> = {
   'settings.import': 'IMPORT SAVE',
   'settings.imported': 'SAVE IMPORTED',
   'settings.importFailed': 'INVALID FILE',
+  'settings.importConfirm': 'This replaces the save on this device with the one in the file:\n{runs} operations · {credits} bio-credits · best level {level}.\nIf you already have an operative identity, it is kept. Continue?',
+  'menu.storageWarning': 'THE BROWSER IS NOT SAVING · PROGRESS WILL BE LOST ON CLOSE',
   'ability.rapid.name': 'RAPID FIRE',
   'ability.rapid.desc': 'Fire 12% faster',
   'ability.power.name': 'POWER SHOT',

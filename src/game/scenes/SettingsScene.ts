@@ -4,7 +4,9 @@ import { setLocale, t, type StringKey } from '../i18n';
 import {
   LOCALE_OPTIONS, MOTION_OPTIONS, QUALITY_OPTIONS, cycle, type GameSettings,
 } from '../progression/Settings';
-import { exportProfileJson, importProfileJson, loadProfile, updateProfile, updateSettings } from '../systems/ProfileStore';
+import {
+  MAX_IMPORT_BYTES, applyProfileImport, exportProfileJson, loadProfile, parseProfileImport, updateProfile, updateSettings,
+} from '../systems/ProfileStore';
 import { applyRuntimeSettings } from '../systems/RuntimeSettings';
 import { AudioManager, setMusicLightweight } from '../managers/AudioManager';
 import { detectQualityProfile } from '../config/QualityProfile';
@@ -110,16 +112,24 @@ export class SettingsScene extends Phaser.Scene {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'application/json,.json';
+    const reject = () => {
+      status.setText(t('settings.importFailed')).setColor('#ff476f');
+      this.audio?.play('ui_deny');
+    };
     input.onchange = () => {
       const file = input.files?.[0];
       if (!file) return;
+      // Checked before reading: a wrong pick (a video, a disk image) would otherwise be loaded whole.
+      if (file.size > MAX_IMPORT_BYTES) return reject();
       void file.text().then(text => {
-        const profile = importProfileJson(text);
-        if (!profile) {
-          status.setText(t('settings.importFailed')).setColor('#ff476f');
-          this.audio?.play('ui_deny');
-          return;
-        }
+        const incoming = parseProfileImport(text);
+        if (!incoming) return reject();
+        // Importing replaces every run on this device, so the player sees what they get first.
+        const summary = t('settings.importConfirm', {
+          runs: incoming.runs, credits: incoming.bioCredits, level: incoming.bestLevel,
+        });
+        if (!window.confirm(summary)) return;
+        const profile = applyProfileImport(incoming);
         applyRuntimeSettings(profile.settings);
         this.audio?.play('ui_confirm');
         // Restart so every row, and the language, reflects the restored save.

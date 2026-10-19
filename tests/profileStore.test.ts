@@ -190,3 +190,145 @@ describe('save backup', () => {
     expect(profile?.workshop.plating).toBe(5);
   });
 });
+
+describe('damaged save recovery', () => {
+  const corruptKeys = () => [...Array(storage.length).keys()]
+    .map(index => storage.key(index)!)
+    .filter(key => key.startsWith('leek-ops-profile-v5-corrupt-'));
+
+  it('keeps the unparseable text aside and recovers the previous good write', async () => {
+    const { saveRun } = await import('../src/game/systems/ProfileStore');
+    saveRun(4, false);
+    saveRun(6, false);
+    // The rotation keeps the save as it was before the latest write.
+    expect(JSON.parse(storage.getItem('leek-ops-profile-v5-prev')!).runs).toBe(1);
+    storage.setItem('leek-ops-profile-v5', '{"runs": 2, "bioCr');
+    vi.resetModules();
+    const { loadProfile } = await import('../src/game/systems/ProfileStore');
+    expect(loadProfile()).toMatchObject({ runs: 1, bestLevel: 4 });
+    const copies = corruptKeys();
+    expect(copies).toHaveLength(1);
+    expect(storage.getItem(copies[0])).toBe('{"runs": 2, "bioCr');
+    expect(JSON.parse(storage.getItem('leek-ops-profile-v5')!).runs).toBe(1);
+    // The good previous copy was not replaced by the damaged text.
+    expect(JSON.parse(storage.getItem('leek-ops-profile-v5-prev')!).runs).toBe(1);
+  });
+
+  it('falls back to the newest readable legacy key when there is no previous copy', async () => {
+    storage.setItem('leek-ops-profile-v5', 'garbage');
+    storage.setItem('leek-ops-profile-v4', '{not json');
+    storage.setItem('leek-ops-profile-v3', JSON.stringify({ runs: 7, bioCredits: 90 }));
+    const { loadProfile } = await import('../src/game/systems/ProfileStore');
+    expect(loadProfile()).toMatchObject({ runs: 7, bioCredits: 90 });
+    expect(corruptKeys()).toHaveLength(1);
+  });
+
+  it('keeps at most two corrupt copies', async () => {
+    let now = 1_700_000_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now++);
+    const { loadProfile } = await import('../src/game/systems/ProfileStore');
+    for (const text of ['bad-1', 'bad-2', 'bad-3']) {
+      storage.setItem('leek-ops-profile-v5', text);
+      loadProfile();
+    }
+    vi.restoreAllMocks();
+    expect(corruptKeys().map(key => storage.getItem(key)).sort()).toEqual(['bad-2', 'bad-3']);
+  });
+});
+
+/** Storage that can be switched into the state of a full quota or Safari private mode. */
+class FailingStorage extends MemoryStorage {
+  failWrites = false;
+  setItem(key: string, value: string) {
+    if (this.failWrites) throw new DOMException('quota', 'QuotaExceededError');
+    super.setItem(key, value);
+  }
+}
+
+describe('storage write failures', () => {
+  let failing: FailingStorage;
+  beforeEach(() => {
+    failing = new FailingStorage();
+    vi.stubGlobal('localStorage', failing);
+  });
+
+  it('keeps progress in memory across saves and reports storage as unhealthy', async () => {
+    const { saveRun, loadProfile, storageHealthy } = await import('../src/game/systems/ProfileStore');
+    expect(storageHealthy()).toBe(true);
+    failing.failWrites = true;
+    saveRun(2, false);
+    const second = saveRun(3, false);
+    expect(second.runs).toBe(2);
+    expect(second.bioCredits).toBe(10 + 15);
+    expect(loadProfile().runs).toBe(2);
+    expect(storageHealthy()).toBe(false);
+    // Once writes work again the next save lands in storage with everything kept in memory.
+    failing.failWrites = false;
+    saveRun(1, false);
+    expect(storageHealthy()).toBe(true);
+    expect(JSON.parse(failing.getItem('leek-ops-profile-v5')!).runs).toBe(3);
+  });
+
+  it('never overwrites a damaged save it could not copy aside', async () => {
+    failing.setItem('leek-ops-profile-v5', 'half-written');
+    failing.failWrites = true;
+    const { loadProfile, saveRun, storageHealthy } = await import('../src/game/systems/ProfileStore');
+    expect(loadProfile().runs).toBe(0);
+    expect(saveRun(5, false).runs).toBe(1);
+    expect(storageHealthy()).toBe(false);
+    expect(failing.getItem('leek-ops-profile-v5')).toBe('half-written');
+  });
+
+  it('survives storage that throws on every access', async () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => { throw new Error('denied'); },
+      setItem: () => { throw new Error('denied'); },
+    });
+    const { saveRun, storageHealthy } = await import('../src/game/systems/ProfileStore');
+    saveRun(2, false);
+    expect(saveRun(2, false).runs).toBe(2);
+    expect(storageHealthy()).toBe(false);
+  });
+});
+
+describe('import safety', () => {
+  const exported = (profile: object) => JSON.stringify({ game: 'leek-ops', profile });
+
+  it('rejects oversized files before parsing and changes nothing', async () => {
+    const { importProfileJson, loadProfile, saveRun, MAX_IMPORT_BYTES } = await import('../src/game/systems/ProfileStore');
+    saveRun(3, false);
+    const padded = exported({ runs: 50, padding: 'x'.repeat(MAX_IMPORT_BYTES) });
+    expect(importProfileJson(padded)).toBeUndefined();
+    expect(loadProfile().runs).toBe(1);
+  });
+
+  it('keeps the local operative identity over the one in the file', async () => {
+    const { ensureOperative, importProfileJson, loadProfile } = await import('../src/game/systems/ProfileStore');
+    const local = ensureOperative();
+    const { generateCode } = await import('../src/game/online/OperativeIdentity');
+    const restored = importProfileJson(exported({ runs: 8, operative: { code: generateCode(), callsign: 'OTHER' } }));
+    expect(restored?.operative).toEqual(local);
+    expect(loadProfile()).toMatchObject({ runs: 8, operative: local });
+  });
+
+  it('keeps the local operative when the file has none', async () => {
+    const { ensureOperative, importProfileJson } = await import('../src/game/systems/ProfileStore');
+    const local = ensureOperative();
+    expect(importProfileJson(exported({ runs: 2 }))?.operative).toEqual(local);
+  });
+
+  it('adopts the file operative on a device that never went online', async () => {
+    const { importProfileJson } = await import('../src/game/systems/ProfileStore');
+    const { generateCode } = await import('../src/game/online/OperativeIdentity');
+    const operative = { code: generateCode(), callsign: 'MOVER' };
+    expect(importProfileJson(exported({ operative }))?.operative).toEqual(operative);
+  });
+
+  it('caps id lists so a crafted file cannot store megabytes', async () => {
+    const { importProfileJson } = await import('../src/game/systems/ProfileStore');
+    const ids = Array.from({ length: 5000 }, (_, index) => `id-${index}`);
+    const profile = importProfileJson(exported({ unlocks: ids, achievements: ids }));
+    expect(profile?.unlocks.length).toBeLessThanOrEqual(64);
+    expect(profile?.achievements.length).toBeLessThanOrEqual(64);
+  });
+});

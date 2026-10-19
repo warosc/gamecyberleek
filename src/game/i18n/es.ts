@@ -206,6 +206,8 @@ export const es = {
   'settings.import': 'IMPORTAR PARTIDA',
   'settings.imported': 'PARTIDA IMPORTADA',
   'settings.importFailed': 'ARCHIVO NO VÁLIDO',
+  'settings.importConfirm': 'Esto reemplaza la partida de este dispositivo por la del archivo:\n{runs} operaciones · {credits} bio-créditos · mejor nivel {level}.\nSi ya tienes identidad de operativo, se mantiene. ¿Continuar?',
+  'menu.storageWarning': 'EL NAVEGADOR NO DEJA GUARDAR · EL PROGRESO SE PERDERÁ AL CERRAR',
   'ability.rapid.name': 'FUEGO RÁPIDO',
   'ability.rapid.desc': 'Dispara un 12% más rápido',
   'ability.power.name': 'DISPARO POTENTE',

@@ -41,6 +41,22 @@ export interface PlayerProfile {
 
 const KEY = 'leek-ops-profile-v5';
 const LEGACY_KEYS = ['leek-ops-profile-v4', 'leek-ops-profile-v3', 'leek-ops-profile-v2', 'leek-ops-profile-v1'] as const;
+/** The save as it was before the latest write: one step of undo for a write that later reads back damaged. */
+const PREV_KEY = `${KEY}-prev`;
+/** Unparseable saves are moved aside under this prefix instead of being overwritten. */
+const CORRUPT_PREFIX = `${KEY}-corrupt-`;
+const MAX_CORRUPT_COPIES = 2;
+/** A real export is a few KB; anything this large is not one, and parsing it would stall the tab. */
+export const MAX_IMPORT_BYTES = 256 * 1024;
+/** Unlocks and achievements number in the tens; the cap only stops a crafted file storing megabytes. */
+const MAX_IDS = 64;
+
+/**
+ * Set while the last write to localStorage failed (quota, Safari private mode, storage disabled).
+ * Every mutator re-reads through `loadProfile`, so without this the progress of a run would be
+ * dropped the moment it was saved: with it, credits and unlocks at least last the session.
+ */
+let memoryJson: string | undefined;
 
 function freshProfile(): PlayerProfile {
   return {
@@ -85,7 +101,7 @@ function validNonNegative(value: unknown, fallback: number) {
 }
 
 const idList = (value: unknown) => Array.isArray(value)
-  ? [...new Set(value.filter((id): id is string => typeof id === 'string' && id.length < 64))]
+  ? [...new Set(value.filter((id): id is string => typeof id === 'string' && id.length < 64))].slice(0, MAX_IDS)
   : [];
 
 /**
@@ -123,16 +139,69 @@ function normalizeProfile(value: unknown): PlayerProfile {
   };
 }
 
-export function loadProfile(): PlayerProfile {
+/** The parsed save, or undefined when the text is not a JSON object (truncated write, bad edit). */
+function parseSave(text: string | null): object | undefined {
+  if (text === null) return undefined;
   try {
-    const stored = localStorage.getItem(KEY) ?? LEGACY_KEYS.map(key => localStorage.getItem(key)).find(Boolean) ?? '{}';
-    const profile = normalizeProfile(JSON.parse(stored));
-    if (!localStorage.getItem(KEY)) persist(profile);
-    return profile;
+    const parsed: unknown = JSON.parse(text);
+    return parsed && typeof parsed === 'object' ? parsed : undefined;
   } catch {
-    const recovered = freshProfile();
-    persist(recovered);
+    return undefined;
+  }
+}
+
+/**
+ * Moves damaged save text aside so a later fix (or a bug report) can still get at it. Only the
+ * newest copies are kept: a save that keeps corrupting must not slowly fill the quota.
+ * Returns false when the copy could not be written, and the caller must then leave the original alone.
+ */
+function keepCorruptCopy(raw: string) {
+  try {
+    const copies: string[] = [];
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (key?.startsWith(CORRUPT_PREFIX)) copies.push(key);
+    }
+    copies.sort().slice(0, Math.max(0, copies.length - (MAX_CORRUPT_COPIES - 1))).forEach(key => localStorage.removeItem(key));
+    localStorage.setItem(`${CORRUPT_PREFIX}${Date.now()}`, raw);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The newest readable fallback: the previous good write first, then the older schema keys. */
+function recoverProfile() {
+  for (const key of [PREV_KEY, ...LEGACY_KEYS]) {
+    const parsed = parseSave(localStorage.getItem(key));
+    if (parsed) return normalizeProfile(parsed);
+  }
+  return freshProfile();
+}
+
+export function loadProfile(): PlayerProfile {
+  if (memoryJson !== undefined) return normalizeProfile(parseSave(memoryJson));
+  try {
+    const stored = localStorage.getItem(KEY);
+    const parsed = parseSave(stored);
+    if (parsed) return normalizeProfile(parsed);
+    const recovered = recoverProfile();
+    if (stored === null) {
+      persist(recovered);
+    } else if (keepCorruptCopy(stored)) {
+      // Removed first so `persist` does not rotate the damaged text into the good previous copy.
+      localStorage.removeItem(KEY);
+      persist(recovered);
+    } else {
+      // No room to keep a copy: play on from memory rather than overwrite the only one.
+      memoryJson = JSON.stringify(recovered);
+    }
     return recovered;
+  } catch {
+    // Storage itself is unreachable (some browsers throw on any access when it is disabled).
+    const fresh = freshProfile();
+    memoryJson = JSON.stringify(fresh);
+    return fresh;
   }
 }
 
@@ -140,14 +209,30 @@ export function loadProfile(): PlayerProfile {
  * Safari in private browsing throws on setItem, as does any browser over quota. Persistence is
  * a convenience here: losing it must never interrupt a run. `saveRun` is called from the death
  * transition and `updateProfile` from a mobile HUD tap, so an escaping error would kill the
- * game loop on exactly the paths a player cannot avoid.
+ * game loop on exactly the paths a player cannot avoid. A failed write keeps the profile in
+ * `memoryJson` instead, and every write retries storage, so it heals once space frees up.
  */
 function persist(profile: PlayerProfile) {
+  const json = JSON.stringify(profile);
   try {
-    localStorage.setItem(KEY, JSON.stringify(profile));
+    const previous = localStorage.getItem(KEY);
+    if (previous !== null && previous !== json) {
+      try {
+        localStorage.setItem(PREV_KEY, previous);
+      } catch {
+        // The backup is best effort; the save itself matters more.
+      }
+    }
+    localStorage.setItem(KEY, json);
+    memoryJson = undefined;
   } catch {
-    // Ignored on purpose: the run continues with an in-memory profile.
+    memoryJson = json;
   }
+}
+
+/** False while saves only live in memory, so the menu can warn that progress will not survive a reload. */
+export function storageHealthy() {
+  return memoryJson === undefined;
 }
 
 /** Credits for one run before achievement bonuses: sector risk and the salvage upgrade scale it. */
@@ -248,23 +333,34 @@ export function exportProfileJson() {
 }
 
 /**
- * Restores a save exported by `exportProfileJson`. Every field is re-validated exactly as on
- * load, so a hand-edited or damaged file can at worst reset the fields it broke. Returns
- * `undefined`, and changes nothing, when the text is not a LEEK OPS save.
+ * Reads a save exported by `exportProfileJson` without applying it, so the caller can show what
+ * it holds first. Every field is re-validated exactly as on load, so a hand-edited or damaged
+ * file can at worst reset the fields it broke. `undefined` when the text is not a LEEK OPS save.
  */
-export function importProfileJson(text: string) {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-  if (!parsed || typeof parsed !== 'object') return undefined;
+export function parseProfileImport(text: string) {
+  if (text.length > MAX_IMPORT_BYTES) return undefined;
+  const parsed = parseSave(text);
+  if (!parsed) return undefined;
   const envelope = parsed as { game?: unknown; profile?: unknown };
   if (envelope.game !== 'leek-ops' || !envelope.profile || typeof envelope.profile !== 'object') return undefined;
-  const profile = normalizeProfile(envelope.profile);
+  return normalizeProfile(envelope.profile);
+}
+
+/**
+ * Replaces the local save with an imported one. The local operative identity wins when there is
+ * one: an older export without it would otherwise orphan this device's cloud slot, and a friend's
+ * file would make the next upload overwrite their cloud save.
+ */
+export function applyProfileImport(imported: PlayerProfile) {
+  const profile = { ...imported, operative: loadProfile().operative ?? imported.operative };
   persist(profile);
   return profile;
+}
+
+/** Parse and apply in one step; `undefined`, and nothing changes, when the text is not a save. */
+export function importProfileJson(text: string) {
+  const profile = parseProfileImport(text);
+  return profile && applyProfileImport(profile);
 }
 
 /** The operative identity, created and saved the first time something online needs it. */
