@@ -15,7 +15,7 @@ SSH_KEY=~/.ssh/leek_ops_deploy scripts/deploy-vps.sh debian@66.70.188.137
 
 ```
 VITE_DEBUG_GAME=false
-VITE_ONLINE_URL=/api
+VITE_ONLINE_URL=/online
 ```
 
 It refuses to pack when tracked files have uncommitted changes (`--allow-dirty` overrides), when
@@ -34,7 +34,7 @@ the live commit.
 
 Postgres (`leek-ops-db`) and PostgREST (`leek-ops-api`) run as compose project `leek-ops-online`
 on the private network `leek-ops-net`, with nothing published on the host; the game's nginx
-forwards `POST /api/rpc/*` to PostgREST. Each deploy brings them up and applies pending
+forwards `POST /online/rpc/*` to PostgREST. Each deploy brings them up and applies pending
 migrations (`server/migrate.sh`) before swapping the game container. Secrets are only on the
 server, in `~/leek-ops-online/.env`; details in `server/README.md`. Backups: see there.
 

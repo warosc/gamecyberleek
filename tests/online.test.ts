@@ -50,7 +50,7 @@ describe('online REST adapter', () => {
     calls.push({ url, body: JSON.parse(String(init.body)), headers: init.headers as Record<string, string> });
     return new Response(reply === null ? '' : JSON.stringify(reply), { status });
   }) as unknown as typeof fetch;
-  const service = () => new RestOnlineService('/api/', () => identity, fakeFetch);
+  const service = () => new RestOnlineService('/online/', () => identity, fakeFetch);
 
   beforeEach(() => { calls.length = 0; reply = null; status = 200; });
 
@@ -58,7 +58,7 @@ describe('online REST adapter', () => {
     reply = 3350;
     const best = await service().submitDailyRun('2026-09-25', { kills: 120.6, level: 9, durationMs: 200000.4, victory: false });
     expect(best).toBe(3350);
-    expect(calls[0].url).toBe('/api/rpc/leek_submit_daily_run');
+    expect(calls[0].url).toBe('/online/rpc/leek_submit_daily_run');
     expect(calls[0].headers).toEqual({ 'Content-Type': 'application/json' });
     expect(calls[0].body).toEqual({
       p_code: identity.code, p_callsign: 'PUERRO-1', p_day: '2026-09-25', p_kills: 120, p_level: 9, p_duration_ms: 200000, p_victory: false,
@@ -69,7 +69,7 @@ describe('online REST adapter', () => {
     reply = '5b1f6a7e-0000-4000-8000-000000000001';
     const ticket = await service().startDailyRun('2026-09-25');
     expect(ticket).toBe('5b1f6a7e-0000-4000-8000-000000000001');
-    expect(calls[0].url).toBe('/api/rpc/leek_start_daily_run');
+    expect(calls[0].url).toBe('/online/rpc/leek_start_daily_run');
     expect(calls[0].body).toEqual({ p_code: identity.code, p_day: '2026-09-25' });
     reply = 4100;
     await service().submitDailyRun('2026-09-25', { kills: 50, level: 6, durationMs: 90000, victory: false, ticket });
@@ -94,7 +94,7 @@ describe('online REST adapter', () => {
     const stalled = (async (_url: string, init: RequestInit) => new Response(new ReadableStream({
       start(controller) { init.signal?.addEventListener('abort', () => controller.error(new Error('aborted'))); },
     }))) as unknown as typeof fetch;
-    const slow = new RestOnlineService('/api', () => identity, stalled, 20);
+    const slow = new RestOnlineService('/online', () => identity, stalled, 20);
     const error = await slow.fetchDailyBoard('2026-09-25').catch(caught => caught);
     expect(error).toBeInstanceOf(OnlineError);
     expect(error.isTransient).toBe(true);
@@ -109,7 +109,7 @@ describe('online REST adapter', () => {
     expect(conflict.message).toContain('further ahead');
     status = 429;
     expect((await service().uploadProfile({} as never).catch(error => error)).isTransient).toBe(true);
-    const offline = new RestOnlineService('/api', () => identity,
+    const offline = new RestOnlineService('/online', () => identity,
       (async () => { throw new TypeError('Failed to fetch'); }) as unknown as typeof fetch);
     const network = await offline.fetchDailyBoard('2026-09-25').catch(error => error);
     expect(network.status).toBe(0);
@@ -143,7 +143,7 @@ describe('online REST adapter', () => {
       const seen: unknown[] = [];
       session.onChange(entries => seen.push(entries));
       await vi.advanceTimersByTimeAsync(0);
-      expect(calls[0].url).toBe('/api/rpc/leek_live_board');
+      expect(calls[0].url).toBe('/online/rpc/leek_live_board');
       const key = (calls[0].body as { p_key: string }).p_key;
       expect(key).toMatch(/^[0-9a-f]{32}$/);
       session.update(120.7, 10.9);

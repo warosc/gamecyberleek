@@ -5,7 +5,7 @@
 //   node scripts/release.mjs --allow-dirty   -> pack even with uncommitted changes to tracked files
 //
 // Reads build-time settings from .env.production (git-ignored): VITE_DEBUG_GAME=false and
-// VITE_ONLINE_URL (normally the same-origin /api). Refuses to pack when the working tree has
+// VITE_ONLINE_URL (normally the same-origin /online). Refuses to pack when the working tree has
 // uncommitted changes, the unit tests fail, the online URL is missing (unless --offline), or the
 // bundle still contains debug hooks or anything that looks like a secret key. The release also
 // carries the online backend (server/) and its SQL migrations, which vps-install.sh applies.

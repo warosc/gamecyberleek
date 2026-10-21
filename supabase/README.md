@@ -3,10 +3,10 @@
 The SQL in `migrations/` is the whole online backend: the daily leaderboard, the live daily board,
 run tickets and cloud saves. It started on a Supabase project (hence the folder name), which went
 away in October 2026; since then it runs on our own VPS as Postgres + PostgREST
-(`server/docker-compose.online.yml`), and the game's nginx forwards the same-origin `/api/rpc/` to
+(`server/docker-compose.online.yml`), and the game's nginx forwards the same-origin `/online/rpc/` to
 it. See `server/README.md` for operating it.
 
-The game plays fully offline. Built with `VITE_ONLINE_URL=/api` it adds the online features; with
+The game plays fully offline. Built with `VITE_ONLINE_URL=/online` it adds the online features; with
 it empty it never touches the network.
 
 ## Database setup

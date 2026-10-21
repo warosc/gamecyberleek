@@ -17,7 +17,7 @@ installDevTelemetry();
 // Before the game exists: quality, locale and mixer levels are read by the first scene.
 applyRuntimeSettings(loadProfile().settings);
 setMusicLightweight(detectQualityProfile().tier === 'low');
-// With the online API configured (normally the same-origin `/api` the game's nginx forwards to
+// With the online API configured (normally the same-origin `/online` the game's nginx forwards to
 // PostgREST) the game uses it; otherwise the offline adapter serves this device's own daily
 // board. Either way core play never waits on the network.
 const onlineUrl = import.meta.env.VITE_ONLINE_URL as string | undefined;

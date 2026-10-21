@@ -231,10 +231,10 @@ test('the cloud screen works offline and, against a server, uploads and restores
   expect(code).toMatch(/^[A-HJ-NP-Z2-9]{4}(-[A-HJ-NP-Z2-9]{4}){3}$/);
   expect((await storedProfile(page)).operative.code).toBe(code);
 
-  // A fake backend at the same-origin /api: the real adapter talks to it over fetch exactly as it
+  // A fake backend at the same-origin /online: the real adapter talks to it over fetch exactly as it
   // does to PostgREST in production.
   const saves = new Map<string, unknown>();
-  await page.route('**/api/rpc/**', async route => {
+  await page.route('**/online/rpc/**', async route => {
     const name = route.request().url().split('/').pop();
     const body = route.request().postDataJSON() as { p_code: string; p_callsign?: string; p_profile?: unknown };
     if (name === 'leek_put_save') {
@@ -254,7 +254,7 @@ test('the cloud screen works offline and, against a server, uploads and restores
     const ports = await import('/src/game/online/OnlinePorts.ts' as string);
     const { RestOnlineService } = await import('/src/game/online/RestOnlineService.ts' as string);
     const { ensureOperative } = await import('/src/game/systems/ProfileStore.ts' as string);
-    ports.setOnlineService(new RestOnlineService('/api', ensureOperative));
+    ports.setOnlineService(new RestOnlineService('/online', ensureOperative));
     window.combatGame.scene.getScene('Cloud').scene.restart();
   });
   await page.waitForTimeout(300);

@@ -21,7 +21,7 @@ export function livePresenceKey() {
 /**
  * Adapter for the game's own online API: PostgREST in front of Postgres on the VPS, serving the
  * RPC functions in supabase/migrations at `<baseUrl>/rpc/<name>`. The base is normally the
- * same-origin path `/api`, so there is no CORS and no key: the tables are closed to the anon role
+ * same-origin path `/online`, so there is no CORS and no key: the tables are closed to the anon role
  * and only those functions are callable.
  *
  * Every call has a timeout and rejects with an OnlineError; callers treat the network as optional.

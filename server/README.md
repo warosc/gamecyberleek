@@ -1,16 +1,16 @@
 # Online backend (VPS)
 
 Postgres 15 and PostgREST, defined in `docker-compose.online.yml`, serving the SQL functions in
-`supabase/migrations/` to the game at the same-origin path `/api/rpc/<function>`.
+`supabase/migrations/` to the game at the same-origin path `/online/rpc/<function>`.
 
 ```
-browser ── :8090 or Cloudflare tunnel ──> leek-ops-game (nginx) ──/api/rpc/──> leek-ops-api (PostgREST)
+browser ── :8090 or Cloudflare tunnel ──> leek-ops-game (nginx) ──/online/rpc/──> leek-ops-api (PostgREST)
                                                                                     │ role anon
                                                                               leek-ops-db (Postgres)
 ```
 
 - Nothing is published on the host. The three containers share the Docker network `leek-ops-net`.
-- nginx only forwards `POST /api/rpc/*`, rate-limits by client IP (5 r/s, burst 20), drops every
+- nginx only forwards `POST /online/rpc/*`, rate-limits by client IP (5 r/s, burst 20), drops every
   forwarding header the client sent and sets `X-Client-Ip` itself. It trusts Cloudflare's
   `Cf-Connecting-Ip` only for requests that reach it from the Docker gateway, which is where the
   tunnel's traffic comes from.
