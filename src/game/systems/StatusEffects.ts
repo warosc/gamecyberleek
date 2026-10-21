@@ -3,7 +3,7 @@ export type StatusKind = 'burn' | 'chill' | 'toxin';
 /** Carried on a damage packet; the target decides how it stacks. */
 export interface StatusPayload {
   kind: StatusKind;
-  /** Burn/toxin: damage per tick. Chill: ignored. */
+  /** Burn/toxin: damage per tick. Chill: the slow (0.35 = 35 %); 0 means the default CHILL_SLOW. */
   potency: number;
   durationMs: number;
 }
@@ -60,7 +60,10 @@ export class StatusEffects {
 
   /** Movement multiplier from chill; 1 when unaffected. */
   speedFactor(now: number) {
-    return this.has('chill', now) ? 1 - CHILL_SLOW * (this.resilient ? BOSS_STATUS_SCALE : 1) : 1;
+    if (!this.has('chill', now)) return 1;
+    // apply() already scaled a stored slow for bosses; the default only applies when none was given.
+    const stored = this.active.get('chill')!.potency;
+    return 1 - (stored > 0 ? stored : CHILL_SLOW * (this.resilient ? BOSS_STATUS_SCALE : 1));
   }
 
   /**

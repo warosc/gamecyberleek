@@ -87,6 +87,7 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.mobileInput.active,
       (id) => this.gameScene.getSpecialCharge(id),
       (id) => this.gameScene.activateSpecial(id),
+      (id) => this.gameScene.getSpecialCooldown(id),
     );
     this.pauseMenu = new PauseMenu(this, this.gameScene);
     this.phaseBanner = new PhaseBanner(this, this.gameScene.mobileInput.active);

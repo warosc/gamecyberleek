@@ -18,7 +18,7 @@ describe('game logic', () => {
   it('applies and resolves stat upgrades by stable id', () => {
     const stats = createPlayerStats();
     getAbilityById('power')!.apply(stats, 1);
-    expect(stats.attackDamage).toBe(28);
+    expect(stats.attackDamage).toBe(26); // 20 × 1.3
     expect(getAbilityById('missing')).toBeUndefined();
     expect(ABILITIES.every((a) => a.maxLevel > 0)).toBe(true);
   });

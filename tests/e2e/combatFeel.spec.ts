@@ -508,12 +508,13 @@ test('a new weapon replaces the active weapon, its stats and its visible model',
       art: body?.name,
     };
   });
+  // Weapon drops are mods: the starter weapon, its mode and its model stay; only stats change.
   expect(equipped).toEqual({
     count: 2,
-    name: 'CAÑÓN DE PLASMA MK-1',
-    mode: 'plasma',
-    damage: 29,
-    art: 'weapon-plasma',
+    name: 'PULSEGUN-01',
+    mode: 'pulse',
+    damage: 27,
+    art: 'weapon-pulse',
   });
 });
 
@@ -562,7 +563,7 @@ test('inventory opens, swaps stored weapons, recycles items and activates a set 
       evolved: Boolean(weapon.getByName('weapon-evolution-crown')),
     };
   });
-  expect(result).toEqual({ count: 2, mode: 'plasma', synergy: 'plague-bastion', damage: 47, evolved: false });
+  expect(result).toEqual({ count: 2, mode: 'pulse', synergy: 'plague-bastion', damage: 45, evolved: false });
   await page.keyboard.press('i');
   await expect.poll(() => page.evaluate(() =>
     (window.combatGame.scene.getScene('Game') as GameScene).state)).toBe('PLAYING');

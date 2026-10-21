@@ -15,12 +15,14 @@ export type BossSignature = 'none' | 'bloom' | 'cryo-lance';
 /**
  * One commander per sector. The later two reuse BRÓK-9's production sprite under a colour grade
  * until dedicated art exists; what makes each distinct in play is its signature attack.
+ * Toughness is not part of the identity: commander health comes from EnemyScaling (sector factor
+ * plus the player's DPS), so there is one source of truth for how hard each sector hits.
  */
 export const BOSS_VARIANTS = [
-  { name: 'BRÓK-9', title: 'COMANDANTE DE LA BRECHA', texture: 'brok9-commander', tint: undefined, healthScale: 1, signature: 'none' },
-  { name: 'KOLI-6', title: 'MATRIARCA DE ESPORAS', texture: 'koli6-commander', tint: 0xfff0c8, healthScale: 1.12, signature: 'bloom' },
-  { name: 'ROMA-X', title: 'NÚCLEO CRIOGÉNICO', texture: 'romax-commander', tint: 0xa8dcff, healthScale: 1.24, signature: 'cryo-lance' },
-] as const satisfies readonly { name: string; title: string; texture: string; tint: number | undefined; healthScale: number; signature: BossSignature }[];
+  { name: 'BRÓK-9', title: 'COMANDANTE DE LA BRECHA', texture: 'brok9-commander', tint: undefined, signature: 'none' },
+  { name: 'KOLI-6', title: 'MATRIARCA DE ESPORAS', texture: 'koli6-commander', tint: 0xfff0c8, signature: 'bloom' },
+  { name: 'ROMA-X', title: 'NÚCLEO CRIOGÉNICO', texture: 'romax-commander', tint: 0xa8dcff, signature: 'cryo-lance' },
+] as const satisfies readonly { name: string; title: string; texture: string; tint: number | undefined; signature: BossSignature }[];
 
 export function bossVariant(sector: number) {
   return BOSS_VARIANTS[Math.min(Math.max(0, sector), BOSS_VARIANTS.length - 1)];

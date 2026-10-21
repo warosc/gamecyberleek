@@ -3,13 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 // BossVisual extends a Phaser container; only its data exports are under test here.
 vi.mock('phaser', () => ({ default: { GameObjects: { Container: class {} } } }));
 const { BOSS_VARIANTS, bossVariant } = await import('../src/game/entities/enemies/BossVisual');
+const { bossHealth } = await import('../src/game/config/EnemyScaling');
 const { ENEMY_DEFS, EnemyType, FAMILY_RULES } = await import('../src/game/entities/enemies/EnemyTypes');
 
 describe('sector commanders', () => {
   it('gives each sector a distinct commander that is tougher than the last', () => {
     expect(new Set(BOSS_VARIANTS.map(boss => boss.name)).size).toBe(3);
-    BOSS_VARIANTS.forEach((boss, index) => {
-      if (index) expect(boss.healthScale).toBeGreaterThan(BOSS_VARIANTS[index - 1].healthScale);
+    // Health lives in EnemyScaling now; each commander must still be tougher than the last.
+    BOSS_VARIANTS.forEach((_, index) => {
+      if (index) expect(bossHealth(1800, index, 0)).toBeGreaterThan(bossHealth(1800, index - 1, 0));
     });
     expect(BOSS_VARIANTS.map(boss => boss.signature)).toEqual(['none', 'bloom', 'cryo-lance']);
   });

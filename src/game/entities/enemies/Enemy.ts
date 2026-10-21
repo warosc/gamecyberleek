@@ -8,6 +8,7 @@ import { STATUS_COLORS, StatusEffects, type StatusPayload } from '../../systems/
 import { VegetableVisual } from './VegetableVisual';
 import { isVegetableType, vegetableTexture, VEGETABLE_ROSTER } from './VegetableRoster';
 import { MinibossVisual } from './MinibossVisual';
+import { scaleHealthPool } from '../../config/EnemyScaling';
 
 /** Preserves the original feel: 0.075 rad per frame at 60fps. */
 const PULSE_RADIANS_PER_MS = 0.075 * 0.06;
@@ -81,6 +82,8 @@ export class Enemy extends Phaser.GameObjects.Arc {
   elite = false;
   eliteAffix: EliteAffix = 'OVERCHARGED';
   private eliteMultiplier = 1;
+  /** Sector contact-damage factor from EnemyScaling; 1 for enemies created without scaling. */
+  private damageScale = 1;
   /** Burn, chill and toxin on gameplay time; bosses and minibosses resist them. */
   readonly status: StatusEffects;
   /** Gameplay time until which a nearby bulwark's aura reduces damage taken. */
@@ -394,8 +397,19 @@ export class Enemy extends Phaser.GameObjects.Arc {
     }).setOrigin(0.5).setDepth(15);
     return this;
   }
+  /**
+   * Run-time and sector scaling (see EnemyScaling), applied right after construction. A
+   * multiplier on the current pool rather than a constructor argument, so the many existing
+   * `new Enemy(...)` call sites stay valid and an elite promotion still multiplies on top.
+   */
+  applyScaling(healthMultiplier: number, damageMultiplier = 1) {
+    scaleHealthPool(this.health, healthMultiplier);
+    this.damageScale = damageMultiplier;
+    return this;
+  }
   get contactDamage() {
-    return this.def.damage * (this.elite ? ELITE_AFFIX_DEFS[this.eliteAffix].damageMultiplier : 1);
+    return this.def.damage * this.damageScale *
+      (this.elite ? ELITE_AFFIX_DEFS[this.eliteAffix].damageMultiplier : 1);
   }
   get xpReward() {
     return this.def.xp * (this.elite ? 3 : 1);

@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ALL_CONTRACT_KINDS,
+  BOSS_ELITE_VALUE,
   CONTRACTS_PER_RUN,
   ContractSystem,
   PERFECT_BONUS_CREDITS,
+  UNSCATHED_START_MS,
   contractDescription,
   type ContractProgress,
 } from '../src/game/systems/ContractSystem';
@@ -46,7 +48,21 @@ describe('contract selection', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const system = new ContractSystem();
     expect(system.list.map((c) => c.kind)).toEqual(['KILL_STREAK', 'DEVICE_KILLS', 'UNSCATHED']);
-    expect(system.list.map((c) => c.target)).toEqual([5, 2, 30000]);
+    expect(system.list.map((c) => c.target)).toEqual([12, 4, 45000]);
+  });
+
+  it('rolls targets that take a real run to meet, not just the first minute', () => {
+    // The first four random calls drive the shuffle (0.999 keeps the declared order, 0 rotates
+    // it); the rest pick each target inside its range.
+    const roll = (shuffle: number, target: number) => {
+      let calls = 0;
+      vi.spyOn(Math, 'random').mockImplementation(() => (calls++ < ALL_CONTRACT_KINDS.length - 1 ? shuffle : target));
+      return new ContractSystem().list.map((c) => [c.kind, c.target]);
+    };
+    // ~50 enemies spawn in the first minute, so even the lowest kill target outlasts it.
+    expect(roll(0.999, 0)).toEqual([['ELIMINATIONS', 80], ['KILL_STREAK', 12], ['DEVICE_KILLS', 4]]);
+    expect(roll(0.999, 0.999)).toEqual([['ELIMINATIONS', 120], ['KILL_STREAK', 16], ['DEVICE_KILLS', 6]]);
+    expect(roll(0, 0.999)).toEqual([['KILL_STREAK', 16], ['DEVICE_KILLS', 6], ['UNSCATHED', 75000]]);
   });
 
   it('describes a contract using its rolled target', () => {
@@ -96,13 +112,24 @@ describe('contract progress', () => {
     expect(system.summary().completedCount).toBe(3);
   });
 
-  it('counts elites toward the hunt but a boss kill always finishes it outright', () => {
-    const system = new ContractSystem([contract('ELITE_HUNT', 3, 70)]);
+  it('counts elites toward the hunt and the commander as several elites, not the whole hunt', () => {
+    const system = new ContractSystem([contract('ELITE_HUNT', 6, 70)]);
     system.onEnemyDefeated({ elite: true, boss: false, environment: false });
     expect(system.list[0]).toMatchObject({ progress: 1, completed: false });
-    const completed = system.onEnemyDefeated({ elite: false, boss: true, environment: false });
+    // A victory alone no longer completes it: 1 elite + the commander is still short of 6.
+    expect(system.onEnemyDefeated({ elite: false, boss: true, environment: false })).toBeUndefined();
+    expect(system.list[0]).toMatchObject({ progress: 1 + BOSS_ELITE_VALUE, completed: false });
+    system.onEnemyDefeated({ elite: true, boss: false, environment: false });
+    const completed = system.onEnemyDefeated({ elite: true, boss: false, environment: false });
     expect(completed?.kind).toBe('ELITE_HUNT');
-    expect(system.list[0]).toMatchObject({ progress: 3, completed: true });
+    expect(system.list[0]).toMatchObject({ progress: 6, completed: true });
+  });
+
+  it('caps hunt progress at the target when the commander overshoots it', () => {
+    const system = new ContractSystem([contract('ELITE_HUNT', 5, 70)]);
+    for (let kill = 0; kill < 4; kill++) system.onEnemyDefeated({ elite: true, boss: false, environment: false });
+    expect(system.onEnemyDefeated({ elite: false, boss: true, environment: false })?.kind).toBe('ELITE_HUNT');
+    expect(system.list[0]).toMatchObject({ progress: 5, completed: true });
   });
 
   it('tracks the longest kill chain reached, not the current one', () => {
@@ -117,15 +144,26 @@ describe('contract progress', () => {
   });
 
   it('completes the unscathed contract only after a continuous clean interval', () => {
+    const start = UNSCATHED_START_MS;
     const system = new ContractSystem([contract('UNSCATHED', 30000, 65)]);
-    expect(system.update(20000)).toBeUndefined();
+    expect(system.update(start + 20000)).toBeUndefined();
     expect(system.list[0].progress).toBe(20000);
-    system.onPlayerDamaged(25000);
-    expect(system.update(30000)).toBeUndefined(); // only 5s clean since the hit
+    system.onPlayerDamaged(start + 25000);
+    expect(system.update(start + 30000)).toBeUndefined(); // only 5s clean since the hit
     expect(system.list[0].progress).toBe(5000);
-    const completed = system.update(55000);
+    const completed = system.update(start + 55000);
     expect(completed?.kind).toBe('UNSCATHED');
     expect(system.list[0]).toMatchObject({ completed: true, progress: 30000 });
+  });
+
+  it('does not count the radish-only warm-up toward the clean clock', () => {
+    const system = new ContractSystem([contract('UNSCATHED', 45000, 65)]);
+    expect(system.update(UNSCATHED_START_MS - 1)).toBeUndefined();
+    expect(system.list[0].progress).toBe(0);
+    // A hit during the warm-up must not pull the start earlier either.
+    system.onPlayerDamaged(10000);
+    expect(system.update(UNSCATHED_START_MS + 44999)).toBeUndefined();
+    expect(system.update(UNSCATHED_START_MS + 45000)?.kind).toBe('UNSCATHED');
   });
 });
 

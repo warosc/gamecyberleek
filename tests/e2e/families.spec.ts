@@ -108,7 +108,8 @@ test('each sector fields its own commander and the cryo lance slows the player',
     const commander = (scene.enemies.getChildren() as Enemy[]).find(enemy => enemy.enemyType === 'BOSS')!;
     return { max: commander.health.max };
   });
-  expect(boss.max).toBe(Math.round(1800 * 1.24));
+  // Sector 3 health factor (EnemyScaling); a fresh run's DPS is far below the 15 s floor.
+  expect(boss.max).toBe(Math.round(1800 * 1.55));
   await expect.poll(() => page.evaluate(() => {
     type Node = Phaser.GameObjects.GameObject & { list?: Node[]; text?: string };
     const collect = (list: Node[]): string[] =>

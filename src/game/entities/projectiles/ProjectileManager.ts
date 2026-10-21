@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { resolveDamage } from '../../systems/CombatSystem';
-import type { PlayerStats } from '../player/PlayerStats';
+import { projectileDamageShare, type PlayerStats } from '../player/PlayerStats';
 import { Projectile } from './Projectile';
 import { GAMEPLAY } from '../../config/Constants';
 export class ProjectileManager {
@@ -26,7 +26,9 @@ export class ProjectileManager {
     ) as Projectile | null;
     if (!p) return;
     const hit = resolveDamage({
-      baseAmount: stats.attackDamage * damageMultiplier,
+      // Each projectile carries its share of the volley, so extra projectiles add coverage and
+      // only part of a full shot's damage (see `extraProjectileDamage`).
+      baseAmount: stats.attackDamage * projectileDamageShare(stats) * damageMultiplier,
       type: stats.weaponMode === 'plasma' ? 'plasma' : 'energy',
       source: 'player',
       criticalChance: stats.criticalChance,

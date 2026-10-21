@@ -7,6 +7,8 @@ import type { Player } from '../entities/player/Player';
 import { bossVariant } from '../entities/enemies/BossVisual';
 import { MINIBOSS_VARIANTS } from '../entities/enemies/MinibossVisual';
 import { shakeCamera } from './RuntimeSettings';
+import { combatRating } from './BuildProgression';
+import { bossHealth, minibossHealth, sectorDamageMultiplier } from '../config/EnemyScaling';
 
 /** Owns encounter milestones; combat and victory resolution remain in GameScene. */
 export class EncounterSystem {
@@ -35,9 +37,10 @@ export class EncounterSystem {
     const x = Phaser.Math.Clamp(this.player.x + 430, 90, ARENA.width - 90);
     const y = Phaser.Math.Clamp(this.player.y - 230, 90, ARENA.height - 90);
     const miniboss = new Enemy(this.scene, x, y, EnemyType.MINIBOSS, this.sector);
-    const multiplier = 1 + Math.min(this.sector, 2) * 0.18;
-    miniboss.health.max = Math.round(miniboss.health.max * multiplier);
-    miniboss.health.current = miniboss.health.max;
+    // Scaled like the wave it arrives with (time factor at 2:30, ×2.0), not a flat +18 % per
+    // sector that left it a 560 HP speed bump for a mid-run build.
+    const base = miniboss.health.max;
+    miniboss.applyScaling(minibossHealth(base, this.sector) / base, sectorDamageMultiplier(this.sector));
     this.enemies.add(miniboss);
     const identity = MINIBOSS_VARIANTS[Math.min(this.sector, 2)];
     this.scene.events.emit(Events.MINIBOSS_SPAWNED, identity.name, identity.title, identity.accent, miniboss.health.max);
@@ -61,8 +64,11 @@ export class EncounterSystem {
     const y = Phaser.Math.Clamp(this.player.y - 300, 100, ARENA.height - 100);
     const identity = bossVariant(this.sector);
     const boss = new Enemy(this.scene, x, y, EnemyType.BOSS, this.sector);
-    boss.health.max = Math.round(boss.health.max * identity.healthScale);
-    boss.health.current = boss.health.max;
+    // Sized against the build that has to beat it: a flat 1800 HP fell in 2–5 s to a level-12
+    // build, so phases 2 and 3 were almost never seen. See bossHealth for the floor and cap.
+    const base = boss.health.max;
+    const hp = bossHealth(base, this.sector, combatRating(this.player.stats).dps);
+    boss.applyScaling(hp / base, sectorDamageMultiplier(this.sector));
     this.enemies.add(boss);
     this.scene.events.emit(Events.BOSS_SPAWNED, identity.name, boss.health.max);
     shakeCamera(this.scene.cameras.main, 700, 0.012);

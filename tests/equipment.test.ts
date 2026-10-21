@@ -8,13 +8,13 @@ function sequence(values: number[]) {
 }
 
 describe('equipment progression', () => {
-  it('applies a weapon drop to combat stats', () => {
+  it('applies a weapon mod to combat stats without replacing the weapon', () => {
     const stats = createPlayerStats();
     const item = rollEquipment(3, sequence([0.1, 0.1, 0.1]));
     item.apply(stats);
     expect(item.kind).toBe('weapon');
     expect(stats.attackDamage).toBeGreaterThan(20);
-    expect(stats.weaponName).not.toBe('PULSEGUN-01');
+    expect(stats.weaponName).toBe('PULSEGUN-01');
     expect(item.id).toMatch(/^weapon\./);
     expect(item.modifiers.length).toBeGreaterThan(0);
   });
@@ -35,7 +35,7 @@ describe('equipment progression', () => {
     const item = rollEquipment(3, sequence([0.1, 0.1, 0.1]));
     applyEquipmentModifiers(stats, item.modifiers);
     expect(stats.attackDamage).toBeGreaterThan(20);
-    expect(stats.weaponName).toBe(item.name.replace(/ MK-\d+$/, ''));
+    expect(item.modifiers.every(modifier => modifier.operation !== 'set')).toBe(true);
   });
 
   it('removes the numeric contribution of a replaced weapon', () => {

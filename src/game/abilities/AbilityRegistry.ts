@@ -1,5 +1,7 @@
 import type { PlayerStats } from '../entities/player/PlayerStats';
 import type { StarterWeaponId } from '../weapons/WeaponRegistry';
+import { CHILL_SLOW } from '../systems/StatusEffects';
+import { runRandom } from '../systems/RunRandom';
 export interface Ability {
   id: string;
   name: string;
@@ -23,11 +25,13 @@ export const ABILITIES: Ability[] = [
   {
     id: 'power',
     name: 'POWER SHOT',
-    description: '+8 attack damage',
+    description: '+30% attack damage',
     icon: '✦',
     maxLevel: 5,
+    // Proportional, not flat: +8 was +44 % for the pulse gun (18) but +21 % for the spore cannon
+    // (38). Compounding ×1.3 keeps level 3 (×2.2) where +24 left the pulse gun with mastery.
     apply: (s) => {
-      s.attackDamage += 8;
+      s.attackDamage *= 1.3;
     },
   },
   {
@@ -43,9 +47,10 @@ export const ABILITIES: Ability[] = [
   {
     id: 'multi',
     name: 'MULTI SHOT',
-    description: '+1 projectile',
+    description: '+1 projectile · each extra adds 50% damage',
     icon: '☷',
     maxLevel: 3,
+    // Extra projectiles deal `extraProjectileDamage` (50 %) of a shot, applied in ProjectileManager.
     apply: (s) => {
       s.projectileCount++;
     },
@@ -63,11 +68,14 @@ export const ABILITIES: Ability[] = [
   {
     id: 'magnet',
     name: 'MAGNET',
-    description: '+55 pickup radius',
+    description: '+55 pickup radius and +10% XP',
     icon: '◉',
     maxLevel: 4,
+    // Radius alone was the weakest pick; the XP share makes it a real investment in levels. Four
+    // levels (+0.4) stay well inside the online level ceiling's 3× XP allowance.
     apply: (s) => {
       s.magnetRadius += 55;
+      s.xpMultiplier += 0.1;
     },
   },
   {
@@ -82,21 +90,26 @@ export const ABILITIES: Ability[] = [
   },
   {
     id: 'overdrive',
-    name: 'LEEK OVERDRIVE',
-    description: '10s: +50% damage and fire rate',
+    name: 'LEEK OVERCLOCK',
+    description: 'Q/E/R recharge 12% faster',
     icon: '⚡',
     maxLevel: 3,
-    apply: () => {},
+    // Was a one-off 12–16 s Overdrive: a whole level-up spent on a buff that ended before the next
+    // wave. A permanent cut to the special cooldowns keeps paying for the rest of the run.
+    apply: (s) => {
+      s.specialCooldownMultiplier *= 0.88;
+    },
   },
   { id: 'ignite', name: 'MUNICIÓN INCENDIARIA', description: 'Los impactos queman: +4 daño cada 0,5 s', icon: '♨', maxLevel: 3,
     apply: s => { s.burnDamage += 4; } },
-  { id: 'cryo', name: 'NÚCLEO CRIO', description: 'Los impactos ralentizan un 35% durante 1,5 s', icon: '❄', maxLevel: 2,
-    apply: s => { s.chillDurationMs += 1500; } },
+  // Level 2 slows harder as well as longer; a second level that only added duration was a dead pick.
+  { id: 'cryo', name: 'NÚCLEO CRIO', description: 'Los impactos ralentizan un 35% (1,5 s) · Nivel 2: 50% (3 s)', icon: '❄', maxLevel: 2,
+    apply: (s, level) => { s.chillDurationMs += 1500; s.chillSlow = level >= 2 ? 0.5 : CHILL_SLOW; } },
   { id: 'toxin', name: 'SAVIA TÓXICA', description: 'Toxina acumulable: +2 daño por dosis (máx. 5)', icon: '☣', maxLevel: 3,
     apply: s => { s.toxinDamage += 2; } },
   { id: 'breach', name: 'AGUJA DE PLASMA', description: '+1 enemigo atravesado por disparo', icon: '↠', maxLevel: 3,
     apply: s => { s.bonusPiercing++; } },
-  { id: 'fan', name: 'ABANICO VERDE', description: '+1 proyectil por disparo', icon: '⋔', maxLevel: 3,
+  { id: 'fan', name: 'ABANICO VERDE', description: '+1 proyectil por disparo · cada extra suma un 50% de daño', icon: '⋔', maxLevel: 3,
     apply: s => { s.projectileCount++; } },
   { id: 'phase_dash', name: 'PASO FANTASMA', description: 'Dash 20% más frecuente y +20 velocidad', icon: '»', maxLevel: 3,
     apply: s => { s.dashCooldown *= 0.8; s.moveSpeed += 20; } },
@@ -125,7 +138,7 @@ export const isSignatureAbility = (id: string) => Object.values(SIGNATURE_ABILIT
 function shuffled<T>(items: readonly T[]): T[] {
   const result = [...items];
   for (let index = result.length - 1; index > 0; index--) {
-    const swap = Math.floor(Math.random() * (index + 1));
+    const swap = Math.floor(runRandom('upgrades') * (index + 1));
     [result[index], result[swap]] = [result[swap], result[index]];
   }
   return result;

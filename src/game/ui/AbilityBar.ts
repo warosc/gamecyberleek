@@ -13,6 +13,9 @@ export class AbilityBar {
     mobile: boolean,
     private readonly getCharge: (id: SpecialAbilityId) => number,
     onActivate: (id: SpecialAbilityId) => void,
+    /** Effective cooldown: OVERCLOCK shortens it, so the base value would show the wrong seconds. */
+    private readonly getCooldown: (id: SpecialAbilityId) => number = (id) =>
+      SPECIAL_ABILITIES.find((ability) => ability.id === id)!.cooldown,
   ) {
     if (mobile)
       scene.add
@@ -72,7 +75,7 @@ export class AbilityBar {
       this.fills.get(ability.id)!.width = 86 * charge;
       this.cooldowns
         .get(ability.id)!
-        .setText(charge >= 1 ? t('hud.ready') : `${Math.ceil((ability.cooldown * (1 - charge)) / 1000)}s`);
+        .setText(charge >= 1 ? t('hud.ready') : `${Math.ceil((this.getCooldown(ability.id) * (1 - charge)) / 1000)}s`);
     }
   }
 }

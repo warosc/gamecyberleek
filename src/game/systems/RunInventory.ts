@@ -2,6 +2,12 @@ import type { Equipment } from '../loot/Equipment';
 
 export const INVENTORY_CAPACITY = 6;
 
+/**
+ * Six backpack slots plus a pointer to the active weapon mod. It only tracks items: the caller
+ * removes `replaced`/`previous` modifiers and applies the new ones. Weapon items are mods made of
+ * additive and multiplicative modifiers only, so that swap restores the starter's stats exactly
+ * and never changes its weaponMode.
+ */
 export class RunInventory {
   private readonly items: Equipment[] = [];
   private activeWeapon?: Equipment;

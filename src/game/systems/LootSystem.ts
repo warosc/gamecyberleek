@@ -5,6 +5,7 @@ import type { Player } from '../entities/player/Player';
 import { EquipmentDrop } from '../loot/EquipmentDrop';
 import { rollEquipment } from '../loot/Equipment';
 import type { AudioManager } from '../managers/AudioManager';
+import { randomFrom } from './RunRandom';
 
 interface LootSystemOptions {
   player: Player;
@@ -44,7 +45,7 @@ export class LootSystem {
   }
 
   spawnEquipmentDrop() {
-    const equipment = rollEquipment(this.options.level());
+    const equipment = rollEquipment(this.options.level(), randomFrom('loot'));
     const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
     const x = Phaser.Math.Clamp(this.options.player.x + Math.cos(angle) * 145, 70, ARENA.width - 70);
     const y = Phaser.Math.Clamp(this.options.player.y + Math.sin(angle) * 145, 70, ARENA.height - 70);

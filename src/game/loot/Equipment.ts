@@ -63,11 +63,14 @@ export function removeEquipmentModifiers(
   }
 }
 
+// Every additive stat an item may touch. A key missing here is silently dropped from the
+// modifiers the scene applies: ÓPTICA FOTOSINTÉTICA advertised +1 perforación (bonusPiercing)
+// but never delivered it.
 const NUMERIC_KEYS: readonly (keyof PlayerStats)[] = [
   'maxHp', 'moveSpeed', 'dashSpeed', 'dashDuration', 'dashCooldown', 'attackDamage',
   'attackCooldown', 'projectileSpeed', 'criticalChance', 'xpMultiplier', 'projectileCount',
   'magnetRadius', 'damageReduction', 'projectileScale', 'projectilePiercing', 'splashRadius',
-  'chainTargets', 'chainRange',
+  'chainTargets', 'chainRange', 'bonusPiercing', 'burnDamage', 'chillDurationMs', 'toxinDamage',
 ];
 
 function structuredModifiers(apply: (stats: PlayerStats) => void): EquipmentModifier[] {
@@ -82,9 +85,8 @@ function structuredModifiers(apply: (stats: PlayerStats) => void): EquipmentModi
     const operation = key === 'attackCooldown' || key === 'dashCooldown' ? 'multiply' : 'add';
     modifiers.push({ key, operation, value: operation === 'multiply' ? next / previous : next - previous });
   }
-  for (const key of ['weaponName', 'projectileColor', 'weaponMode'] as const) {
-    if (after[key] !== before[key]) modifiers.push({ key, operation: 'set', value: after[key] });
-  }
+  // Only numeric deltas: a `set` cannot be undone on swap, and loot must never rewrite the
+  // starter's weaponMode, name or colour (see the weapon mods below).
   return modifiers;
 }
 
@@ -113,6 +115,13 @@ export function rollEquipment(level: number, random = Math.random): Equipment {
   const tier = Math.max(1, Math.ceil(level / 3));
   const rarityPower: Record<EquipmentRarity, number> = { COMMON: 0, RARE: 8, EPIC: 18, LEGENDARY: 34 };
   if (weapon) {
+    // Weapon drops are mods for the starter, not replacement guns. They used to `set` weaponMode,
+    // so a spore player who installed the pulse pistol lost splash, an arc player who took the
+    // laser lost chains, and both lost their signature evolution. A mod only adds numbers on top
+    // of the starter. It never touches weaponMode, weaponName, projectileColor or projectileScale:
+    // the signature evolution `set`s the last three, so a mod stacked on them could not be removed
+    // cleanly once the weapon evolved. Each mod keeps one universal bonus so it pays off in every
+    // mode; the arc and plasma themed extras only add to the mode that already uses them.
     const choices = [
       {
         name: 'PISTOLA DE PULSO',
@@ -120,52 +129,33 @@ export function rollEquipment(level: number, random = Math.random): Equipment {
         apply: (stats: PlayerStats) => {
           stats.attackDamage += Math.round(5 * multiplier);
           stats.criticalChance += 0.03 * multiplier;
-          stats.weaponName = 'PISTOLA DE PULSO';
-          stats.projectileColor = 0x73ef62;
-          stats.weaponMode = 'pulse';
-          stats.projectilePiercing = 0;
-          stats.splashRadius = 0;
         },
       },
       {
         name: 'BLÁSTER ARC',
-        description: `+${Math.round(4 * multiplier)} daño · ${Math.round(6 * multiplier)}% más rápido`,
+        description: `+${Math.round(4 * multiplier)} daño · ${Math.round(6 * multiplier)}% más rápido · +${Math.round(30 * multiplier)} alcance de cadena`,
         apply: (stats: PlayerStats) => {
           stats.attackDamage += Math.round(4 * multiplier);
           stats.attackCooldown *= 1 - Math.min(0.22, 0.06 * multiplier);
-          stats.weaponName = 'BLÁSTER ARC';
-          stats.projectileColor = 0x21e6ff;
-          stats.projectileScale = 1.15;
-          stats.weaponMode = 'arc';
-          stats.projectilePiercing = 1;
-          stats.splashRadius = 0;
+          stats.chainRange += Math.round(30 * multiplier);
         },
       },
       {
         name: 'LÁSER IÓNICO',
-        description: `+${Math.round(7 * multiplier)} daño · +${Math.round(90 * multiplier)} velocidad láser`,
+        description: `+${Math.round(4 * multiplier)} daño · +${Math.floor(multiplier)} perforación · +${Math.round(90 * multiplier)} velocidad de proyectil`,
         apply: (stats: PlayerStats) => {
-          stats.attackDamage += Math.round(7 * multiplier);
+          stats.attackDamage += Math.round(4 * multiplier);
+          // One extra pierce through RARE, two from EPIC up.
+          stats.projectilePiercing += Math.floor(multiplier);
           stats.projectileSpeed += Math.round(90 * multiplier);
-          stats.weaponName = 'LÁSER IÓNICO';
-          stats.projectileColor = 0x6ffcff;
-          stats.projectileScale = 1.4;
-          stats.weaponMode = 'laser';
-          stats.projectilePiercing = 2;
-          stats.splashRadius = 0;
         },
       },
       {
         name: 'CAÑÓN DE PLASMA',
-        description: `+${Math.round(11 * multiplier)} daño · proyectil de plasma mayor`,
+        description: `+${Math.round(9 * multiplier)} daño · +${Math.round(20 * multiplier)} área de plasma`,
         apply: (stats: PlayerStats) => {
-          stats.attackDamage += Math.round(11 * multiplier);
-          stats.weaponName = 'CAÑÓN DE PLASMA';
-          stats.projectileColor = 0xd566ff;
-          stats.projectileScale = 1.8;
-          stats.weaponMode = 'plasma';
-          stats.projectilePiercing = 0;
-          stats.splashRadius = 92;
+          stats.attackDamage += Math.round(9 * multiplier);
+          stats.splashRadius += Math.round(20 * multiplier);
         },
       },
     ];

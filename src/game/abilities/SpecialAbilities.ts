@@ -13,3 +13,13 @@ export const SPECIAL_ABILITIES: SpecialAbilityDefinition[] = [
   { id: 'shield', key: 'E', name: 'BIO SHIELD', cooldown: 12000, color: 0x73ef62 },
   { id: 'overdrive', key: 'R', name: 'OVERDRIVE', cooldown: 18000, color: 0xd566ff },
 ];
+
+/**
+ * Cooldown of one special after the build's `specialCooldownMultiplier` (LEEK OVERCLOCK). The
+ * activation check, the charge bar and the seconds readout must all read this one value, or the
+ * bar would show "ready" while the key is still refused.
+ */
+export function specialCooldownMs(id: SpecialAbilityId, multiplier = 1) {
+  const definition = SPECIAL_ABILITIES.find((ability) => ability.id === id)!;
+  return definition.cooldown * multiplier;
+}

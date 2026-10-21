@@ -3,12 +3,20 @@ import { EnemyType } from '../entities/enemies/EnemyTypes';
 export const BOSS_START_MS = 240000;
 export const MINIBOSS_START_MS = 150000;
 export const UPGRADE_MILESTONES = [60000, 120000, 180000] as const;
+/**
+ * A guaranteed supply chest 15 s before the commander, so the build heads into the boss topped
+ * up even when the random chests fell early or out of reach.
+ */
+export const FINAL_CHEST_MS = 225000;
 export const RUN_PHASES = [
   { at: 0, label: 'RÁBANOS · MANTÉN DISTANCIA', interval: 1300, cap: 12, types: [EnemyType.GRUNT] },
   { at: 30000, label: 'ZANAHORIAS · SAL DE LA LÍNEA', interval: 1100, cap: 20, types: [EnemyType.GRUNT, EnemyType.GRUNT, EnemyType.RUNNER] },
   { at: 75000, label: 'TOMATES · ESQUIVA EL DISPARO', interval: 900, cap: 28, types: [EnemyType.GRUNT, EnemyType.RUNNER, EnemyType.SHOOTER] },
   { at: 135000, label: 'BRECHA ABIERTA · COMBINA TUS MEJORAS', interval: 700, cap: 32, types: [EnemyType.GRUNT, EnemyType.RUNNER, EnemyType.SHOOTER, EnemyType.TANK] },
-  { at: 210000, label: 'ÚLTIMA OLEADA · PREPÁRATE PARA EL COMANDANTE', interval: 950, cap: 32, types: [EnemyType.GRUNT, EnemyType.RUNNER, EnemyType.SHOOTER] },
+  // A crescendo into the commander: this phase used to slow spawns (700 → 950 ms), so the run's
+  // climax was its quietest stretch since the tomatoes. Tanks are left out so the last wave is
+  // fast and dense rather than spongy right before the boss.
+  { at: 210000, label: 'ÚLTIMA OLEADA · PREPÁRATE PARA EL COMANDANTE', interval: 600, cap: 32, types: [EnemyType.GRUNT, EnemyType.RUNNER, EnemyType.SHOOTER] },
   { at: BOSS_START_MS, label: 'COMANDANTE · DERRÓTALO', interval: 999999, cap: 0, types: [] },
 ] as const;
 

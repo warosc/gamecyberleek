@@ -145,17 +145,15 @@ export const PHRASES_EN: Record<string, string> = {
  * when a whole string has no exact entry.
  */
 export const FRAGMENTS_EN: readonly [string, string][] = [
-  ['proyectil de plasma mayor', 'larger plasma shell'],
   ['velocidad de proyectil', 'projectile speed'],
   ['radio de recolección', 'pickup radius'],
   ['alcance de cadena', 'chain range'],
-  ['alcance eléctrico', 'electric range'],
   ['área de plasma', 'plasma area'],
-  ['velocidad láser', 'laser speed'],
   ['dash más rápido', 'faster dash'],
   ['más cadencia', 'more fire rate'],
   ['más rápido', 'faster'],
   ['perforación', 'pierce'],
+  ['toxina', 'toxin'],
   ['movimiento', 'movement'],
   ['armadura', 'armor'],
   ['crítico', 'critical'],

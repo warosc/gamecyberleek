@@ -66,7 +66,9 @@ function freshProfile(): PlayerProfile {
     victories: 0,
     bioCredits: 0,
     vibration: true,
-    autoFire: false,
+    // On by default: a first-time phone player otherwise has to find the toggle while learning to
+    // move, and alpha runs died at 8-17 s at level 1. Saves that chose already keep their choice.
+    autoFire: true,
     unlocks: [],
     weaponMastery: { ...EMPTY_WEAPON_MASTERY },
     contractsCompleted: 0,

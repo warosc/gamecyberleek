@@ -1,5 +1,6 @@
 import type { MomentumState } from './CombatMomentum';
 import { t } from '../i18n';
+import { runRandom } from './RunRandom';
 
 export type ContractKind = 'ELIMINATIONS' | 'KILL_STREAK' | 'DEVICE_KILLS' | 'UNSCATHED' | 'ELITE_HUNT';
 
@@ -35,37 +36,47 @@ interface ContractBlueprint {
 /**
  * Data-only definitions. Targets are rolled per run so a contract never feels identical twice;
  * rewards scale roughly with how disruptive the objective is to a player's default playstyle.
+ *
+ * Targets are sized against the real run: ~50 spawns in the first minute and ~290 before the
+ * commander, a 1.8 s chain window, six barrels per arena and ~20 elites from 2:00. The earlier
+ * ranges (15–25 kills, a 5-chain, 2 barrel kills, 2 elites or any boss kill, a clean half-minute
+ * that could start at 0:00) were all met by just playing, so the perfect bonus was routine.
  */
 const BLUEPRINTS: Record<ContractKind, ContractBlueprint> = {
   ELIMINATIONS: {
     kind: 'ELIMINATIONS',
     title: 'ELIMINACIONES',
     reward: 45,
-    rollTarget: () => 15 + Math.floor(Math.random() * 11), // 15-25
+    // ~130 enemies have spawned by 2:15, so this lands between 1:30 and 2:15 for a player who
+    // clears the waves as they come, and not at all for one who only survives.
+    rollTarget: () => 80 + Math.floor(runRandom('contracts') * 41), // 80-120
   },
   KILL_STREAK: {
     kind: 'KILL_STREAK',
     title: 'CADENA LETAL',
     reward: 55,
-    rollTarget: () => 5 + Math.floor(Math.random() * 4), // 5-8
+    // Needs a packed screen and a build that clears it, not a lucky pair of runners.
+    rollTarget: () => 12 + Math.floor(runRandom('contracts') * 5), // 12-16
   },
   DEVICE_KILLS: {
     kind: 'DEVICE_KILLS',
     title: 'SABOTAJE',
     reward: 60,
-    rollTarget: () => 2 + Math.floor(Math.random() * 3), // 2-4
+    // Six barrels per arena: this asks for luring crowds onto them, not stray shots.
+    rollTarget: () => 4 + Math.floor(runRandom('contracts') * 3), // 4-6
   },
   UNSCATHED: {
     kind: 'UNSCATHED',
     title: 'SIN RASGUÑOS',
     reward: 65,
-    rollTarget: () => 30000 + Math.floor(Math.random() * 31) * 1000, // 30s-60s
+    // Counted from UNSCATHED_START_MS only, so it is earned against carrots and tomatoes.
+    rollTarget: () => 45000 + Math.floor(runRandom('contracts') * 31) * 1000, // 45s-75s
   },
   ELITE_HUNT: {
     kind: 'ELITE_HUNT',
     title: 'CAZA MAYOR',
     reward: 70,
-    rollTarget: () => 2 + Math.floor(Math.random() * 2), // 2-3
+    rollTarget: () => 5 + Math.floor(runRandom('contracts') * 3), // 5-7
   },
 };
 
@@ -73,12 +84,22 @@ export const ALL_CONTRACT_KINDS = Object.keys(BLUEPRINTS) as ContractKind[];
 export const contractTitle = (kind: ContractKind) => BLUEPRINTS[kind].title;
 export const CONTRACTS_PER_RUN = 3;
 export const PERFECT_BONUS_CREDITS = 120;
+/**
+ * The clean clock starts here, not at 0:00: the first 30 s are radishes only and cannot really
+ * hurt anyone, so they used to hand out half of the contract for free.
+ */
+export const UNSCATHED_START_MS = 30000;
+/**
+ * The commander counts as this many elites. It used to close the hunt outright, which made the
+ * contract a free completion for every victory.
+ */
+export const BOSS_ELITE_VALUE = 3;
 
 /** Fisher-Yates over a copy, mirroring `AbilityRegistry`'s `shuffled`. Kept engine-free. */
 function shuffled<T>(items: readonly T[]): T[] {
   const result = [...items];
   for (let index = result.length - 1; index > 0; index--) {
-    const swap = Math.floor(Math.random() * (index + 1));
+    const swap = Math.floor(runRandom('contracts') * (index + 1));
     [result[index], result[swap]] = [result[swap], result[index]];
   }
   return result;
@@ -116,7 +137,7 @@ function rollThreeContracts(): ContractProgress[] {
  */
 export class ContractSystem {
   readonly list: ContractProgress[];
-  private cleanSince = 0;
+  private cleanSince = UNSCATHED_START_MS;
 
   constructor(contracts: ContractProgress[] = rollThreeContracts()) {
     this.list = contracts;
@@ -160,18 +181,13 @@ export class ContractSystem {
       }
     }
     const eliteHunt = this.find('ELITE_HUNT');
-    if (eliteHunt && !eliteHunt.completed) {
-      // The commander is the run's single boss, so downing it always closes this contract
-      // outright rather than counting as one more elite.
-      if (event.boss) {
+    if (eliteHunt && !eliteHunt.completed && (event.boss || event.elite)) {
+      // The commander is worth several elites, not the whole hunt: the contract should still
+      // ask for elites to be hunted before the finale.
+      eliteHunt.progress += event.boss ? BOSS_ELITE_VALUE : 1;
+      if (eliteHunt.progress >= eliteHunt.target) {
         this.complete(eliteHunt);
         justCompleted ??= eliteHunt;
-      } else if (event.elite) {
-        eliteHunt.progress++;
-        if (eliteHunt.progress >= eliteHunt.target) {
-          this.complete(eliteHunt);
-          justCompleted ??= eliteHunt;
-        }
       }
     }
     return justCompleted;
@@ -191,14 +207,15 @@ export class ContractSystem {
 
   /** Fed from `Events.PLAYER_DAMAGED` whenever damage was actually applied; resets the clean clock. */
   onPlayerDamaged(survivalMs: number) {
-    this.cleanSince = survivalMs;
+    // A hit during the warm-up must not move the start earlier than the warm-up's end.
+    this.cleanSince = Math.max(UNSCATHED_START_MS, survivalMs);
   }
 
   /** Called once per gameplay frame (never while paused, in a level-up, or after game over). */
   update(survivalMs: number): ContractProgress | undefined {
     const unscathed = this.find('UNSCATHED');
     if (!unscathed || unscathed.completed) return undefined;
-    unscathed.progress = Math.min(unscathed.target, survivalMs - this.cleanSince);
+    unscathed.progress = Math.max(0, Math.min(unscathed.target, survivalMs - this.cleanSince));
     if (unscathed.progress >= unscathed.target) {
       this.complete(unscathed);
       return unscathed;

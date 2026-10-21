@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import { ARENA, Events, GAMEPLAY } from '../config/Constants';
 import { BOSS_PHASE_CALLOUTS, BOSS_REINFORCEMENTS } from '../config/BossPhases';
-import { Enemy } from '../entities/enemies/Enemy';
+import { BOSS_START_MS } from '../config/RunPacing';
+import type { Enemy } from '../entities/enemies/Enemy';
+import { createScaledEnemy } from '../entities/enemies/EnemyFactory';
 
 /** Owns one-shot phase transitions, leaving the boss itself focused on attack behavior. */
 export class BossPhaseDirector {
@@ -20,7 +22,9 @@ export class BossPhaseDirector {
       const angle = index * Math.PI * 2 / types.length + (phase === 3 ? Math.PI / 4 : 0);
       const x = Phaser.Math.Clamp(boss.x + Math.cos(angle) * 210, 70, ARENA.width - 70);
       const y = Phaser.Math.Clamp(boss.y + Math.sin(angle) * 210, 70, ARENA.height - 70);
-      this.enemies.add(new Enemy(this.scene, x, y, type));
+      // Phases only start after the commander arrives, where the time factor is capped, so the
+      // boss start stands in for the clock: reinforcements match the last wave (×2.6 × sector).
+      this.enemies.add(createScaledEnemy(this.scene, type, x, y, BOSS_START_MS, this.sector));
     });
     const ring = this.scene.add.circle(boss.x, boss.y, 75, phase === 3 ? 0xff476f : 0xffb52e, 0.06)
       .setStrokeStyle(6, phase === 3 ? 0xff476f : 0xffb52e, 0.95).setDepth(15);

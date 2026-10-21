@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
-import { RUN_PHASE_CALLOUTS, runPhase, UPGRADE_MILESTONES } from '../config/RunPacing';
+import { FINAL_CHEST_MS, RUN_PHASE_CALLOUTS, runPhase, UPGRADE_MILESTONES } from '../config/RunPacing';
 import { currentViewportShape, mobileWorldZoom } from '../config/ViewportLayout';
 import { ARENA, COLORS, Events, GAMEPLAY, GameState } from '../config/Constants';
 import { Player } from '../entities/player/Player';
 import { ProjectileManager } from '../entities/projectiles/ProjectileManager';
-import { EnemyFactory } from '../entities/enemies/EnemyFactory';
+import { EnemyFactory, createScaledEnemy } from '../entities/enemies/EnemyFactory';
 import { Enemy } from '../entities/enemies/Enemy';
 import { EnemyType } from '../entities/enemies/EnemyTypes';
 import { SpawnSystem } from '../systems/SpawnSystem';
@@ -12,9 +12,10 @@ import { ExperienceSystem } from '../systems/ExperienceSystem';
 import { chooseAbilities, getAbilityById, isSignatureAbility, signatureAbilityId } from '../abilities/AbilityRegistry';
 import { ExperienceOrb } from '../entities/experience/ExperienceOrb';
 import { orbPullSpeed } from '../systems/OrbMagnet';
+import { setRunSeed } from '../systems/RunRandom';
 import { AudioManager } from '../managers/AudioManager';
 import { ARENA_THEMES } from '../config/ArenaDefinitions';
-import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
+import { SPECIAL_ABILITIES, specialCooldownMs, type SpecialAbilityId } from '../abilities/SpecialAbilities';
 import { EnemyProjectileManager } from '../entities/projectiles/EnemyProjectileManager';
 import { loadProfile, updateSettings } from '../systems/ProfileStore';
 import { EnemyDeathResolver } from '../systems/EnemyDeathResolver';
@@ -102,6 +103,7 @@ export class GameScene extends Phaser.Scene {
   private spawn!: SpawnSystem;
   private audio!: AudioManager;
   private nextChestAt = GAMEPLAY.chestFirstMs;
+  private finalChestDropped = false;
   private pendingEquipmentDrop = false;
   private milestoneIndex = 0;
   private lastRunPhaseAt = 0;
@@ -207,6 +209,9 @@ export class GameScene extends Phaser.Scene {
   }
   init(data: { arenaIndex?: number; weaponId?: StarterWeaponId; daily?: { date: string; mutator: string } }) {
     this.daily = data.daily;
+    // Before anything rolls: a daily run replays the same waves, offers, loot and contracts for
+    // everyone that day; any other run is unseeded.
+    setRunSeed(this.daily && `${this.daily.date}:${this.daily.mutator}`);
     this.padEngaged = false;
     this.musicIntensity = 0;
     this.arenaIndex = (data.arenaIndex ?? this.arenaIndex) % ARENA_THEMES.length;
@@ -221,6 +226,7 @@ export class GameScene extends Phaser.Scene {
     this.offeredAbilities = [];
     this.specialLastUsed = { nova: -99999, shield: -99999, overdrive: -99999 };
     this.nextChestAt = GAMEPLAY.chestFirstMs;
+    this.finalChestDropped = false;
     this.pendingEquipmentDrop = false;
     this.victoryPending = false;
     this.lastBossPhase = 1;
@@ -416,6 +422,11 @@ export class GameScene extends Phaser.Scene {
       this.nextChestAt += GAMEPLAY.chestIntervalMs;
       this.loot.spawnChest();
     }
+    // One guaranteed supply drop before the commander, whatever the regular rhythm left.
+    if (!this.finalChestDropped && this.survivalMs >= FINAL_CHEST_MS && !this.encounters.hasBossSpawned) {
+      this.finalChestDropped = true;
+      this.loot.spawnChest();
+    }
     this.updateSpecialAbilities(this.survivalMs);
     if (this.live && this.survivalMs >= this.nextLiveUpdateAt) {
       this.nextLiveUpdateAt = this.survivalMs + 2000;
@@ -432,7 +443,7 @@ export class GameScene extends Phaser.Scene {
     this.padInput.dash = false;
     this.projectiles.update(this.survivalMs);
     this.enemyProjectiles.update(this.survivalMs);
-    if (!this.encounters.hasBossSpawned) this.spawn.update(delta, this.player);
+    if (!this.encounters.hasBossSpawned) this.spawn.update(delta, this.player, this.survivalMs);
     this.updateBulwarkAuras();
     let attacks = this.enemies.getChildren().filter(object => (object as Enemy).isPreparingAttack).length;
     this.enemies
@@ -514,6 +525,7 @@ export class GameScene extends Phaser.Scene {
       const fatal = next.hit(applied);
       this.impacts.hit(next.x, next.y, applied, { critical: false, boss: next.enemyType === EnemyType.BOSS, elite: next.elite, fatal: false });
       if (fatal) this.resolveEnemyDeath(next);
+      else this.applyWeaponStatuses(next, 0.5);
       source = next;
     }
   }
@@ -615,7 +627,6 @@ export class GameScene extends Phaser.Scene {
       this.player.health.heal(25);
       this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
     }
-    if (id === 'overdrive') this.player.activateOverdrive(10000 + level * 2000);
     this.state = this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
     this.physics.resume();
     this.events.emit(Events.ABILITY_SELECTED, id);
@@ -652,8 +663,8 @@ export class GameScene extends Phaser.Scene {
       if (weaponSwap?.replaced)
         removeEquipmentModifiers(this.player.stats, weaponSwap.replaced.modifiers);
       applyEquipmentModifiers(this.player.stats, equipment.modifiers);
-      if (equipment.kind === 'weapon') this.equippedWeapon = equipment.name;
-      else if (equipment.kind === 'armor') this.equippedArmor = equipment.name;
+      // Weapon drops are mods: the HUD keeps the starter (or evolved) weapon name.
+      if (equipment.kind === 'armor') this.equippedArmor = equipment.name;
       this.telemetry.equipped(this.equippedWeapon);
       if (this.player.stats.maxHp > oldMaxHp) {
         const gainedHp = this.player.stats.maxHp - oldMaxHp;
@@ -694,7 +705,6 @@ export class GameScene extends Phaser.Scene {
     this.clearBuildSynergy();
     if (swap.previous) removeEquipmentModifiers(this.player.stats, swap.previous.modifiers);
     applyEquipmentModifiers(this.player.stats, swap.current.modifiers);
-    this.equippedWeapon = swap.current.name;
     this.refreshBuildSynergy();
     this.telemetry.equipped(this.equippedWeapon);
     this.events.emit(Events.EQUIPMENT_CHANGED, this.equippedWeapon, this.equippedArmor);
@@ -744,13 +754,12 @@ export class GameScene extends Phaser.Scene {
     this.physics.resume();
     this.events.emit(Events.STATE_CHANGED, this.state);
   }
+  /** Q/E/R cooldown after OVERCLOCK; the ability bar shows its remaining seconds from this too. */
+  getSpecialCooldown(id: SpecialAbilityId) {
+    return specialCooldownMs(id, this.player.stats.specialCooldownMultiplier);
+  }
   getSpecialCharge(id: SpecialAbilityId) {
-    const definition = SPECIAL_ABILITIES.find((ability) => ability.id === id)!;
-    return Phaser.Math.Clamp(
-      (this.survivalMs - this.specialLastUsed[id]) / definition.cooldown,
-      0,
-      1,
-    );
+    return Phaser.Math.Clamp((this.survivalMs - this.specialLastUsed[id]) / this.getSpecialCooldown(id), 0, 1);
   }
   private updateSpecialAbilities(time: number) {
     for (const ability of SPECIAL_ABILITIES) {
@@ -761,8 +770,7 @@ export class GameScene extends Phaser.Scene {
   activateSpecial(id: SpecialAbilityId, time = this.survivalMs) {
     if (this.victoryPending) return;
     if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
-    const ability = SPECIAL_ABILITIES.find((definition) => definition.id === id)!;
-    if (time - this.specialLastUsed[id] < ability.cooldown) return;
+    if (time - this.specialLastUsed[id] < this.getSpecialCooldown(id)) return;
     this.specialLastUsed[id] = time;
     this.telemetry.usedAbility(id);
     if (id === 'nova') this.activateNova();
@@ -888,12 +896,18 @@ export class GameScene extends Phaser.Scene {
       synergy: this.activeSynergy?.name,
     });
   }
-  /** Direct hits carry the build's statuses; splash and chains stay plain damage. */
-  private applyWeaponStatuses(enemy: Enemy) {
+  /**
+   * Hits carry the build's statuses. Arc chains and spore splash pass them on at `share` (half)
+   * strength: when only direct hits applied them, burn, chill and toxin were a pulse-only build.
+   */
+  private applyWeaponStatuses(enemy: Enemy, share = 1) {
     const stats = this.player.stats;
-    if (stats.burnDamage > 0) enemy.applyStatus({ kind: 'burn', potency: stats.burnDamage, durationMs: 2000 });
-    if (stats.chillDurationMs > 0) enemy.applyStatus({ kind: 'chill', potency: 0, durationMs: stats.chillDurationMs });
-    if (stats.toxinDamage > 0) enemy.applyStatus({ kind: 'toxin', potency: stats.toxinDamage, durationMs: 3000 });
+    if (stats.burnDamage > 0)
+      enemy.applyStatus({ kind: 'burn', potency: Math.max(1, Math.round(stats.burnDamage * share)), durationMs: 2000 });
+    if (stats.chillDurationMs > 0)
+      enemy.applyStatus({ kind: 'chill', potency: stats.chillSlow, durationMs: Math.round(stats.chillDurationMs * share) });
+    if (stats.toxinDamage > 0)
+      enemy.applyStatus({ kind: 'toxin', potency: Math.max(1, Math.round(stats.toxinDamage * share)), durationMs: 3000 });
   }
   /** Damage over time, resolved after the behaviour pass so no enemy is destroyed mid-iteration. */
   private tickStatusEffects() {
@@ -942,7 +956,9 @@ export class GameScene extends Phaser.Scene {
     for (let index = 0; index < spawns; index++) {
       if (this.enemies.countActive(true) >= GAMEPLAY.maxEnemies) return;
       const angle = (Math.PI * 2 * index) / spawns;
-      this.enemies.add(new Enemy(this, x + Math.cos(angle) * spread, y + Math.sin(angle) * spread, EnemyType.RUNNER));
+      // Split runners scale like any spawn at this moment, or late broods would burst into base-HP runners.
+      this.enemies.add(createScaledEnemy(this, EnemyType.RUNNER, x + Math.cos(angle) * spread, y + Math.sin(angle) * spread,
+        this.survivalMs, this.arenaIndex));
     }
   }
   /** Single fan-out point for momentum state: keeps `MOMENTUM_CHANGED` and the kill-streak
@@ -1045,7 +1061,7 @@ export class GameScene extends Phaser.Scene {
       this.telemetry.dealtDamage(damage);
       if (enemy.hit(Math.round(damage))) {
         this.resolveEnemyDeath(enemy, cause);
-      }
+      } else if (cause === 'weapon') this.applyWeaponStatuses(enemy, 0.5);
     });
     this.audio.tone(65, 0.2, 0.05);
   }
