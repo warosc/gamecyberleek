@@ -15,22 +15,28 @@ SSH_KEY=~/.ssh/leek_ops_deploy scripts/deploy-vps.sh debian@66.70.188.137
 
 ```
 VITE_DEBUG_GAME=false
-VITE_SUPABASE_URL=https://tawimigwbpwtwwkeaglg.supabase.co
-VITE_SUPABASE_ANON_KEY=<publishable key>
+VITE_ONLINE_URL=/api
 ```
 
 It refuses to pack when tracked files have uncommitted changes (`--allow-dirty` overrides), when
-`npm test` fails, when `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY` is missing (`--offline`
-overrides), or when the key is not a public one (only `sb_publishable_…` or a JWT with role
-`anon` is accepted). After building it refuses a bundle that still has the debug keys, lacks the
-Supabase URL, or contains `service_role` / `sb_secret_` in any JS chunk, and it validates
-`nginx.conf` in Docker. The deploy key `~/.ssh/leek_ops_deploy` is authorised for
+`npm test` fails, or when `VITE_ONLINE_URL` is missing (`--offline` overrides). After building it
+refuses a bundle that still has the debug keys, lacks the online URL, or contains anything that
+looks like a server credential in any JS chunk, and it validates `nginx.conf` in Docker. The
+archive also carries the online backend (`server/`) and the SQL migrations. The deploy key `~/.ssh/leek_ops_deploy` is authorised for
 `debian` on the VPS, so no password is needed.
 
 On the server each release is in `~/leek-ops-releases/releases/<name>/`, and
 `~/leek-ops-releases/current` points at the live one. The container is `leek-ops-game`
 (compose project `leek-ops`) on port 8090. `curl http://66.70.188.137:8090/release.json` shows
 the live commit.
+
+## Online backend
+
+Postgres (`leek-ops-db`) and PostgREST (`leek-ops-api`) run as compose project `leek-ops-online`
+on the private network `leek-ops-net`, with nothing published on the host; the game's nginx
+forwards `POST /api/rpc/*` to PostgREST. Each deploy brings them up and applies pending
+migrations (`server/migrate.sh`) before swapping the game container. Secrets are only on the
+server, in `~/leek-ops-online/.env`; details in `server/README.md`. Backups: see there.
 
 ## Rollback
 

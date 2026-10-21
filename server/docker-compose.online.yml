@@ -1,0 +1,44 @@
+# The game's online backend on the VPS: Postgres and PostgREST on a private network. Nothing is
+# published on the host; the game's nginx forwards /api/rpc/ to PostgREST over leek-ops-net.
+# Secrets live in ~/leek-ops-online/.env on the server (see server/README.md), never in git.
+services:
+  db:
+    image: postgres:15
+    container_name: leek-ops-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: leek
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in ~/leek-ops-online/.env}
+      AUTHENTICATOR_PASSWORD: ${AUTHENTICATOR_PASSWORD:?set AUTHENTICATOR_PASSWORD in ~/leek-ops-online/.env}
+    volumes:
+      # Named explicitly: every release runs this file from its own directory, and a name derived
+      # from the directory would start each release on an empty database.
+      - pgdata:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres', '-d', 'leek']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [leek-ops-net]
+  api:
+    image: postgrest/postgrest:v12.2.3
+    container_name: leek-ops-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD}@db:5432/leek
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      # The schema description would list every function and table name to anyone who asks.
+      PGRST_OPENAPI_MODE: disabled
+      PGRST_DB_POOL: 5
+    networks: [leek-ops-net]
+volumes:
+  pgdata:
+    name: leek-ops-online-pgdata
+networks:
+  leek-ops-net:
+    external: true

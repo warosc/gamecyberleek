@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CODE_PATTERN, generateCallsign, generateCode, normalizeCallsign, normalizeCode, normalizeIdentity,
 } from '../src/game/online/OperativeIdentity';
-import { SupabaseOnlineService, livePresenceKey } from '../src/game/online/SupabaseOnlineService';
+import { RestOnlineService, livePresenceKey } from '../src/game/online/RestOnlineService';
 import { OnlineError } from '../src/game/online/OnlinePorts';
 
 class MemoryStorage implements Storage {
@@ -41,7 +41,7 @@ describe('operative identity', () => {
   });
 });
 
-describe('supabase adapter', () => {
+describe('online REST adapter', () => {
   const identity = { code: 'ABCD-EFGH-JKMN-PQRS', callsign: 'PUERRO-1' };
   const calls: { url: string; body: unknown; headers: Record<string, string> }[] = [];
   let reply: unknown = null;
@@ -50,17 +50,16 @@ describe('supabase adapter', () => {
     calls.push({ url, body: JSON.parse(String(init.body)), headers: init.headers as Record<string, string> });
     return new Response(reply === null ? '' : JSON.stringify(reply), { status });
   }) as unknown as typeof fetch;
-  const service = () => new SupabaseOnlineService('https://demo.supabase.co/', 'anon-key', () => identity, fakeFetch);
+  const service = () => new RestOnlineService('/api/', () => identity, fakeFetch);
 
   beforeEach(() => { calls.length = 0; reply = null; status = 200; });
 
-  it('sends run facts for the server to score, with the key only in apikey for publishable keys', async () => {
+  it('sends run facts for the server to score, with no key to leak', async () => {
     reply = 3350;
     const best = await service().submitDailyRun('2026-09-25', { kills: 120.6, level: 9, durationMs: 200000.4, victory: false });
     expect(best).toBe(3350);
-    expect(calls[0].url).toBe('https://demo.supabase.co/rest/v1/rpc/leek_submit_daily_run');
-    expect(calls[0].headers.apikey).toBe('anon-key');
-    expect(calls[0].headers.Authorization).toBeUndefined();
+    expect(calls[0].url).toBe('/api/rpc/leek_submit_daily_run');
+    expect(calls[0].headers).toEqual({ 'Content-Type': 'application/json' });
     expect(calls[0].body).toEqual({
       p_code: identity.code, p_callsign: 'PUERRO-1', p_day: '2026-09-25', p_kills: 120, p_level: 9, p_duration_ms: 200000, p_victory: false,
     });
@@ -70,7 +69,7 @@ describe('supabase adapter', () => {
     reply = '5b1f6a7e-0000-4000-8000-000000000001';
     const ticket = await service().startDailyRun('2026-09-25');
     expect(ticket).toBe('5b1f6a7e-0000-4000-8000-000000000001');
-    expect(calls[0].url).toBe('https://demo.supabase.co/rest/v1/rpc/leek_start_daily_run');
+    expect(calls[0].url).toBe('/api/rpc/leek_start_daily_run');
     expect(calls[0].body).toEqual({ p_code: identity.code, p_day: '2026-09-25' });
     reply = 4100;
     await service().submitDailyRun('2026-09-25', { kills: 50, level: 6, durationMs: 90000, victory: false, ticket });
@@ -95,15 +94,10 @@ describe('supabase adapter', () => {
     const stalled = (async (_url: string, init: RequestInit) => new Response(new ReadableStream({
       start(controller) { init.signal?.addEventListener('abort', () => controller.error(new Error('aborted'))); },
     }))) as unknown as typeof fetch;
-    const slow = new SupabaseOnlineService('https://demo.supabase.co', 'k', () => identity, stalled, 20);
+    const slow = new RestOnlineService('/api', () => identity, stalled, 20);
     const error = await slow.fetchDailyBoard('2026-09-25').catch(caught => caught);
     expect(error).toBeInstanceOf(OnlineError);
     expect(error.isTransient).toBe(true);
-  });
-
-  it('adds the bearer header for legacy JWT anon keys', async () => {
-    await new SupabaseOnlineService('https://demo.supabase.co', 'eyJlegacy', () => identity, fakeFetch).fetchDailyBoard('2026-09-25');
-    expect(calls[0].headers.Authorization).toBe('Bearer eyJlegacy');
   });
 
   it('reports conflicts and transient failures as typed errors', async () => {
@@ -115,7 +109,7 @@ describe('supabase adapter', () => {
     expect(conflict.message).toContain('further ahead');
     status = 429;
     expect((await service().uploadProfile({} as never).catch(error => error)).isTransient).toBe(true);
-    const offline = new SupabaseOnlineService('https://demo.supabase.co', 'k', () => identity,
+    const offline = new RestOnlineService('/api', () => identity,
       (async () => { throw new TypeError('Failed to fetch'); }) as unknown as typeof fetch);
     const network = await offline.fetchDailyBoard('2026-09-25').catch(error => error);
     expect(network.status).toBe(0);
@@ -139,6 +133,52 @@ describe('supabase adapter', () => {
   it('reads cloud save metadata', async () => {
     reply = [{ runs: 7, updated_at: '2026-09-25T10:00:00Z' }];
     expect(await service().cloudSaveInfo(identity.code)).toEqual({ runs: 7, updatedAt: '2026-09-25T10:00:00Z' });
+  });
+
+  it('reports the live score throttled and reads the server board while open', async () => {
+    vi.useFakeTimers();
+    try {
+      reply = [{ id: 'abc123def456', callsign: 'ACE', score: 900, self: false }];
+      const session = (await service().openLiveBoard('2026-09-25'))!;
+      const seen: unknown[] = [];
+      session.onChange(entries => seen.push(entries));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(calls[0].url).toBe('/api/rpc/leek_live_board');
+      const key = (calls[0].body as { p_key: string }).p_key;
+      expect(key).toMatch(/^[0-9a-f]{32}$/);
+      session.update(120.7, 10.9);
+      session.update(150, 12);
+      await vi.advanceTimersByTimeAsync(1500);
+      const updates = calls.filter(call => call.url.endsWith('leek_live_update'));
+      // Two updates inside the window collapse into one report carrying the latest values.
+      expect(updates).toHaveLength(1);
+      expect(updates[0].body).toEqual({ p_day: '2026-09-25', p_key: key, p_callsign: 'PUERRO-1', p_score: 150, p_seconds: 12 });
+      await vi.advanceTimersByTimeAsync(2500);
+      expect(seen.length).toBeGreaterThanOrEqual(2);
+      expect(seen[0]).toEqual([{ id: 'abc123def456', callsign: 'ACE', score: 900, self: false }]);
+      await session.leave();
+      const before = calls.length;
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(calls.length).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the live board quiet when the server rejects or is down', async () => {
+    vi.useFakeTimers();
+    try {
+      status = 503;
+      const session = (await service().openLiveBoard('2026-09-25'))!;
+      const seen: unknown[] = [];
+      session.onChange(entries => seen.push(entries));
+      session.update(100, 5);
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(seen).toEqual([]);
+      await session.leave();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('makes live presence keys without crypto.randomUUID, which plain-HTTP pages lack', () => {

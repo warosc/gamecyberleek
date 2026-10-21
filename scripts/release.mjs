@@ -4,38 +4,22 @@
 //   node scripts/release.mjs --offline       -> same, deliberately without the online settings
 //   node scripts/release.mjs --allow-dirty   -> pack even with uncommitted changes to tracked files
 //
-// Reads build-time settings from .env.production (git-ignored): VITE_DEBUG_GAME=false and the
-// public Supabase URL / publishable key. Refuses to pack when the working tree has uncommitted
-// changes, the unit tests fail, the online settings are missing (unless --offline), the key is not
-// a public one, or the bundle still contains debug hooks or anything that looks like a secret key.
+// Reads build-time settings from .env.production (git-ignored): VITE_DEBUG_GAME=false and
+// VITE_ONLINE_URL (normally the same-origin /api). Refuses to pack when the working tree has
+// uncommitted changes, the unit tests fail, the online URL is missing (unless --offline), or the
+// bundle still contains debug hooks or anything that looks like a secret key. The release also
+// carries the online backend (server/) and its SQL migrations, which vps-install.sh applies.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Strings that only appear with a server-side key; a bundle holding one hands it to every player. */
-export const SECRET_MARKERS = ['service_role', 'sb_secret_'];
-
 /**
- * Why `key` must not ship in the browser bundle, or null when it is a public key. Only a
- * publishable key or a legacy JWT whose role is `anon` is public: the secret / service_role key
- * bypasses row-level security, so anyone reading the bundle could rewrite every leaderboard.
+ * Strings that only appear with a server-side credential; a bundle holding one hands it to every
+ * player. The backend needs no key in the browser at all, so none of these has any business there.
  */
-export function publicKeyProblem(key) {
-  if (key.startsWith('sb_publishable_')) return null;
-  if (key.startsWith('sb_secret_')) return 'VITE_SUPABASE_ANON_KEY is a secret key (sb_secret_); use the publishable key';
-  if (key.startsWith('eyJ')) {
-    let role;
-    try {
-      role = JSON.parse(Buffer.from(key.split('.')[1] ?? '', 'base64url').toString('utf8')).role;
-    } catch {
-      return 'VITE_SUPABASE_ANON_KEY looks like a JWT but its payload cannot be decoded';
-    }
-    return role === 'anon' ? null : `VITE_SUPABASE_ANON_KEY is a JWT with role "${role}"; only an "anon" key may ship`;
-  }
-  return 'VITE_SUPABASE_ANON_KEY is neither a publishable key (sb_publishable_) nor an anon JWT';
-}
+export const SECRET_MARKERS = ['service_role', 'sb_secret_', 'AUTHENTICATOR_PASSWORD', 'POSTGRES_PASSWORD'];
 
 /** The secret markers found in the built JS, as "<chunk>: <marker>". */
 export function secretsInChunks(chunks) {
@@ -62,16 +46,10 @@ function release(argv) {
       .map(line => [line.slice(0, line.indexOf('=')).trim(), line.slice(line.indexOf('=') + 1).trim()]),
   );
   if (env.VITE_DEBUG_GAME !== 'false') throw new Error('.env.production must set VITE_DEBUG_GAME=false');
-  const online = Boolean(env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY);
-  // A release without them builds fine and only shows up as a game whose leaderboard and cloud
-  // saves never connect, so leaving them out has to be said out loud.
-  if (!online && !offline) {
-    throw new Error('.env.production must set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (pass --offline to release without them)');
-  }
-  if (env.VITE_SUPABASE_ANON_KEY) {
-    const problem = publicKeyProblem(env.VITE_SUPABASE_ANON_KEY);
-    if (problem) throw new Error(problem);
-  }
+  const online = Boolean(env.VITE_ONLINE_URL);
+  // A release without it builds fine and only shows up as a game whose leaderboard and cloud
+  // saves never connect, so leaving it out has to be said out loud.
+  if (!online && !offline) throw new Error('.env.production must set VITE_ONLINE_URL (pass --offline to release without it)');
 
   const sha = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: root }).toString().trim();
   // The release is labelled with HEAD, so uncommitted edits would ship under a commit that does
@@ -104,7 +82,7 @@ function release(argv) {
   }
   const secrets = secretsInChunks(chunks);
   if (secrets.length) throw new Error(`secret key material found in the production bundle:\n${secrets.join('\n')}`);
-  if (online && !bundle.includes(env.VITE_SUPABASE_URL)) throw new Error('Supabase URL missing from the bundle');
+  if (online && !bundle.includes(`"${env.VITE_ONLINE_URL}"`)) throw new Error('online URL missing from the bundle');
 
   // A broken nginx.conf only shows up as a restart loop on the server; catch it here instead.
   try {
@@ -134,6 +112,14 @@ function release(argv) {
   // a CRLF shell script fails on Linux with "set: Illegal option -".
   for (const file of ['Dockerfile.prebuilt', 'docker-compose.vps.yml', 'nginx.conf', 'scripts/vps-install.sh'])
     writeFileSync(join(stage, file.split('/').pop()), read(file).replace(/\r\n/g, '\n'));
+  // The online backend and its migrations travel with the game, so one deploy updates both.
+  const serverFiles = ['server/docker-compose.online.yml', 'server/migrate.sh', 'server/init/00-roles.sh',
+    ...readdirSync(join(root, 'supabase', 'migrations')).filter(name => name.endsWith('.sql')).map(name => `supabase/migrations/${name}`)];
+  for (const file of serverFiles) {
+    const target = join(stage, file.replace(/^supabase\//, ''));
+    mkdirSync(join(target, '..'), { recursive: true });
+    writeFileSync(target, read(file).replace(/\r\n/g, '\n'));
+  }
   // Relative paths only: GNU tar reads "D:/..." as a remote host.
   const archive = `release/leek-ops-${sha}.tgz`;
   run('tar', ['-czf', archive, '-C', `release/leek-ops-${sha}`, '.']);

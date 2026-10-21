@@ -8,7 +8,7 @@ import { installGamepadBridge } from './game/input/GamepadBridge';
 import { setMusicLightweight } from './game/managers/AudioManager';
 import { detectQualityProfile } from './game/config/QualityProfile';
 import { OfflineOnlineService, setOnlineService } from './game/online/OnlinePorts';
-import { SupabaseOnlineService } from './game/online/SupabaseOnlineService';
+import { RestOnlineService } from './game/online/RestOnlineService';
 import { flushDailyRuns } from './game/online/OnlineSync';
 import { onlineService } from './game/online/OnlinePorts';
 import { ensureOperative } from './game/systems/ProfileStore';
@@ -17,12 +17,12 @@ installDevTelemetry();
 // Before the game exists: quality, locale and mixer levels are read by the first scene.
 applyRuntimeSettings(loadProfile().settings);
 setMusicLightweight(detectQualityProfile().tier === 'low');
-// With a Supabase project configured the game uses it; otherwise the offline adapter serves
-// this device's own daily board. Either way core play never waits on the network.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-setOnlineService(supabaseUrl && supabaseKey
-  ? new SupabaseOnlineService(supabaseUrl, supabaseKey, ensureOperative)
+// With the online API configured (normally the same-origin `/api` the game's nginx forwards to
+// PostgREST) the game uses it; otherwise the offline adapter serves this device's own daily
+// board. Either way core play never waits on the network.
+const onlineUrl = import.meta.env.VITE_ONLINE_URL as string | undefined;
+setOnlineService(onlineUrl
+  ? new RestOnlineService(onlineUrl, ensureOperative)
   : new OfflineOnlineService(() => loadProfile().daily));
 // Scores a dropped connection left behind get another chance at startup.
 void flushDailyRuns(onlineService());

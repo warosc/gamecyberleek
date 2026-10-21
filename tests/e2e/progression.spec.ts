@@ -231,13 +231,15 @@ test('the cloud screen works offline and, against a server, uploads and restores
   expect(code).toMatch(/^[A-HJ-NP-Z2-9]{4}(-[A-HJ-NP-Z2-9]{4}){3}$/);
   expect((await storedProfile(page)).operative.code).toBe(code);
 
-  // A fake Supabase: the real adapter talks to it over fetch exactly as it would in production.
+  // A fake backend at the same-origin /api: the real adapter talks to it over fetch exactly as it
+  // does to PostgREST in production.
   const saves = new Map<string, unknown>();
-  await page.route('https://fake-project.supabase.co/rest/v1/rpc/**', async route => {
+  await page.route('**/api/rpc/**', async route => {
     const name = route.request().url().split('/').pop();
     const body = route.request().postDataJSON() as { p_code: string; p_callsign?: string; p_profile?: unknown };
-    if (route.request().headers().apikey !== 'anon-test') return route.fulfill({ status: 401 });
     if (name === 'leek_put_save') {
+      // The code is the key to the slot; it must never be stored inside the save.
+      expect(body.p_profile).not.toHaveProperty('operative');
       saves.set(body.p_code, { profile: body.p_profile, callsign: body.p_callsign });
       return route.fulfill({ status: 200, body: '"2026-09-25T10:00:00Z"' });
     }
@@ -250,9 +252,9 @@ test('the cloud screen works offline and, against a server, uploads and restores
   });
   await page.evaluate(async () => {
     const ports = await import('/src/game/online/OnlinePorts.ts' as string);
-    const { SupabaseOnlineService } = await import('/src/game/online/SupabaseOnlineService.ts' as string);
+    const { RestOnlineService } = await import('/src/game/online/RestOnlineService.ts' as string);
     const { ensureOperative } = await import('/src/game/systems/ProfileStore.ts' as string);
-    ports.setOnlineService(new SupabaseOnlineService('https://fake-project.supabase.co', 'anon-test', ensureOperative));
+    ports.setOnlineService(new RestOnlineService('/api', ensureOperative));
     window.combatGame.scene.getScene('Cloud').scene.restart();
   });
   await page.waitForTimeout(300);

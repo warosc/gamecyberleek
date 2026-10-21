@@ -2,10 +2,12 @@ import {
   OnlineError, type CloudSaveInfo, type DailyRunFacts, type LeaderboardEntry, type OnlineService,
 } from './OnlinePorts';
 import type { OperativeIdentity } from './OperativeIdentity';
-import { PresenceClock, rankLive, type LiveBoardSession, type LiveEntry } from './LiveRanking';
+import type { LiveBoardSession, LiveEntry } from './LiveRanking';
 
-/** Presence updates are throttled: the live board only needs to feel live, not be exact. */
+/** Live reports are throttled: the board only needs to feel live, not be exact. */
 const LIVE_UPDATE_MS = 1500;
+/** How often the live board is read back; rows expire on the server 20 s after their last report. */
+const LIVE_POLL_MS = 2500;
 
 /**
  * A random per-session presence key. crypto.randomUUID exists only in secure contexts, and the
@@ -17,19 +19,18 @@ export function livePresenceKey() {
 }
 
 /**
- * Supabase adapter for the online port. It talks to the RPC functions in supabase/migrations
- * over plain fetch with the project's public key: no SDK for data, no auth session, and no table
- * access (the tables are closed by RLS). The live board uses Realtime presence, loaded on demand
- * so offline players never download it.
+ * Adapter for the game's own online API: PostgREST in front of Postgres on the VPS, serving the
+ * RPC functions in supabase/migrations at `<baseUrl>/rpc/<name>`. The base is normally the
+ * same-origin path `/api`, so there is no CORS and no key: the tables are closed to the anon role
+ * and only those functions are callable.
  *
  * Every call has a timeout and rejects with an OnlineError; callers treat the network as optional.
  */
-export class SupabaseOnlineService implements OnlineService {
+export class RestOnlineService implements OnlineService {
   readonly online = true;
 
   constructor(
-    private readonly url: string,
-    private readonly anonKey: string,
+    private readonly baseUrl: string,
     private readonly identity: () => OperativeIdentity,
     private readonly fetchImpl: typeof fetch = (...args) => fetch(...args),
     private readonly timeoutMs = 8000,
@@ -41,15 +42,9 @@ export class SupabaseOnlineService implements OnlineService {
     let response: Response;
     let text: string;
     try {
-      response = await this.fetchImpl(`${this.url.replace(/\/$/, '')}/rest/v1/rpc/${name}`, {
+      response = await this.fetchImpl(`${this.baseUrl.replace(/\/$/, '')}/rpc/${name}`, {
         method: 'POST',
-        headers: {
-          apikey: this.anonKey,
-          // Legacy anon keys are JWTs and also go in Authorization; publishable keys
-          // (sb_publishable_...) are not JWTs and belong in the apikey header only.
-          ...(this.anonKey.startsWith('eyJ') ? { Authorization: `Bearer ${this.anonKey}` } : {}),
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         signal: controller.signal,
       });
@@ -125,58 +120,53 @@ export class SupabaseOnlineService implements OnlineService {
   }
 
   async openLiveBoard(date: string): Promise<LiveBoardSession | undefined> {
-    const { RealtimeClient } = await import('@supabase/realtime-js');
-    const client = new RealtimeClient(`${this.url.replace(/\/$/, '')}/realtime/v1`, { params: { apikey: this.anonKey } });
-    // A random per-session key: presence is public, so it must never carry the operative code.
-    const selfId = livePresenceKey();
-    const channel = client.channel(`leek-daily-${date}`, { config: { presence: { key: selfId } } });
-    const listeners: ((entries: LiveEntry[]) => void)[] = [];
+    // A random key per run: the board is public, so it must never carry the operative code.
+    const key = livePresenceKey();
     const { callsign } = this.identity();
-    let subscribed = false;
-    const clock = new PresenceClock();
-    let pending: number | undefined;
-    let pendingSeconds = 0;
-    let sentScore = -1;
+    const listeners: ((entries: LiveEntry[]) => void)[] = [];
+    let open = true;
+    let pending: { score: number; seconds: number } | undefined;
     let lastSentAt = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let sendTimer: ReturnType<typeof setTimeout> | undefined;
 
     const send = () => {
-      timer = undefined;
-      if (!subscribed || pending === undefined || pending === sentScore) return;
-      sentScore = pending;
+      sendTimer = undefined;
+      if (!open || !pending) return;
+      const { score, seconds } = pending;
+      pending = undefined;
       lastSentAt = Date.now();
-      void channel.track({ callsign, score: pending, t: pendingSeconds }).catch(() => undefined);
+      // The server checks run time against real time and the score against its ceiling; a
+      // rejected or failed report only leaves this player's row as it was.
+      void this.rpc('leek_live_update', { p_day: date, p_key: key, p_callsign: callsign, p_score: score, p_seconds: seconds })
+        .catch(() => undefined);
     };
-    channel.on('presence', { event: 'sync' }, () => {
-      const entries = rankLive(channel.presenceState() as Record<string, { callsign?: unknown; score?: unknown; t?: unknown }[]>, selfId, clock);
-      for (const listener of listeners) listener(entries);
-    });
-    channel.subscribe(status => {
-      if (status === 'SUBSCRIBED') {
-        subscribed = true;
-        if (pending === undefined) pending = 0;
-        send();
-      }
-    });
+    const poll = () => {
+      void this.rpc<{ id: string; callsign: string; score: number; self: boolean }[]>('leek_live_board', { p_day: date, p_key: key })
+        .then(rows => {
+          if (!open) return;
+          const entries = (rows ?? []).map(row => ({ id: row.id, callsign: row.callsign, score: row.score, self: row.self }));
+          for (const listener of listeners) listener(entries);
+        })
+        .catch(() => undefined);
+    };
+    poll();
+    const pollTimer = setInterval(poll, LIVE_POLL_MS);
 
     return {
       update(score: number, seconds: number) {
-        pending = Math.max(0, Math.floor(score));
-        pendingSeconds = Math.max(0, Math.floor(seconds));
-        if (timer) return;
-        timer = setTimeout(send, Math.max(0, LIVE_UPDATE_MS - (Date.now() - lastSentAt)));
+        pending = { score: Math.max(0, Math.floor(score)), seconds: Math.max(0, Math.floor(seconds)) };
+        if (sendTimer) return;
+        sendTimer = setTimeout(send, Math.max(0, LIVE_UPDATE_MS - (Date.now() - lastSentAt)));
       },
       onChange(listener) {
         listeners.push(listener);
       },
+      // Nothing to tell the server: a row that stops reporting drops off the board after 20 s.
       async leave() {
-        if (timer) clearTimeout(timer);
+        open = false;
+        clearInterval(pollTimer);
+        if (sendTimer) clearTimeout(sendTimer);
         listeners.length = 0;
-        try {
-          await client.removeChannel(channel);
-        } finally {
-          client.disconnect();
-        }
       },
     };
   }

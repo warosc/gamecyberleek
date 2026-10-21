@@ -15,7 +15,6 @@
     "test:e2e:mobile": "playwright test --project=mobile-webkit"
   },
   "dependencies": {
-    "@supabase/realtime-js": "^2.117.2",
     "phaser": "^4.2.1"
   },
   "devDependencies": {

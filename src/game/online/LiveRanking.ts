@@ -18,10 +18,10 @@ export interface LiveBoardSession {
 interface PresencePayload { callsign?: unknown; score?: unknown; t?: unknown }
 
 /**
- * Presence is not validated by the server: anyone holding the public key can join the channel and
- * claim any score. These ceilings come from the game's own rules, loosely, so the live board drops
- * the crude fakes without ever hiding a real run. They are not a security boundary; the persisted
- * daily board is scored and checked on the server.
+ * Ceilings from the game's own rules, loose enough never to hide a real run. The server enforces
+ * the same numbers on every live report (leek_live_score_ceiling in migration 0005, and
+ * leek_level_ceiling in 0003); keep the two in step. rankLive and PresenceClock below still apply
+ * them to presence-style state, which the tests and the e2e fake board use.
  */
 export const LIVE_MAX_SECONDS = 3600;
 /** The regular spawner adds at most one enemy per 0.7 s; splits and summons fit in the margin. */
