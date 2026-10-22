@@ -6,7 +6,7 @@ import { recordRestart, type RunRecord } from '../systems/RunTelemetry';
 import type { ContractOutcome } from '../systems/ContractSystem';
 import { AudioManager } from '../managers/AudioManager';
 import { t, td } from '../i18n';
-import { UI, fitText, framePanel, hex, isCompact, panelButton, uiFont } from '../ui/SceneWidgets';
+import { FocusGroup, UI, fitText, framePanel, hex, isCompact, panelButton, uiFont } from '../ui/SceneWidgets';
 import { backdropTexture, queueSceneArt } from '../config/SceneArt';
 
 const BUTTON_WIDTH = 270;
@@ -61,8 +61,9 @@ export class GameOverScene extends Phaser.Scene {
     this.statCard(ox + 770, 222, t('gameover.damage'), String(summary.damageDealt), 'results-damage');
     this.statCard(ox + 1030, 222, t('gameover.accuracy'), `${accuracy}%`, 'results-accuracy');
 
-    const items = data.equipment.length ? data.equipment.slice(-3).join('  ·  ') : t('gameover.noEquipment');
-    const build = data.synergy ? t('gameover.synergy', { name: data.synergy })
+    // Names arrive as the Spanish source strings the run used; `td` shows them in the player's language.
+    const items = data.equipment.length ? data.equipment.slice(-3).map(name => td(name)).join('  ·  ') : t('gameover.noEquipment');
+    const build = data.synergy ? t('gameover.synergy', { name: td(data.synergy) })
       : t('gameover.build', { weapon: summary.weapon, count: summary.upgrades.length });
     fitText(this.add.text(ox + 140, 318, t('gameover.run', { level: data.level, sector: data.arenaIndex + 1, taken: summary.damageTaken }), {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 15), color: UI.text, letterSpacing: 1,
@@ -126,10 +127,12 @@ export class GameOverScene extends Phaser.Scene {
     const mainMenu = go('Menu');
     const offset = (BUTTON_WIDTH + BUTTON_GAP) / 2;
     const againLabel = data.daily ? t('gameover.retryDaily') : data.victory && canAdvance ? t('gameover.next') : t('gameover.again');
-    panelButton(this, GAME_WIDTH / 2 - offset, 580, BUTTON_WIDTH, 64, againLabel, UI.green, redeploy, 18, { primary: true });
-    panelButton(this, GAME_WIDTH / 2 + offset, 580, BUTTON_WIDTH, 64, t('gameover.menu'), UI.cyan, mainMenu, 18);
-    // Not SPACE: it is the dash key, and players are still holding it when the run ends.
-    this.input.keyboard?.on('keydown-ENTER', redeploy);
+    const again = panelButton(this, GAME_WIDTH / 2 - offset, 580, BUTTON_WIDTH, 64, againLabel, UI.green, redeploy, 18, { primary: true });
+    const menu = panelButton(this, GAME_WIDTH / 2 + offset, 580, BUTTON_WIDTH, 64, t('gameover.menu'), UI.cyan, mainMenu, 18);
+    // ENTER (pad A) runs the focused button, redeploy unless the player moved off it; both
+    // actions keep the arming delay above. Not SPACE: it is the dash key, and players are still
+    // holding it when the run ends.
+    new FocusGroup(this).button(again, { row: 0 }).button(menu, { row: 0 }).start(0);
     this.input.keyboard?.on('keydown-ESC', mainMenu);
     // Keyboard hints mean nothing on a phone.
     if (!isCompact(this)) this.add.text(GAME_WIDTH / 2, 646, t('gameover.keys'), {

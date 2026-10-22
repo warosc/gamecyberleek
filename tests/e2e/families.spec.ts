@@ -40,6 +40,8 @@ test('a medic pulse heals a wounded ally', async ({ page }) => {
   await page.evaluate(() => {
     // The medic holds 280-420px from the player; a chasing ally would leave its pulse radius,
     // so the ally is pinned beside the medic and only the medic's own behaviour is exercised.
+    // Auto-fire (on by default on phones) would shoot the medic before its first pulse.
+    (window.combatGame.scene.getScene('Game') as GameScene).mobileInput.autoFire = false;
     const ally = window.spawnTest('TANK', 360, 60);
     ally.health.current = 20;
     ally.updateBehavior = () => (ally.body as Phaser.Physics.Arcade.Body).setVelocity(0);

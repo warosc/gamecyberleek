@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../managers/AudioManager';
 import { backdropTexture, type BackdropId } from '../config/SceneArt';
+import { FocusNavigator, type FocusDirection, type FocusSlot } from './FocusNavigator';
 
 export const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
 
@@ -131,6 +132,8 @@ export interface PanelButton {
   setDimmed(dimmed: boolean): void;
   setEnabled(enabled: boolean): void;
   setSelected(selected: boolean): void;
+  /** Runs the button's action, as keyboard and gamepad focus do. */
+  activate(): void;
 }
 
 export interface ButtonOptions {
@@ -196,7 +199,130 @@ export function panelButton(
       text.setAlpha(enabled ? 1 : 0.4);
     },
     setSelected(next: boolean) { selected = next; draw(); },
+    activate: action,
   };
+}
+
+/** One thing a focus group can land on: usually a panel button, sometimes a whole settings row. */
+export interface FocusItem {
+  setSelected(selected: boolean): void;
+  activate(): void;
+  /** When set, LEFT / RIGHT change this item's value instead of moving focus (a settings row). */
+  adjust?(step: 1 | -1): void;
+  /** Objects whose hover moves focus here, so mouse and keyboard never point at two things. */
+  hit?: Phaser.GameObjects.GameObject[];
+  enabled?: () => boolean;
+}
+
+export interface FocusPlacement {
+  /** Items sharing a row are walked with LEFT / RIGHT. Defaults to a new row below the last one. */
+  row?: number;
+  /** Horizontal position for ordering a row and for UP / DOWN. Defaults to the first hit object's x. */
+  x?: number;
+}
+
+/**
+ * Keyboard and gamepad focus for a screen of buttons. Register items in visual order, then
+ * `start()`: arrows (and the d-pad, which the gamepad bridge replays as arrows) move focus with
+ * wrap-around, ENTER (pad A) activates, and pointer hover moves focus too. Listeners are removed
+ * on scene shutdown, and with `owner` when that object is destroyed, so modal panels rebuilt
+ * many times in one scene never stack handlers.
+ */
+export class FocusGroup {
+  private readonly items: FocusItem[] = [];
+  private readonly slots: FocusSlot[] = [];
+  private navigator?: FocusNavigator;
+  private readonly disposers: (() => void)[] = [];
+  private disposed = false;
+
+  constructor(private readonly scene: Phaser.Scene, private readonly owner?: Phaser.GameObjects.GameObject) {}
+
+  get index() {
+    return this.navigator?.index ?? 0;
+  }
+
+  get size() {
+    return this.items.length;
+  }
+
+  add(item: FocusItem, placement: FocusPlacement = {}) {
+    const last = this.slots[this.slots.length - 1];
+    const anchor = item.hit?.[0] as { x?: number } | undefined;
+    this.items.push(item);
+    this.slots.push({
+      row: placement.row ?? (last ? last.row + 1 : 0),
+      x: placement.x ?? anchor?.x ?? 0,
+      enabled: item.enabled,
+    });
+    return this;
+  }
+
+  /** A panel button as a focus item; a disabled button is skipped. */
+  button(button: PanelButton, placement?: FocusPlacement, adjust?: (step: 1 | -1) => void) {
+    return this.add({
+      setSelected: selected => button.setSelected(selected),
+      activate: () => button.activate(),
+      adjust,
+      hit: [button.box],
+      enabled: () => button.box.input?.enabled !== false,
+    }, placement);
+  }
+
+  /** Binds the keys and shows focus on `initial` (or the first enabled item after it). */
+  start(initial = 0) {
+    const keyboard = this.scene.input.keyboard;
+    this.navigator = new FocusNavigator(this.slots, initial);
+    const on = (event: string, handler: (event?: KeyboardEvent) => void) => {
+      keyboard?.on(event, handler);
+      this.disposers.push(() => keyboard?.off(event, handler));
+    };
+    const move = (direction: FocusDirection) => () => {
+      this.navigator?.move(direction);
+      this.draw();
+    };
+    // Held keys repeat: fine for walking a list, not for buying or changing a value twice.
+    const sideways = (step: 1 | -1, direction: FocusDirection) => (event?: KeyboardEvent) => {
+      const adjust = this.items[this.index]?.adjust;
+      if (!adjust) return move(direction)();
+      if (!event?.repeat) adjust(step);
+    };
+    on('keydown-UP', move('up'));
+    on('keydown-DOWN', move('down'));
+    on('keydown-LEFT', sideways(-1, 'left'));
+    on('keydown-RIGHT', sideways(1, 'right'));
+    on('keydown-ENTER', event => {
+      const item = this.items[this.index];
+      if (!event?.repeat && item && (item.enabled?.() ?? true)) item.activate();
+    });
+    this.items.forEach((item, index) => item.hit?.forEach(target => {
+      const hover = () => { if (this.navigator?.focus(index)) this.draw(); };
+      target.on('pointerover', hover);
+      this.disposers.push(() => target.off('pointerover', hover));
+    }));
+    const dispose = () => this.destroy();
+    this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, dispose);
+    this.disposers.push(() => this.scene.events.off(Phaser.Scenes.Events.SHUTDOWN, dispose));
+    if (this.owner) {
+      this.owner.once(Phaser.GameObjects.Events.DESTROY, dispose);
+      this.disposers.push(() => this.owner?.off(Phaser.GameObjects.Events.DESTROY, dispose));
+    }
+    this.draw();
+    return this;
+  }
+
+  focus(index: number) {
+    if (this.navigator?.focus(index)) this.draw();
+  }
+
+  destroy() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.disposers.splice(0).forEach(dispose => dispose());
+  }
+
+  private draw() {
+    this.items.forEach((item, index) => item.setSelected(index === this.index));
+  }
 }
 
 /** Full-screen sub-menu frame shared by the workshop, settings, records and cloud screens. */

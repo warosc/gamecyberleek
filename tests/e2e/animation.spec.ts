@@ -31,6 +31,9 @@ test('keyboard and mouse remain usable when the PC reports a touch screen', asyn
   await page.addInitScript(() => Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 1 }));
   await deploy(page);
   expect(await page.evaluate(() => window.animationTestScene.mobileInput.active)).toBe(true);
+  // This is a mouse-and-keyboard PC. The iPhone project also runs it, where the pointer is coarse
+  // and auto-fire (a phone default) rightly takes the aim; a real phone has no mouse to test.
+  await page.evaluate(() => { window.animationTestScene.mobileInput.autoFire = false; });
   const position = () => page.evaluate(() => ({ x: window.animationTestScene.player.x, y: window.animationTestScene.player.y }));
   const start = await position();
   await page.keyboard.down('w');
@@ -62,6 +65,8 @@ test('keyboard and mouse remain usable when the PC reports a touch screen', asyn
 
 test('the weapon grip follows the animated hand while aiming both directions', async ({ page }) => {
   await deploy(page);
+  // Recoil from auto-fire (on by default on phones) would move the grip between samples.
+  await page.evaluate(() => { window.animationTestScene.mobileInput.autoFire = false; });
   const sample = () => page.evaluate(() => {
     const player = window.animationTestScene.player;
     const rig = player.list.find(child => 'getWeaponSocket' in child) as unknown as {

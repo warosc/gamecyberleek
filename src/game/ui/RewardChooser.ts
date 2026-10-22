@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { hudFont, isCompactHud } from './HudLayout';
 
 export interface RewardCardSpec {
   accent: number;
@@ -13,8 +14,16 @@ export interface RewardCardSpec {
   pips?: { filled: number; total: number };
 }
 
-const CARD_WIDTH = 264;
-const CARD_HEIGHT = 292;
+/**
+ * Card geometry. On a phone-sized display (0.46 scale on an iPhone Pro Max) the 15px effect line
+ * drew at 7 CSS px; at 22px it needs three wrapped lines, so the cards grow to 340x330 and the
+ * row to 1080px, which still fits the narrowest widened phone canvas (1281).
+ */
+export function rewardCardLayout(compact: boolean) {
+  return compact
+    ? { width: 340, height: 330, spacing: 370, icon: 46, iconRadius: 30, title: 110, effect: 190, pips: 258, footer: 290, badge: 24, badgeRadius: 18 }
+    : { width: 264, height: 292, spacing: 300, icon: 54, iconRadius: 34, title: 108, effect: 158, pips: 208, footer: 236, badge: 22, badgeRadius: 15 };
+}
 const HOTKEYS = ['ONE', 'TWO', 'THREE'] as const;
 /**
  * A modal opens mid-combat, while the player is still clicking to fire or pressing the pad's A
@@ -49,8 +58,10 @@ export class RewardChooser {
   build(specs: RewardCardSpec[], centerX: number, centerY: number) {
     this.armedAt = this.scene.time.now + REWARD_ARM_MS;
     const parts: Phaser.GameObjects.GameObject[] = [];
+    const layout = rewardCardLayout(isCompactHud(this.scene));
+    const { width: CARD_WIDTH, height: CARD_HEIGHT } = layout;
     specs.forEach((spec, index) => {
-      const x = centerX + (index - (specs.length - 1) / 2) * 300;
+      const x = centerX + (index - (specs.length - 1) / 2) * layout.spacing;
       const glow = this.scene.add
         .rectangle(x, centerY, CARD_WIDTH + 14, CARD_HEIGHT + 14, spec.accent, 0.12)
         .setStrokeStyle(1, spec.accent, 0.28);
@@ -62,23 +73,23 @@ export class RewardChooser {
       const top = centerY - CARD_HEIGHT / 2;
 
       const icon = this.scene.add
-        .circle(x, top + 54, 34, 0x06101d, 1)
+        .circle(x, top + layout.icon, layout.iconRadius, 0x06101d, 1)
         .setStrokeStyle(3, spec.accent, 0.95);
       const iconLabel = this.scene.add
-        .text(x, top + 54, spec.icon, { fontFamily: 'Arial Black', fontSize: '30px', color: hex })
+        .text(x, top + layout.icon, spec.icon, { fontFamily: 'Arial Black', fontSize: '30px', color: hex })
         .setOrigin(0.5);
       const title = this.scene.add
-        .text(x, top + 108, spec.name, {
+        .text(x, top + layout.title, spec.name, {
           fontFamily: 'Arial Black',
-          fontSize: '19px',
+          fontSize: hudFont(this.scene, 19),
           color: '#eaffff',
           align: 'center',
           wordWrap: { width: CARD_WIDTH - 36 },
         })
         .setOrigin(0.5);
       const effect = this.scene.add
-        .text(x, top + 158, spec.effect, {
-          fontSize: '15px',
+        .text(x, top + layout.effect, spec.effect, {
+          fontSize: hudFont(this.scene, 15),
           color: '#c3d5df',
           align: 'center',
           wordWrap: { width: CARD_WIDTH - 44 },
@@ -96,7 +107,7 @@ export class RewardChooser {
           const pipX = x + (pip - (total - 1) / 2) * spacing;
           parts.push(
             this.scene.add
-              .rectangle(pipX, top + 208, pipWidth, 7, spec.accent, pip < spec.pips.filled ? 1 : 0.16)
+              .rectangle(pipX, top + layout.pips, pipWidth, 7, spec.accent, pip < spec.pips.filled ? 1 : 0.16)
               .setStrokeStyle(1, spec.accent, pip < spec.pips.filled ? 1 : 0.4),
           );
         }
@@ -104,9 +115,9 @@ export class RewardChooser {
       if (spec.footer)
         parts.push(
           this.scene.add
-            .text(x, top + 236, spec.footer, {
+            .text(x, top + layout.footer, spec.footer, {
               fontFamily: 'Arial Black',
-              fontSize: '12px',
+              fontSize: hudFont(this.scene, 12),
               color: hex,
             })
             .setOrigin(0.5),
@@ -114,12 +125,12 @@ export class RewardChooser {
 
       // Hotkey badge. Showing the key is what makes the keyboard path discoverable at all.
       const badge = this.scene.add
-        .circle(x - CARD_WIDTH / 2 + 22, top + 22, 15, 0x06101d, 1)
+        .circle(x - CARD_WIDTH / 2 + 22, top + layout.badge, layout.badgeRadius, 0x06101d, 1)
         .setStrokeStyle(2, spec.accent, 0.95);
       const badgeLabel = this.scene.add
-        .text(x - CARD_WIDTH / 2 + 22, top + 22, String(index + 1), {
+        .text(x - CARD_WIDTH / 2 + 22, top + layout.badge, String(index + 1), {
           fontFamily: 'Arial Black',
-          fontSize: '14px',
+          fontSize: hudFont(this.scene, 14),
           color: '#ffffff',
         })
         .setOrigin(0.5);

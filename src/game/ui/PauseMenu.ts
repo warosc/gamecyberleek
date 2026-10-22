@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import type { GameScene } from '../scenes/GameScene';
-import { t } from '../i18n';
-import { UI, framePanel, isCompact, panelButton, uiFont } from './SceneWidgets';
+import { t, td } from '../i18n';
+import { FocusGroup, UI, framePanel, isCompact, panelButton, uiFont, type PanelButton } from './SceneWidgets';
 
 /** Builds the pause overlay. The objects are handed to `ModalOverlay`, which owns their life. */
 export class PauseMenu {
@@ -36,7 +36,11 @@ export class PauseMenu {
         .text(
           GAME_WIDTH / 2,
           286,
-          `NIVEL ${this.game.xp.level}   ·   ${this.game.player.stats.weaponName}   ·   ARMOR ${Math.round(this.game.player.stats.damageReduction * 100)}%`,
+          t('pause.status', {
+            level: this.game.xp.level,
+            weapon: td(this.game.player.stats.weaponName),
+            percent: Math.round(this.game.player.stats.damageReduction * 100),
+          }),
           {
             fontFamily: 'Arial Black',
             fontSize: uiFont(this.scene, 12),
@@ -48,7 +52,7 @@ export class PauseMenu {
     );
     const resume = this.button(GAME_WIDTH / 2, 360, t('pause.resume'), 0x73ef62, () => this.game.resumeGame());
     const menu = this.button(GAME_WIDTH / 2, 440, t('pause.menu'), 0x21e6ff, () => this.game.returnToMenu());
-    parts.push(...resume, ...menu);
+    parts.push(...resume.parts, ...menu.parts);
     const volumeLabel = this.scene.add
       .text(GAME_WIDTH / 2, 505, '', {
         fontFamily: 'Arial Black',
@@ -59,16 +63,26 @@ export class PauseMenu {
       .setOrigin(0.5);
     const refreshVolume = () =>
       volumeLabel.setText(t('pause.volume', { value: Math.round(this.game.audioVolume * 100) }));
-    const volumeDown = this.button(GAME_WIDTH / 2 - 145, 505, '−', 0xd566ff, () => {
-      this.game.adjustAudioVolume(-0.1);
+    const changeVolume = (step: 1 | -1) => {
+      this.game.adjustAudioVolume(step * 0.1);
       refreshVolume();
-    }, 70);
-    const volumeUp = this.button(GAME_WIDTH / 2 + 145, 505, '+', 0xd566ff, () => {
-      this.game.adjustAudioVolume(0.1);
-      refreshVolume();
-    }, 70);
+    };
+    const volumeDown = this.button(GAME_WIDTH / 2 - 145, 505, '−', 0xd566ff, () => changeVolume(-1), 70);
+    const volumeUp = this.button(GAME_WIDTH / 2 + 145, 505, '+', 0xd566ff, () => changeVolume(1), 70);
     refreshVolume();
-    parts.push(volumeLabel, ...volumeDown, ...volumeUp);
+    parts.push(volumeLabel, ...volumeDown.parts, ...volumeUp.parts);
+    // Keyboard and pad: the volume row is one stop whose LEFT / RIGHT turn it down and up. The
+    // group lives as long as the panel, which `ModalOverlay` destroys on resume.
+    new FocusGroup(this.scene, resume.box)
+      .button(resume)
+      .button(menu)
+      .add({
+        setSelected: selected => { volumeDown.setSelected(selected); volumeUp.setSelected(selected); },
+        activate: () => changeVolume(1),
+        adjust: changeVolume,
+        hit: [volumeDown.box, volumeUp.box],
+      })
+      .start();
     // Keyboard hints mean nothing on a phone.
     if (!isCompact(this.scene)) parts.push(
       this.scene.add
@@ -83,7 +97,7 @@ export class PauseMenu {
     return parts;
   }
 
-  private button(x: number, y: number, label: string, color: number, action: () => void, width = 340) {
-    return panelButton(this.scene, x, y, width, 60, label, color, action, 17).parts;
+  private button(x: number, y: number, label: string, color: number, action: () => void, width = 340): PanelButton {
+    return panelButton(this.scene, x, y, width, 60, label, color, action, 17);
   }
 }

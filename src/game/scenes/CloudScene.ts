@@ -9,7 +9,7 @@ import {
 import { applyRuntimeSettings } from '../systems/RuntimeSettings';
 import { AudioManager } from '../managers/AudioManager';
 import { queueSceneArt } from '../config/SceneArt';
-import { UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont } from '../ui/SceneWidgets';
+import { FocusGroup, UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont } from '../ui/SceneWidgets';
 
 /**
  * Cloud save and online identity. The operative code is the only key to a cloud save, so the
@@ -39,7 +39,7 @@ export class CloudScene extends Phaser.Scene {
     const callsign = this.add.text(cx - 440, 212, operative.callsign, {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 26), color: '#73ef62',
     }).setOrigin(0, 0.5).setName('cloud-callsign');
-    panelButton(this, cx + 320, 196, 240, 52, t('cloud.rename'), UI.green, () => {
+    const rename = panelButton(this, cx + 320, 196, 240, 52, t('cloud.rename'), UI.green, () => {
       const answer = window.prompt(t('cloud.renamePrompt'), loadProfile().operative?.callsign ?? '');
       if (answer === null) return;
       const saved = renameOperative(answer);
@@ -55,7 +55,7 @@ export class CloudScene extends Phaser.Scene {
     fitText(this.add.text(cx - 440, 336, t('cloud.codeHint'), {
       fontFamily: 'Arial', fontSize: uiFont(this, 13), color: UI.body,
     }).setOrigin(0, 0.5), 620);
-    panelButton(this, cx + 320, 300, 240, 52, t('cloud.copy'), UI.gold, () => {
+    const copy = panelButton(this, cx + 320, 300, 240, 52, t('cloud.copy'), UI.gold, () => {
       void navigator.clipboard?.writeText(loadProfile().operative?.code ?? operative.code)
         .then(() => this.report(t('cloud.copied'), true))
         .catch(() => this.report(t('cloud.copyFailed'), false));
@@ -70,7 +70,15 @@ export class CloudScene extends Phaser.Scene {
     this.add.text(cx, 566, t('cloud.autoNote'), {
       fontFamily: 'Arial', fontSize: uiFont(this, 12), color: UI.muted, align: 'center', wordWrap: { width: 900 },
     }).setOrigin(0.5);
-    backToMenu(this, cx, 640, t('common.back'));
+    const back = backToMenu(this, cx, 640, t('common.back'));
+    // Keyboard and pad, in screen order. Offline, upload and restore are disabled and skipped.
+    new FocusGroup(this)
+      .button(rename)
+      .button(copy)
+      .button(upload, { row: 2 })
+      .button(restore, { row: 2 })
+      .button(back, { row: 3 })
+      .start();
   }
 
   private report(message: string, ok: boolean) {

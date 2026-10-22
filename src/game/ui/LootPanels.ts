@@ -4,7 +4,7 @@ import { t, td } from '../i18n';
 import type { Equipment } from '../loot/Equipment';
 import type { BuildSynergy, combatRating } from '../systems/BuildProgression';
 import { RewardChooser } from './RewardChooser';
-import { hex } from './SceneWidgets';
+import { FocusGroup, hex } from './SceneWidgets';
 
 type Rating = ReturnType<typeof combatRating>;
 
@@ -16,6 +16,22 @@ export interface InventoryActions {
 
 const kindLabel = (kind: Equipment['kind']) =>
   t(kind === 'weapon' ? 'loot.kind.weapon' : kind === 'armor' ? 'loot.kind.armor' : 'loot.kind.module');
+
+/**
+ * Equipping or recycling rebuilds the whole panel. The focus it had is kept for a rebuild in the
+ * same frame, so a keyboard or pad player stays where they were instead of jumping to the start.
+ */
+const inventoryFocus = new WeakMap<Phaser.Scene, { frame: number; index: number }>();
+
+/** The panel's text buttons as focus items: focus lights their background. */
+const focusableText = (text: Phaser.GameObjects.Text, action: () => void, background = '#06101d') => ({
+  setSelected: (selected: boolean) => { text.setBackgroundColor(selected ? '#1d4a63' : background); },
+  activate: action,
+  hit: [text],
+});
+
+/** Centre x of a text, whatever its origin: UP / DOWN pick the nearest by it. */
+const centreX = (text: Phaser.GameObjects.Text) => text.x + (0.5 - text.originX) * text.width;
 
 /** The six-slot run inventory. Returns the modal parts; `ModalOverlay` owns their lifetime. */
 export function buildInventoryPanel(
@@ -30,6 +46,13 @@ export function buildInventoryPanel(
     fontFamily: 'Arial Black', fontSize: '14px', color: '#73ef62', backgroundColor: '#07111f', padding: { x: 14, y: 9 },
   }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
   close.on('pointerup', actions.close);
+  const focus = new FocusGroup(scene, close);
+  // Keep focus where it was when an action rebuilds the panel (see `inventoryFocus`).
+  const keep = (action: () => void) => () => {
+    inventoryFocus.set(scene, { frame: scene.game.loop.frame, index: focus.index });
+    action();
+  };
+  focus.add(focusableText(close, actions.close, '#07111f'), { row: 0, x: centreX(close) });
   const parts: Phaser.GameObjects.GameObject[] = [
     scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.95),
     scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, Math.min(1120, GAME_WIDTH - 44), 650, 0x061323, 0.98)
@@ -78,7 +101,10 @@ export function buildInventoryPanel(
         fontFamily: 'Arial Black', fontSize: '12px', color: active ? '#73ef62' : '#21e6ff',
         backgroundColor: '#06101d', padding: { x: 11, y: 7 },
       });
-      if (!active) equip.setInteractive({ useHandCursor: true }).on('pointerup', () => actions.equip(index));
+      if (!active) {
+        equip.setInteractive({ useHandCursor: true }).on('pointerup', () => actions.equip(index));
+        focus.add(focusableText(equip, keep(() => actions.equip(index))), { row: 1 + Math.floor(index / 3), x: centreX(equip) });
+      }
       parts.push(equip);
     }
     if (!active) {
@@ -86,12 +112,18 @@ export function buildInventoryPanel(
         fontFamily: 'Arial Black', fontSize: '11px', color: '#ff9a65', backgroundColor: '#06101d', padding: { x: 10, y: 7 },
       }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
       recycle.on('pointerup', () => actions.recycle(index));
+      focus.add(focusableText(recycle, keep(() => actions.recycle(index))), { row: 1 + Math.floor(index / 3), x: centreX(recycle) });
       parts.push(recycle);
     }
   }
   parts.push(scene.add.text(GAME_WIDTH / 2, 672, t('inventory.footer'), {
     fontFamily: 'monospace', fontSize: '12px', color: '#7894a5',
   }).setOrigin(0.5));
+  // Arrows / d-pad walk the slots' actions, ENTER / A runs one. Fresh panels start on the first
+  // item action rather than CLOSE; ESC and I still close from anywhere.
+  const kept = inventoryFocus.get(scene);
+  inventoryFocus.delete(scene);
+  focus.start(kept && kept.frame === scene.game.loop.frame ? kept.index : Math.min(1, focus.size - 1));
   return parts;
 }
 

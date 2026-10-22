@@ -8,9 +8,10 @@ import { STARTER_WEAPONS, starterWeapon, type StarterWeaponId } from '../weapons
 import { masteryRank, type WeaponMastery } from '../weapons/WeaponMastery';
 import { dailyOperation } from '../progression/DailyOperation';
 import { t, td, type StringKey } from '../i18n';
-import { UI, drawFrame, fitText, framePanel, hex, isCompact, panelButton, uiFont } from '../ui/SceneWidgets';
+import { FocusGroup, UI, type FocusItem, drawFrame, fitText, framePanel, hex, isCompact, panelButton, uiFont } from '../ui/SceneWidgets';
 import { onlineService } from '../online/OnlinePorts';
 import { iconKey, queueSceneArt } from '../config/SceneArt';
+import { reducedMotion } from '../systems/RuntimeSettings';
 
 /** Last sector chosen in this session, so returning from a sub-menu keeps the selection. */
 const SECTOR_REGISTRY_KEY = 'menu-sector';
@@ -19,7 +20,6 @@ export class MenuScene extends Phaser.Scene {
   private audio?: AudioManager;
   private selectedWeaponId: StarterWeaponId = 'pulse';
   private sector = 0;
-  private selectWeapon?: (index: number) => void;
   /** Horizontal shift for the right-hand showcase, which centres itself on wide phone canvases. */
   private showcaseX = 0;
   constructor() {
@@ -73,7 +73,7 @@ export class MenuScene extends Phaser.Scene {
       color: UI.muted,
       letterSpacing: 3,
     });
-    this.createSectorSelector(profile.unlocks);
+    const sector = this.createSectorSelector(profile.unlocks);
     // The two-line brief is flavour; on a phone the larger type needs its room for the controls.
     if (!compact)
       this.add.text(80, 322, t('menu.brief'), {
@@ -91,15 +91,15 @@ export class MenuScene extends Phaser.Scene {
       weaponId: daily.weaponId, arenaIndex: daily.sector, daily: { date: daily.date, mutator: daily.mutator.id },
     });
     // DEPLOY keeps its original rectangle: browser tests and muscle memory both click its centre.
-    this.createButton(80, 392, 330, 66, t('menu.deploy'), UI.green, deploy, 25, undefined, true);
-    this.createButton(420, 392, 130, 66, t('menu.daily'), UI.gold, deployDaily, 12, 'menu-daily');
-    this.createButton(80, 474, 220, 48, t('menu.howToPlay'), UI.cyan, () =>
+    const deployButton = this.createButton(80, 392, 330, 66, t('menu.deploy'), UI.green, deploy, 25, undefined, true);
+    const dailyButton = this.createButton(420, 392, 130, 66, t('menu.daily'), UI.gold, deployDaily, 12, 'menu-daily');
+    const howToButton = this.createButton(80, 474, 220, 48, t('menu.howToPlay'), UI.cyan, () =>
       controls.setVisible(!controls.visible),
     );
-    this.createButton(320, 474, 220, 48, t('menu.enemies'), 0xffb52e, () => this.scene.start('Bestiary'));
-    this.createButton(80, 532, 150, 48, t('menu.workshop'), UI.gold, () => this.scene.start('Workshop'), 14, 'menu-workshop');
-    this.createButton(240, 532, 150, 48, t('menu.settings'), UI.violet, () => this.scene.start('Settings'), 14, 'menu-settings');
-    this.createButton(400, 532, 150, 48, t('menu.records'), UI.cyan, () => this.scene.start('Records'), 14, 'menu-records');
+    const enemiesButton = this.createButton(320, 474, 220, 48, t('menu.enemies'), 0xffb52e, () => this.scene.start('Bestiary'));
+    const workshopButton = this.createButton(80, 532, 150, 48, t('menu.workshop'), UI.gold, () => this.scene.start('Workshop'), 14, 'menu-workshop');
+    const settingsButton = this.createButton(240, 532, 150, 48, t('menu.settings'), UI.violet, () => this.scene.start('Settings'), 14, 'menu-settings');
+    const recordsButton = this.createButton(400, 532, 150, 48, t('menu.records'), UI.cyan, () => this.scene.start('Records'), 14, 'menu-records');
     this.add.text(80, 596,
       profile.unlocks.length > 0
         ? t('menu.unlocks', { list: profile.unlocks.join('  ·  ').toUpperCase() })
@@ -122,7 +122,7 @@ export class MenuScene extends Phaser.Scene {
     controls.setY(Math.min(590, GAME_HEIGHT - 18 - controls.height));
     fitText(controls, 500);
 
-    this.createWeaponSelector(profile.weaponMastery, compact);
+    const loadout = this.createWeaponSelector(profile.weaponMastery, compact);
 
     this.createAtmosphere();
     this.createHeroShowcase();
@@ -175,11 +175,21 @@ export class MenuScene extends Phaser.Scene {
     this.showOnlineStatus(daily.date, setDaily, dailyLines, profile.runs, profile.operative?.code,
       () => 72 + dailyInfo.height + 26 + (storageNote ? storageNote.height + 8 : 0));
 
-    // Keyboard and gamepad: the gamepad bridge replays pad input as these same keys.
-    const keyboard = this.input.keyboard;
-    keyboard?.on('keydown-ENTER', deploy);
-    keyboard?.on('keydown-UP', () => this.selectWeapon?.(this.weaponIndex() - 1));
-    keyboard?.on('keydown-DOWN', () => this.selectWeapon?.(this.weaponIndex() + 1));
+    // Keyboard and gamepad (the bridge replays the pad as arrows and ENTER): arrows walk the
+    // menu, ENTER runs the focused button. Focus starts on DEPLOY, so ENTER alone still deploys.
+    // The sector selector and the loadout are single stops whose LEFT / RIGHT change their value;
+    // 1 / 2 / 3 still pick a weapon from anywhere.
+    new FocusGroup(this)
+      .add(sector, { row: 0 })
+      .button(deployButton, { row: 1 })
+      .button(dailyButton, { row: 1 })
+      .button(howToButton, { row: 2 })
+      .button(enemiesButton, { row: 2 })
+      .button(workshopButton, { row: 3 })
+      .button(settingsButton, { row: 3 })
+      .button(recordsButton, { row: 3 })
+      .add(loadout, { row: 4 })
+      .start(1);
     backdrop.setInteractive();
   }
 
@@ -248,11 +258,16 @@ export class MenuScene extends Phaser.Scene {
       this.audio?.play('ui_confirm');
       render();
     };
-    this.createButton(80, 248, 50, 64, '<', UI.cyan, step(-1), 20, 'menu-sector-prev');
-    this.createButton(500, 248, 50, 64, '>', UI.cyan, step(1), 20, 'menu-sector-next');
-    this.input.keyboard?.on('keydown-LEFT', step(-1));
-    this.input.keyboard?.on('keydown-RIGHT', step(1));
+    const prev = this.createButton(80, 248, 50, 64, '<', UI.cyan, step(-1), 20, 'menu-sector-prev');
+    const next = this.createButton(500, 248, 50, 64, '>', UI.cyan, step(1), 20, 'menu-sector-next');
     render();
+    // One focus stop for the whole selector: both arrows light up, LEFT / RIGHT step it.
+    return {
+      setSelected: (selected: boolean) => { prev.setSelected(selected); next.setSelected(selected); },
+      activate: step(1),
+      adjust: (direction: 1 | -1) => step(direction)(),
+      hit: [prev.box, next.box],
+    } satisfies FocusItem;
   }
 
   private createWeaponSelector(mastery: WeaponMastery, compact: boolean) {
@@ -268,6 +283,7 @@ export class MenuScene extends Phaser.Scene {
       backgroundColor: '#06101de6', padding: { x: 14, y: 7 },
     }).setOrigin(0.5).setDepth(9);
     let bob: Phaser.Tweens.Tween | undefined;
+    const still = reducedMotion();
     const select = (index: number) => {
       const wrapped = (index + STARTER_WEAPONS.length) % STARTER_WEAPONS.length;
       const weapon = STARTER_WEAPONS[wrapped];
@@ -282,11 +298,11 @@ export class MenuScene extends Phaser.Scene {
       });
       // A gentle bob on the chosen badge: one tween, stopped before the next selection.
       const chosenIcon = cards[wrapped]?.icon;
-      if (chosenIcon)
+      if (chosenIcon && !still)
         bob = this.tweens.add({ targets: chosenIcon, y: cards[wrapped].iconY - 5, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       label.setText(t('menu.loadoutReady', { weapon: weapon.name }));
     };
-    this.selectWeapon = select;
+    const hits: Phaser.GameObjects.GameObject[] = [];
     STARTER_WEAPONS.forEach((weapon, index) => {
       const x = centre + (index - 1) * 222;
       const color = hex(weapon.color);
@@ -321,16 +337,29 @@ export class MenuScene extends Phaser.Scene {
           fontFamily: 'Arial', fontSize: '12px', color: UI.body, align: 'center', wordWrap: { width: 184 },
         }).setOrigin(0.5).setDepth(10);
       card.on('pointerup', () => select(index));
+      hits.push(card);
       cards.push({ frame, color: weapon.color, icon, iconY });
       this.input.keyboard?.on(`keydown-${index + 1}`, () => select(index));
     });
     select(0);
+    // The loadout is one focus stop: LEFT / RIGHT change weapon, ENTER takes the next one.
+    return {
+      setSelected: (selected: boolean) => {
+        label.setBackgroundColor(selected ? '#1d4a63' : '#06101de6');
+      },
+      activate: () => select(this.weaponIndex() + 1),
+      adjust: (step: 1 | -1) => select(this.weaponIndex() + step),
+      hit: hits,
+    } satisfies FocusItem;
   }
 
   private createAtmosphere() {
     const dx = this.showcaseX;
     const portal = this.add.ellipse(972 + dx, 360, 410, 520, 0x21e6ff, 0.055).setDepth(1);
     portal.setBlendMode(Phaser.BlendModes.ADD);
+    // Reduced motion keeps the still portal glow and drops the drifting motes, smoke and scan
+    // line: pure decoration, and all of it endless movement.
+    if (reducedMotion()) return;
     this.tweens.add({
       targets: portal,
       scaleX: { from: 0.92, to: 1.06 },
@@ -387,6 +416,8 @@ export class MenuScene extends Phaser.Scene {
     const hero = this.add.image(0, 0, 'leek-hero-clean').setDisplaySize(270, 494);
     const heroScale = hero.scaleX;
     const container = this.add.container(960 + dx, 438, [hero]).setDepth(4);
+    // Reduced motion: the hero stands still instead of breathing and swaying.
+    if (reducedMotion()) return;
     this.tweens.add({
       targets: container,
       y: 428,

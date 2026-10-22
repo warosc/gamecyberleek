@@ -4,7 +4,7 @@ import { t, td } from '../i18n';
 import { WORKSHOP_UPGRADES, nextRankCost, type WorkshopUpgradeId } from '../progression/Workshop';
 import { loadProfile, purchaseWorkshopRank } from '../systems/ProfileStore';
 import { AudioManager } from '../managers/AudioManager';
-import { UI, backToMenu, framePanel, hex, panelButton, subMenuFrame, uiFont, type PanelButton } from '../ui/SceneWidgets';
+import { FocusGroup, UI, backToMenu, framePanel, hex, panelButton, subMenuFrame, uiFont, type PanelButton } from '../ui/SceneWidgets';
 import { shakeCamera } from '../systems/RuntimeSettings';
 import { iconKey, queueSceneArt } from '../config/SceneArt';
 
@@ -35,11 +35,14 @@ export class WorkshopScene extends Phaser.Scene {
 
     // Offset from the 1280 design width so the list stays centred on wide phone canvases.
     const ox = (GAME_WIDTH - 1280) / 2;
+    // Keyboard and pad: UP / DOWN pick an upgrade, ENTER buys it. The group ignores ENTER's key
+    // repeat, so holding it cannot buy two ranks.
+    const focus = new FocusGroup(this);
     WORKSHOP_UPGRADES.forEach((upgrade, index) => {
       const y = 216 + index * 80;
       // The whole row is a purchase target, not only the button: rows are tall enough to tap.
       framePanel(this, GAME_WIDTH / 2, y, 1040, 70, upgrade.color, { strokeAlpha: 0.45, band: 0.07, cut: 12 });
-      this.add.rectangle(GAME_WIDTH / 2, y, 1040, 70, 0x000000, 0.001)
+      const row = this.add.rectangle(GAME_WIDTH / 2, y, 1040, 70, 0x000000, 0.001)
         .setInteractive({ useHandCursor: true }).on('pointerup', () => this.buy(upgrade.id));
       // The upgrade's icon when it loaded, else a plain accent bar.
       const icon = iconKey(`workshop-${upgrade.id}`);
@@ -62,9 +65,14 @@ export class WorkshopScene extends Phaser.Scene {
       const button = panelButton(this, ox + 1010, y, 230, 54, '', upgrade.color, () => this.buy(upgrade.id), 15,
         { name: `workshop-buy-${upgrade.id}` });
       this.rows.set(upgrade.id, { rank, pips, button });
+      focus.add({
+        setSelected: selected => button.setSelected(selected),
+        activate: () => this.buy(upgrade.id),
+        hit: [row, button.box],
+      }, { x: GAME_WIDTH / 2 });
     });
     this.refresh();
-    backToMenu(this, GAME_WIDTH / 2, 648, t('common.back'));
+    focus.button(backToMenu(this, GAME_WIDTH / 2, 648, t('common.back')), { x: GAME_WIDTH / 2 }).start();
   }
 
   private buy(id: WorkshopUpgradeId) {

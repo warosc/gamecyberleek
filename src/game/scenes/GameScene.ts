@@ -41,7 +41,7 @@ import { SectorObjectiveSystem, type ObjectiveMetric } from '../systems/SectorOb
 import { shakeCamera } from '../systems/RuntimeSettings';
 import { FAMILY_RULES } from '../entities/enemies/EnemyTypes';
 import { applyWorkshop } from '../progression/Workshop';
-import { abilityText, td } from '../i18n';
+import { abilityText, t, td } from '../i18n';
 import { dailyMutator, operationScore } from '../progression/DailyOperation';
 import { PAD, setGamepadConsumer, type PadFrame } from '../input/GamepadBridge';
 import { onlineService } from '../online/OnlinePorts';
@@ -68,6 +68,10 @@ export class GameScene extends Phaser.Scene {
     holdAim: true,
   };
   private padEngaged = false;
+  /** Read by UIScene: onboarding hints name the pad's buttons while the pad is the active device. */
+  get padActive() {
+    return this.padEngaged;
+  }
   /** Live daily board session; only exists during an online daily run. */
   private live?: LiveBoardSession;
   private liveEntries: LiveEntry[] = [];
@@ -165,7 +169,10 @@ export class GameScene extends Phaser.Scene {
     this.effects.muzzle(x, y, angle, this.player.stats.weaponMode, this.player.stats.projectileColor);
   };
   private readonly handleEscape = (event: KeyboardEvent) => {
-    if (!event.repeat) this.togglePause();
+    if (event.repeat) return;
+    // ESC (and the pad's B / START, replayed as ESC) closes the backpack; togglePause ignores it.
+    if (this.state === GameState.INVENTORY && !this.pendingLoot) this.toggleInventory();
+    else this.togglePause();
   };
   private readonly handleFocusLost = () => {
     if (this.state === GameState.PLAYING || this.state === GameState.BOSS) this.togglePause();
@@ -242,7 +249,10 @@ export class GameScene extends Phaser.Scene {
     this.mobileInput.aim.set(1, 0);
     this.mobileInput.firing = false;
     this.mobileInput.dash = false;
-    this.mobileInput.autoFire = loadProfile().autoFire;
+    // Auto-fire is a phone aid. A touch-screen laptop also shows the touch controls, but its player
+    // aims with the mouse: auto-fire there pinned the aim to the idle stick and shot the wrong way.
+    const touchFirst = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    this.mobileInput.autoFire = Boolean(touchFirst) && loadProfile().autoFire;
     this.equippedWeapon = starterWeapon(this.selectedWeaponId).name;
     this.equippedArmor = 'SIN ARMADURA';
   }
@@ -675,7 +685,7 @@ export class GameScene extends Phaser.Scene {
       this.events.emit(Events.EQUIPMENT_CHANGED, this.equippedWeapon, this.equippedArmor);
     } else {
       this.player.health.heal(12);
-      this.effects.floatingText(this.player.x, this.player.y - 55, 'RECICLADO +12 HP', '#73ef62', 15);
+      this.effects.floatingText(this.player.x, this.player.y - 55, t('loot.recycledHeal', { hp: 12 }), '#73ef62', 15);
     }
     if (install) this.refreshBuildSynergy();
     this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);

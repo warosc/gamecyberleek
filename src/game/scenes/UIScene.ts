@@ -1,14 +1,17 @@
 import Phaser from 'phaser';
 import { Events, GAME_HEIGHT, GAME_WIDTH, GameState } from '../config/Constants';
 import type { Ability } from '../abilities/AbilityRegistry';
+import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
 import type { GameScene } from './GameScene';
 import type { Equipment } from '../loot/Equipment';
 import { loadProfile } from '../systems/ProfileStore';
+import { reducedMotion } from '../systems/RuntimeSettings';
+import { connectedPad } from '../input/GamepadBridge';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import { ModalOverlay } from '../ui/ModalOverlay';
 import { MobileControls } from '../ui/MobileControls';
-import { RewardChooser } from '../ui/RewardChooser';
-import { OnboardingHints } from '../ui/OnboardingHints';
+import { RewardChooser, rewardCardLayout } from '../ui/RewardChooser';
+import { OnboardingHints, type HintDevice } from '../ui/OnboardingHints';
 import { StatusHud } from '../ui/StatusHud';
 import { BossBanner } from '../ui/BossBanner';
 import { AbilityBar } from '../ui/AbilityBar';
@@ -22,7 +25,8 @@ import { contractDescription, type ContractProgress } from '../systems/ContractS
 import { MinibossBanner } from '../ui/MinibossBanner';
 import { buildInventoryPanel, buildLootDecision, showLootBanner } from '../ui/LootPanels';
 import { LiveBoardHud } from '../ui/LiveBoardHud';
-import { rightColumn } from '../ui/HudLayout';
+import { hudFont, hudPx, isCompactHud, rightColumn } from '../ui/HudLayout';
+import { fitText } from '../ui/SceneWidgets';
 import type { LiveEntry } from '../online/LiveRanking';
 import { abilityText, t, td } from '../i18n';
 import type { BuildSynergy, combatRating } from '../systems/BuildProgression';
@@ -42,6 +46,14 @@ function pulseHaptics(durationMs: number) {
     // Ignored on purpose.
   }
 }
+
+/**
+ * On a first run the contract briefing waits until the player has moved and aimed (see
+ * OnboardingHints), so it no longer lands on top of the control hints and a phase callout in the
+ * first seconds. A player who stands still still gets it after this much live play.
+ */
+const BRIEFING_FALLBACK_MS = 10000;
+
 export class UIScene extends Phaser.Scene {
   private gameScene!: GameScene;
   private statusHud!: StatusHud;
@@ -60,13 +72,24 @@ export class UIScene extends Phaser.Scene {
   private contractHud!: ContractHud;
   private minibossBanner!: MinibossBanner;
   private objectivePanel!: Phaser.GameObjects.Container;
+  private objectiveBack!: Phaser.GameObjects.Rectangle;
   private objectiveTitle!: Phaser.GameObjects.Text;
   private objectiveProgress!: Phaser.GameObjects.Text;
+  /** Phone-sized display (HudLayout): larger type and the roomier layouts that go with it. */
+  private compact = false;
+  private briefing?: Phaser.GameObjects.Container;
+  private briefingWaitMs = 0;
+  /** Last frame's "fully charged" state per power, to spot the first charge and the first use. */
+  private readonly powerCharged = new Map<SpecialAbilityId, boolean>();
   constructor() {
     super('UI');
   }
   create(data: { game: GameScene }) {
     this.gameScene = data.game;
+    this.compact = isCompactHud(this);
+    this.briefing = undefined;
+    this.briefingWaitMs = 0;
+    this.powerCharged.clear();
     this.modal = new ModalOverlay(this);
     this.damageFlash = this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0xff214f, 0)
@@ -93,17 +116,26 @@ export class UIScene extends Phaser.Scene {
     this.phaseBanner = new PhaseBanner(this, this.gameScene.mobileInput.active);
     this.momentumHud = new MomentumHud(this, this.gameScene.mobileInput.active);
     this.contractHud = new ContractHud(this, this.gameScene.contracts.list, this.gameScene.mobileInput.active);
-    this.showContractBriefing();
+    // Built now (hidden) and revealed by revealBriefing(): at once for experienced players, after
+    // the movement and aim hints on a first run.
+    this.briefing = this.buildContractBriefing();
     this.minibossBanner = new MinibossBanner(this);
-    const objectiveBack = this.add.rectangle(0, 0, 330, 70, 0x06101d, 0.9).setStrokeStyle(2, 0x21e6ff, 0.55);
-    this.objectiveTitle = this.add.text(-148, -22, t('objective.optional'), {
-      fontFamily: 'Arial Black', fontSize: '11px', color: '#21e6ff', letterSpacing: 1,
+    // Top-anchored so the panel can grow downward when the brief wraps at phone size.
+    const column = rightColumn(this.gameScene.mobileInput.active, this.compact);
+    const objectiveWidth = column.objectiveWidth;
+    this.objectiveBack = this.add.rectangle(0, 0, objectiveWidth, 70, 0x06101d, 0.9)
+      .setOrigin(0.5, 0).setStrokeStyle(2, 0x21e6ff, 0.55);
+    this.objectiveTitle = this.add.text(-objectiveWidth / 2 + 17, this.compact ? 9 : 13, t('objective.optional'), {
+      fontFamily: 'Arial Black', fontSize: hudFont(this, 11), color: '#21e6ff', letterSpacing: 1,
     });
-    this.objectiveProgress = this.add.text(-148, 4, '', {
-      fontFamily: 'monospace', fontSize: '11px', color: '#c7d9e2',
+    this.objectiveProgress = this.add.text(-objectiveWidth / 2 + 17, this.compact ? 11 + Math.ceil(this.objectiveTitle.height) : 39, '', {
+      fontFamily: 'monospace', fontSize: hudFont(this, 11), color: '#c7d9e2',
+      // A brief at 22px is ~600px: on phone-sized displays it wraps instead of shrinking.
+      wordWrap: this.compact ? { width: objectiveWidth - 34 } : undefined,
     });
-    this.objectivePanel = this.add.container(GAME_WIDTH - 185, rightColumn(this.gameScene.mobileInput.active).objectiveY,
-      [objectiveBack, this.objectiveTitle, this.objectiveProgress]).setDepth(58).setName('objective-panel');
+    const objectiveX = column.objectiveLeft ? 16 + objectiveWidth / 2 : GAME_WIDTH - 20 - objectiveWidth / 2;
+    this.objectivePanel = this.add.container(objectiveX, column.objectiveTop,
+      [this.objectiveBack, this.objectiveTitle, this.objectiveProgress]).setDepth(58).setName('objective-panel');
     this.onObjectiveChanged(this.gameScene.objectiveState);
     if (this.gameScene.mobileInput.active) {
       this.mobileControls = new MobileControls(this, this.gameScene);
@@ -129,7 +161,8 @@ export class UIScene extends Phaser.Scene {
       this.events.once('shutdown', () => this.input.keyboard?.off('keydown-F3', toggle));
     }
     this.hints = new OnboardingHints(this);
-    this.hints.create(loadProfile().runs, this.gameScene.mobileInput.active);
+    this.hints.create(loadProfile().runs, this.hintDevice());
+    if (!this.hints.active) this.revealBriefing();
     this.gameScene.events.on('weapon-fired', this.onWeaponFired, this);
     this.gameScene.events.on(Events.PLAYER_DASHED, this.onDashed, this);
     this.gameScene.events.on(Events.PLAYER_DAMAGED, this.onHealth, this);
@@ -199,13 +232,40 @@ export class UIScene extends Phaser.Scene {
     this.minibossBanner.update(delta);
     const body = this.gameScene.player.body as Phaser.Physics.Arcade.Body | null;
     if (body && body.velocity.lengthSq() > 100) this.hints?.satisfy('move');
-    this.hints?.update(delta);
+    // Hint and briefing timers only run in live play, never behind a modal or the pause menu.
+    const live = (this.gameScene.state === GameState.PLAYING || this.gameScene.state === GameState.BOSS) && !this.modal.active;
+    this.trackPowers();
+    this.hints?.update(delta, live, this.hintDevice());
+    if (this.briefing && !this.briefing.visible) {
+      if (live) this.briefingWaitMs += delta;
+      if (this.hints?.controlsLearned !== false || this.briefingWaitMs >= BRIEFING_FALLBACK_MS) this.revealBriefing();
+    }
     const dashCharge = this.gameScene.player.getDashCharge();
     this.statusHud.update(delta, this.gameScene.survivalMs, dashCharge);
     this.abilityBar.update();
     this.momentumHud.update(this.gameScene.survivalMs);
     this.contractHud.update(this.gameScene.contracts.list);
     this.debugOverlay?.update(delta);
+  }
+  /**
+   * Which controls the hints should name. A pad wins while it is the active device; until
+   * GameScene exposes `padActive`, a connected pad (browsers only expose one after a button press
+   * on the page) stands in for it.
+   */
+  private hintDevice(): HintDevice {
+    const pad = this.gameScene.padActive;
+    if (pad ?? Boolean(connectedPad())) return 'pad';
+    return this.gameScene.mobileInput.active ? 'touch' : 'keyboard';
+  }
+  /** The first power to charge queues its hint; the first one spent retires it. */
+  private trackPowers() {
+    if (!this.hints?.active) return;
+    for (const ability of SPECIAL_ABILITIES) {
+      const charged = this.gameScene.getSpecialCharge(ability.id) >= 1;
+      if (charged) this.hints.powerReady();
+      if (this.powerCharged.get(ability.id) && !charged) this.hints.satisfy('special');
+      this.powerCharged.set(ability.id, charged);
+    }
   }
   private onWeaponFired() {
     // Firing implies aiming, so one shot retires both prompts.
@@ -225,15 +285,19 @@ export class UIScene extends Phaser.Scene {
     this.statusHud.setExperience(xp, level);
   }
   private onXpDiscovered() {
-    const plate = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 104, 470, 62, 0x061323, 0.94)
+    // At phone size the plate grows for the 22px brief and rises above the bottom ability bar.
+    const width = this.compact ? 760 : 470;
+    const centerY = this.compact ? GAME_HEIGHT - 190 : GAME_HEIGHT - 104;
+    const plate = this.add.rectangle(GAME_WIDTH / 2, centerY, width, this.compact ? 84 : 62, 0x061323, 0.94)
       .setStrokeStyle(2, 0x73ef62, 0.85);
-    const title = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 116, t('xp.title'), {
-      fontFamily: 'Arial Black', fontSize: '16px', color: '#73ef62', letterSpacing: 2,
-    }).setOrigin(0.5);
-    const brief = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 91, t('xp.brief'), {
-      fontFamily: 'monospace', fontSize: '11px', color: '#c7d9e2', letterSpacing: 1,
-    }).setOrigin(0.5);
-    const banner = this.add.container(0, 20, [plate, title, brief]).setDepth(125).setAlpha(0).setName('xp-discovery');
+    const title = fitText(this.add.text(GAME_WIDTH / 2, centerY - (this.compact ? 16 : 12), t('xp.title'), {
+      fontFamily: 'Arial Black', fontSize: hudFont(this, 16), color: '#73ef62', letterSpacing: 2,
+    }).setOrigin(0.5), width - 30, 12);
+    const brief = fitText(this.add.text(GAME_WIDTH / 2, centerY + (this.compact ? 18 : 13), t('xp.brief'), {
+      fontFamily: 'monospace', fontSize: hudFont(this, 11), color: '#c7d9e2', letterSpacing: 1,
+    }).setOrigin(0.5), width - 30, 9);
+    // Under reduced motion it fades in place instead of rising.
+    const banner = this.add.container(0, reducedMotion() ? 0 : 20, [plate, title, brief]).setDepth(125).setAlpha(0).setName('xp-discovery');
     this.tweens.add({ targets: banner, y: 0, alpha: 1, duration: 220, hold: 2100, yoyo: true,
       onComplete: () => banner.destroy(true) });
   }
@@ -260,31 +324,42 @@ export class UIScene extends Phaser.Scene {
   }
   private onObjectiveChanged(state: SectorObjectiveState) {
     const status = state.status === 'complete' ? t('objective.complete') : state.status === 'failed' ? t('objective.expired') : `${state.progress}/${state.target}`;
-    this.objectiveTitle.setText(td(state.title)).setColor(`#${state.color.toString(16).padStart(6, '0')}`);
-    this.objectiveProgress.setText(`${status}  ·  ${state.status === 'active' ? td(state.brief) : state.status === 'complete' ? td(state.reward) : t('objective.lost')}`);
+    const width = this.objectiveBack.width;
+    const inner = width - 34;
+    this.objectiveTitle.setFontSize(hudPx(this, 11)).setText(td(state.title)).setColor(`#${state.color.toString(16).padStart(6, '0')}`);
+    fitText(this.objectiveTitle, inner, 9);
+    this.objectiveProgress.setFontSize(hudPx(this, 11))
+      .setText(`${status}  ·  ${state.status === 'active' ? td(state.brief) : state.status === 'complete' ? td(state.reward) : t('objective.lost')}`);
+    // "0/22  ·  Absorbe 22 fragmentos antes de 01:45" measured 297px at 11px in a 296px slot on
+    // desktop, so there it shrinks to fit; at phone size it wraps and the panel grows instead.
+    if (this.compact)
+      this.objectiveBack.setSize(width, Math.max(70, Math.ceil(this.objectiveProgress.y + this.objectiveProgress.height + 10)));
+    else fitText(this.objectiveProgress, inner, 9);
     if (state.status !== 'active') {
-      this.tweens.add({ targets: this.objectivePanel, scale: 1.08, duration: 120, yoyo: true });
+      if (!reducedMotion()) this.tweens.add({ targets: this.objectivePanel, scale: 1.08, duration: 120, yoyo: true });
       if (state.status === 'complete') this.phaseBanner.show({
         title: t('objective.done'), brief: td(state.reward), color: state.color,
       });
     }
   }
   private onUpgradeApplied(name: string, description: string, level: number, rating: ReturnType<typeof combatRating>) {
-    const plate = this.add.rectangle(0, 0, 600, 94, 0x061323, 0.96).setStrokeStyle(3, 0x73ef62, 0.9);
-    const title = this.add.text(0, -20, t('upgrade.level', { name, level }), {
-      fontFamily: 'Arial Black', fontSize: '21px', color: '#73ef62',
-    }).setOrigin(0.5);
-    const detail = this.add.text(0, 16, `${description}  //  DPS ${rating.dps} · CRIT ${rating.critical}%`, {
-      fontFamily: 'monospace', fontSize: '12px', color: '#d8e7ed',
-    }).setOrigin(0.5);
-    const banner = this.add.container(GAME_WIDTH / 2, 205, [plate, title, detail]).setDepth(135).setAlpha(0).setScale(0.88);
+    const width = this.compact ? 780 : 600;
+    const plate = this.add.rectangle(0, 0, width, this.compact ? 108 : 94, 0x061323, 0.96).setStrokeStyle(3, 0x73ef62, 0.9);
+    const title = fitText(this.add.text(0, this.compact ? -22 : -20, t('upgrade.level', { name, level }), {
+      fontFamily: 'Arial Black', fontSize: hudFont(this, 21), color: '#73ef62',
+    }).setOrigin(0.5), width - 40, 14);
+    const detail = fitText(this.add.text(0, this.compact ? 20 : 16, t('upgrade.rating', { description, dps: rating.dps, critical: rating.critical }), {
+      fontFamily: 'monospace', fontSize: hudFont(this, 12), color: '#d8e7ed',
+    }).setOrigin(0.5), width - 40, 10);
+    const still = reducedMotion();
+    const banner = this.add.container(GAME_WIDTH / 2, 205, [plate, title, detail]).setDepth(135).setAlpha(0).setScale(still ? 1 : 0.88);
     this.tweens.add({ targets: banner, alpha: 1, scale: 1, duration: 180, hold: 1200, yoyo: true,
       onComplete: () => banner.destroy(true) });
   }
   private showAbilities(abilities: Ability[]) {
     const parts: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
-      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1040, 570, 0x061323, 0.98)
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, this.modalWidth(), 570, 0x061323, 0.98)
         .setStrokeStyle(2, 0x21e6ff, 0.5),
       this.add
         .text(GAME_WIDTH / 2, 118, t('levelup.title', { level: this.gameScene.xp.level }), {
@@ -294,13 +369,16 @@ export class UIScene extends Phaser.Scene {
         })
         .setOrigin(0.5),
       this.add.text(GAME_WIDTH / 2, 164, t('levelup.subtitle'), {
-        fontFamily: 'Arial Black', fontSize: '12px', color: '#8ba5b8', letterSpacing: 3,
+        fontFamily: 'Arial Black', fontSize: hudFont(this, 12), color: '#8ba5b8', letterSpacing: 3,
       }).setOrigin(0.5),
     ];
-    const levelGlow = this.add.circle(GAME_WIDTH / 2, 118, 72, 0x73ef62, 0)
-      .setStrokeStyle(3, 0x73ef62, 0.55).setDepth(101);
-    parts.unshift(levelGlow);
-    this.tweens.add({ targets: levelGlow, scale: 2.4, alpha: 0, duration: 700, ease: 'Cubic.Out' });
+    // The expanding ring is decoration; under reduced motion the title and cards are enough.
+    if (!reducedMotion()) {
+      const levelGlow = this.add.circle(GAME_WIDTH / 2, 118, 72, 0x73ef62, 0)
+        .setStrokeStyle(3, 0x73ef62, 0.55).setDepth(101);
+      parts.unshift(levelGlow);
+      this.tweens.add({ targets: levelGlow, scale: 2.4, alpha: 0, duration: 700, ease: 'Cubic.Out' });
+    }
     const accents = [0x21e6ff, 0x73ef62, 0xd566ff];
     // A modal can replace another one; the old chooser would keep answering 1/2/3 and ENTER.
     this.chooser?.destroy();
@@ -333,7 +411,7 @@ export class UIScene extends Phaser.Scene {
     parts.push(this.add.text(GAME_WIDTH / 2, 585, this.gameScene.mobileInput.active
       ? t('levelup.tap')
       : t('levelup.keys'), {
-      fontFamily: 'monospace', fontSize: '12px', color: '#7594a8', letterSpacing: 2,
+      fontFamily: 'monospace', fontSize: hudFont(this, 12), color: '#7594a8', letterSpacing: 2,
     }).setOrigin(0.5));
     this.modal.replace(parts, 100);
   }
@@ -343,6 +421,12 @@ export class UIScene extends Phaser.Scene {
     this.chooser?.destroy();
     this.chooser = undefined;
     this.modal.clear();
+  }
+
+  /** The level-up and chest panels wrap their three cards, which are wider at phone size. */
+  private modalWidth() {
+    const cards = rewardCardLayout(this.compact);
+    return Math.max(1040, 2 * cards.spacing + cards.width + 100);
   }
 
   private onBossSpawned() {
@@ -361,7 +445,7 @@ export class UIScene extends Phaser.Scene {
     ];
     const parts: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
-      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1040, 540, 0x061323, 0.98)
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, this.modalWidth(), 540, 0x061323, 0.98)
         .setStrokeStyle(2, 0x73ef62, 0.5),
       this.add
         .text(GAME_WIDTH / 2, 140, t('chest.title'), {
@@ -371,7 +455,7 @@ export class UIScene extends Phaser.Scene {
         })
         .setOrigin(0.5),
       this.add.text(GAME_WIDTH / 2, 182, t('chest.subtitle'), {
-        fontFamily: 'Arial Black', fontSize: '12px', color: '#8ba5b8', letterSpacing: 3,
+        fontFamily: 'Arial Black', fontSize: hudFont(this, 12), color: '#8ba5b8', letterSpacing: 3,
       }).setOrigin(0.5),
     ];
     // A modal can replace another one; the old chooser would keep answering 1/2/3 and ENTER.
@@ -397,7 +481,7 @@ export class UIScene extends Phaser.Scene {
     parts.push(this.add.text(GAME_WIDTH / 2, 578, this.gameScene.mobileInput.active
       ? t('chest.tap')
       : t('levelup.keys'), {
-      fontFamily: 'monospace', fontSize: '12px', color: '#7594a8', letterSpacing: 2,
+      fontFamily: 'monospace', fontSize: hudFont(this, 12), color: '#7594a8', letterSpacing: 2,
     }).setOrigin(0.5));
     this.modal.replace(parts, 110);
   }
@@ -419,8 +503,11 @@ export class UIScene extends Phaser.Scene {
   private showLootBanner(equipment: Equipment) {
     this.statusHud.setLootSummary(
       equipment.kind === 'weapon'
-        ? equipment.name
-        : `${this.gameScene.player.stats.weaponName}  ·  ARMOR ${Math.round(this.gameScene.player.stats.damageReduction * 100)}%`,
+        ? td(equipment.name)
+        : t('hud.armorSummary', {
+          weapon: td(this.gameScene.player.stats.weaponName),
+          percent: Math.round(this.gameScene.player.stats.damageReduction * 100),
+        }),
     );
     showLootBanner(this, equipment);
   }
@@ -433,6 +520,7 @@ export class UIScene extends Phaser.Scene {
     this.chooser = chooser;
     this.modal.replace(parts, 115);
   }
+  /** Raw (Spanish) names from GameScene; StatusHud translates them, including "no armor". */
   private onEquipmentChanged(weapon: string, armor: string) {
     this.statusHud.setEquipment(weapon, armor);
   }
@@ -444,12 +532,13 @@ export class UIScene extends Phaser.Scene {
     const back = this.add.rectangle(GAME_WIDTH / 2, 260, 620, 118, 0x06101d, 0.97)
       .setStrokeStyle(4, color, 1);
     const kicker = this.add.text(GAME_WIDTH / 2, 232, t('evolution.title'), {
-      fontFamily: 'monospace', fontSize: '13px', color: tint, letterSpacing: 4,
+      fontFamily: 'monospace', fontSize: hudFont(this, 13), color: tint, letterSpacing: 4,
     }).setOrigin(0.5);
-    const title = this.add.text(GAME_WIDTH / 2, 270, name, {
+    const title = fitText(this.add.text(GAME_WIDTH / 2, 270, td(name), {
       fontFamily: 'Arial Black', fontSize: '30px', color: '#ffffff', letterSpacing: 2,
-    }).setOrigin(0.5);
-    const banner = this.add.container(0, -30, [back, kicker, title]).setDepth(140).setAlpha(0);
+    }).setOrigin(0.5), 580, 18);
+    // Under reduced motion it fades in place instead of dropping in.
+    const banner = this.add.container(0, reducedMotion() ? 0 : -30, [back, kicker, title]).setDepth(140).setAlpha(0);
     this.tweens.add({
       targets: banner, y: 0, alpha: 1, duration: 240, hold: 1900, yoyo: true,
       onComplete: () => banner.destroy(true),
@@ -467,42 +556,66 @@ export class UIScene extends Phaser.Scene {
    * The compact HUD only has room for a short title (e.g. "SABOTAJE"), which reads fine once
    * a player already knows the system but not on a first look — this is the one place the
    * full `contractDescription()` text (already written, previously unused anywhere) is shown.
-   * Purely decorative: it never pauses gameplay, same as PhaseBanner.
+   * Purely decorative: it never pauses gameplay, same as PhaseBanner. Built hidden; see
+   * revealBriefing() for when it appears.
    */
-  private showContractBriefing() {
+  private buildContractBriefing() {
     const contracts = this.gameScene.contracts.list;
     const lines = contracts.map((contract) => `${td(contract.title)} — ${contractDescription(contract)}`);
-    // Kept clear of the right-hand HUD column (objective, chain, live board: 350 px wide).
-    const width = Math.min(this.gameScene.mobileInput.active ? 640 : 720, GAME_WIDTH - 2 * 370);
-    const height = 74 + lines.length * 28;
+    // Kept clear of the right-hand HUD column (objective, chain, live board: 350 px wide). At
+    // phone size the lines are 22px and wrap, so the banner takes more of the wider canvas.
+    const width = this.compact
+      ? Math.max(540, Math.min(860, GAME_WIDTH - 2 * 350))
+      : Math.min(this.gameScene.mobileInput.active ? 640 : 720, GAME_WIDTH - 2 * 370);
+    const title = this.add
+      .text(0, 0, t('contracts.assigned'), {
+        fontFamily: 'Arial Black', fontSize: hudFont(this, 16), color: '#21e6ff', letterSpacing: 3,
+      })
+      .setOrigin(0.5);
+    const rows = lines.map((line) => this.add
+      .text(0, 0, line, {
+        fontFamily: 'monospace', fontSize: hudFont(this, 13), color: '#c7d9e2', align: 'center',
+        wordWrap: { width: width - 32 },
+      })
+      .setOrigin(0.5, 0));
+    // Stacked by measured height: desktop keeps its 28px rhythm, wrapped phone lines take the
+    // room they need.
+    let cursor = 24 + title.height / 2 + 8;
+    const tops = rows.map((row) => {
+      const top = cursor;
+      cursor += row.height + (this.compact ? 8 : 13);
+      return top;
+    });
+    const height = Math.ceil(cursor + 16);
+    title.setY(-height / 2 + 24);
+    rows.forEach((row, index) => row.setY(-height / 2 + tops[index]));
     const parts: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(0, 0, width, height, 0x06101d, 0.95).setStrokeStyle(3, 0x21e6ff, 0.75),
-      this.add
-        .text(0, -height / 2 + 24, t('contracts.assigned'), {
-          fontFamily: 'Arial Black', fontSize: '16px', color: '#21e6ff', letterSpacing: 3,
-        })
-        .setOrigin(0.5),
+      title,
+      ...rows,
     ];
-    lines.forEach((line, index) => {
-      parts.push(
-        this.add
-          .text(0, -height / 2 + 54 + index * 28, line, {
-            fontFamily: 'monospace', fontSize: '13px', color: '#c7d9e2',
-          })
-          .setOrigin(0.5),
-      );
-    });
     // Depth 95: above the phase banner (90) so it isn't lost under one at the same instant,
     // below every modal (100+) so a level-up or chest reward still takes priority.
-    const banner = this.add
+    return this.add
       .container(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 30, parts)
       .setDepth(95)
       .setAlpha(0)
-      .setScale(0.9)
+      .setVisible(false)
       .setName('contract-briefing');
+  }
+  private revealBriefing() {
+    const banner = this.briefing;
+    if (!banner || banner.visible) return;
+    const still = reducedMotion();
+    banner.setVisible(true).setScale(still ? 1 : 0.9);
     this.tweens.add({
-      targets: banner, alpha: 1, scale: 1, duration: 260, ease: 'Back.Out', hold: 3400, yoyo: true,
-      onComplete: () => banner.destroy(true),
+      targets: banner, alpha: 1, scale: 1, duration: 260, ease: still ? 'Linear' : 'Back.Out',
+      // Wrapped phone lines are more to read, so it holds a second longer there.
+      hold: this.compact ? 4400 : 3400, yoyo: true,
+      onComplete: () => {
+        if (this.briefing === banner) this.briefing = undefined;
+        banner.destroy(true);
+      },
     });
   }
   private onState(state: GameState) {

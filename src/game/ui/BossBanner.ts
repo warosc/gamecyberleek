@@ -2,6 +2,9 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { BOSS_IDENTITY, bossVariant } from '../entities/enemies/BossVisual';
 import { t, td } from '../i18n';
+import { reducedMotion } from '../systems/RuntimeSettings';
+import { fitText } from './SceneWidgets';
+import { hudFont, isCompactHud } from './HudLayout';
 
 /** Owns the boss health panel, its arrival banner and the phase callouts. */
 export class BossBanner {
@@ -11,29 +14,34 @@ export class BossBanner {
   private targetWidth = 510;
   private phaseShown = 1;
   private readonly identity;
+  private readonly compact: boolean;
 
   constructor(private readonly scene: Phaser.Scene, sector = 0) {
     this.identity = bossVariant(sector);
+    this.compact = isCompactHud(scene);
     // Sits below the run clock and the weapon readout rather than across them: at y=88 the
-    // boss bar covered both the moment the encounter that most needs a clock began.
+    // boss bar covered both the moment the encounter that most needs a clock began. With
+    // phone-sized type the top-centre stack ends at 112 (StatusHud), so the panel moves to 120-180.
+    const centerY = this.compact ? 150 : 126;
     const back = scene.add
-      .rectangle(GAME_WIDTH / 2, 126, 540, 48, 0x100817, 0.95)
+      .rectangle(GAME_WIDTH / 2, centerY, 540, this.compact ? 60 : 48, 0x100817, 0.95)
       .setStrokeStyle(3, 0xd566ff, 0.85)
       .setName('boss-banner-panel');
     this.fill = scene.add
-      .rectangle(GAME_WIDTH / 2 - 255, 136, 510, 15, 0x9d36d6)
+      .rectangle(GAME_WIDTH / 2 - 255, centerY + (this.compact ? 16 : 10), 510, 15, 0x9d36d6)
       .setOrigin(0, 0.5);
+    const labelY = centerY - (this.compact ? 14 : 12);
     const name = scene.add
-      .text(GAME_WIDTH / 2 - 130, 114, this.identity.name, {
+      .text(GAME_WIDTH / 2 - 130, labelY, td(this.identity.name), {
         fontFamily: 'Arial Black',
-        fontSize: '15px',
+        fontSize: hudFont(scene, 15),
         color: '#f4d7ff',
       })
       .setOrigin(0.5);
     this.phaseText = scene.add
-      .text(GAME_WIDTH / 2 + 246, 114, td(BOSS_IDENTITY.phases[0]), {
+      .text(GAME_WIDTH / 2 + 246, labelY, td(BOSS_IDENTITY.phases[0]), {
         fontFamily: 'monospace',
-        fontSize: '11px',
+        fontSize: hudFont(scene, 11),
         color: '#d566ff',
         letterSpacing: 1,
       })
@@ -53,15 +61,22 @@ export class BossBanner {
     this.targetWidth = 510;
     this.fill.width = 510;
     this.phaseShown = 1;
-    this.scene.tweens.add({ targets: this.panel, scaleY: 1, duration: 320, ease: 'Back.Out' });
-    this.scene.cameras.main.flash(280, 95, 15, 120);
+    // The arrival banner below is the announcement. The full-screen purple flash and the
+    // springing panel are decoration, and a flash is exactly what reduced motion asks to drop.
+    const still = reducedMotion();
+    if (still) this.panel.setScale(1);
+    else {
+      this.scene.tweens.add({ targets: this.panel, scaleY: 1, duration: 320, ease: 'Back.Out' });
+      this.scene.cameras.main.flash(280, 95, 15, 120);
+    }
     // The arrival of the only boss in the run should not be a health bar quietly appearing.
     const banner = this.scene.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40).setDepth(120);
+    const plateWidth = this.compact ? 820 : 720;
     const plate = this.scene.add
-      .rectangle(0, 0, 720, 96, 0x100817, 0.94)
+      .rectangle(0, 0, plateWidth, this.compact ? 112 : 96, 0x100817, 0.94)
       .setStrokeStyle(3, 0xd566ff, 0.9);
     const title = this.scene.add
-      .text(0, -14, `${this.identity.name} // ${t('boss.commander')}`, {
+      .text(0, this.compact ? -18 : -14, `${td(this.identity.name)} // ${t('boss.commander')}`, {
         fontFamily: 'Arial Black',
         fontSize: '38px',
         color: '#f4d7ff',
@@ -69,22 +84,24 @@ export class BossBanner {
         strokeThickness: 6,
       })
       .setOrigin(0.5);
+    fitText(title, plateWidth - 40, 24);
     const subtitle = this.scene.add
-      .text(0, 26, td(this.identity.title), {
+      .text(0, this.compact ? 32 : 26, td(this.identity.title), {
         fontFamily: 'Arial Black',
-        fontSize: '13px',
+        fontSize: hudFont(this.scene, 13),
         color: '#d566ff',
         letterSpacing: 5,
       })
       .setOrigin(0.5);
+    fitText(subtitle, plateWidth - 40, 12);
     banner.add([plate, title, subtitle]);
-    banner.setAlpha(0).setScale(0.85);
+    banner.setAlpha(0).setScale(still ? 1 : 0.85);
     this.scene.tweens.add({
       targets: banner,
       alpha: 1,
       scale: 1,
       duration: 300,
-      ease: 'Back.Out',
+      ease: still ? 'Linear' : 'Back.Out',
       hold: 1400,
       yoyo: true,
       onComplete: () => banner.destroy(),
@@ -102,11 +119,17 @@ export class BossBanner {
     if (phase === this.phaseShown) return;
     // A phase change alters how the boss attacks, so it has to be impossible to miss.
     this.phaseShown = phase;
+    // The callout text below is the telegraph and stays under reduced motion; the pops and the
+    // rising slide are what it drops.
+    const still = reducedMotion();
     this.phaseText.setScale(1);
-    this.scene.tweens.add({ targets: this.phaseText, scale: 1.9, duration: 180, yoyo: true });
-    this.scene.tweens.add({ targets: this.panel, scaleX: 1.04, duration: 140, yoyo: true });
+    if (!still) {
+      this.scene.tweens.add({ targets: this.phaseText, scale: 1.9, duration: 180, yoyo: true });
+      this.scene.tweens.add({ targets: this.panel, scaleX: 1.04, duration: 140, yoyo: true });
+    }
+    const flashY = this.compact ? 228 : 208;
     const flash = this.scene.add
-      .text(GAME_WIDTH / 2, 208, td(BOSS_IDENTITY.phases[phase - 1]), {
+      .text(GAME_WIDTH / 2, still ? flashY - 20 : flashY, td(BOSS_IDENTITY.phases[phase - 1]), {
         fontFamily: 'Arial Black',
         fontSize: '44px',
         color: phase === 3 ? '#ff476f' : '#ffb52e',
@@ -119,7 +142,7 @@ export class BossBanner {
     this.scene.tweens.add({
       targets: flash,
       alpha: 1,
-      y: 188,
+      y: flashY - 20,
       duration: 220,
       hold: 700,
       yoyo: true,

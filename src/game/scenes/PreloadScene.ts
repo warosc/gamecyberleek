@@ -5,6 +5,7 @@ import { VEGETABLE_ART } from '../entities/enemies/VegetableRoster';
 import { parseMidi } from '../audio/MidiFile';
 import type { MusicCue, MusicManifest } from '../audio/MusicDirector';
 import { registerMusic } from '../managers/AudioManager';
+import { t } from '../i18n';
 export class PreloadScene extends Phaser.Scene {
   private startedAt = 0;
   private bar?: Phaser.GameObjects.Rectangle;
@@ -41,7 +42,7 @@ export class PreloadScene extends Phaser.Scene {
     this.percent = this.add.text(width / 2, height / 2 + 110, '0%', {
       fontFamily: 'Arial Black', fontSize: '17px', color: '#73ef62',
     }).setOrigin(0.5);
-    this.status = this.add.text(width / 2, height / 2 + 145, 'INICIALIZANDO NÚCLEO TÁCTICO', {
+    this.status = this.add.text(width / 2, height / 2 + 145, t('preload.booting'), {
       fontFamily: 'monospace', fontSize: '12px', color: '#789bab', letterSpacing: 2,
     }).setOrigin(0.5);
     const domBar = document.getElementById('boot-progress');
@@ -57,8 +58,8 @@ export class PreloadScene extends Phaser.Scene {
       if (domStatus) domStatus.textContent = message;
     });
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
-      this.status?.setText('BIO-SISTEMAS LISTOS');
-      if (domStatus) domStatus.textContent = 'BIO-SISTEMAS LISTOS';
+      this.status?.setText(t('preload.ready'));
+      if (domStatus) domStatus.textContent = t('preload.ready');
     });
     this.load.image(BOSS_IDENTITY.texture, BOSS_IDENTITY.asset);
     // Dedicated sprites for the later families and commanders; absent entries keep the graded fallback.
@@ -119,11 +120,11 @@ export class PreloadScene extends Phaser.Scene {
     }
   }
   private loadingMessage(key: string) {
-    if (key.startsWith('music-')) return 'AFINANDO BANDA SONORA';
-    if (key.startsWith('rig-') || key.startsWith('leek-')) return 'ENSAMBLANDO OPERADOR CYBERLEEK';
-    if (key.startsWith('vegetable-') || key.includes('brok')) return 'ESCANEANDO AMENAZAS VEGETALES';
-    if (key.includes('floor')) return 'CARTOGRAFIANDO SECTORES';
-    if (key.includes('menu')) return 'ABRIENDO CANAL DE OPERACIONES';
-    return 'SINCRONIZANDO BIO-SISTEMAS';
+    if (key.startsWith('music-')) return t('preload.music');
+    if (key.startsWith('rig-') || key.startsWith('leek-')) return t('preload.rig');
+    if (key.startsWith('vegetable-') || key.includes('brok')) return t('preload.threats');
+    if (key.includes('floor')) return t('preload.sectors');
+    if (key.includes('menu')) return t('preload.channel');
+    return t('preload.sync');
   }
 }

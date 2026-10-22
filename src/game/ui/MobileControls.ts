@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
 import type { GameScene } from '../scenes/GameScene';
 import { loadProfile, updateProfile } from '../systems/ProfileStore';
+import { reducedMotion } from '../systems/RuntimeSettings';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { t } from '../i18n';
+import { fitText } from './SceneWidgets';
+import { hudFont, isCompactHud } from './HudLayout';
 
 /** Owns touch controls and guarantees that interrupted pointers never stick. */
 export class MobileControls {
@@ -31,22 +34,37 @@ export class MobileControls {
     const aimBase = this.scene.add.circle(aimCenter.x, aimCenter.y, 74, 0x07111f, .38)
       .setStrokeStyle(3, 0xff476f, .65).setInteractive().setDepth(60);
     const aimKnob = this.scene.add.circle(aimCenter.x, aimCenter.y, 28, 0xff476f, .5).setDepth(61);
-    const moveLabel = this.scene.add.text(moveCenter.x, moveCenter.y + 88, t('hud.move'), { fontFamily: 'Arial Black', fontSize: '10px', color: '#8fcbd6' }).setOrigin(.5).setDepth(61);
-    const aimLabel = this.scene.add.text(aimCenter.x, aimCenter.y + 88, t('hud.aimFire'), { fontFamily: 'Arial Black', fontSize: '10px', color: '#ff9caf' }).setOrigin(.5).setDepth(61);
+    // Phone-sized type (22px; the old 10px drew at 4.6 CSS px on an iPhone Pro Max) sits 4px
+    // closer to its stick so it clears the taller XP bar, and stays on the canvas: "APUNTAR /
+    // FUEGO" is ~240px wide and, centred under the aim stick, ran past the right edge.
+    const compact = isCompactHud(this.scene);
+    const labelOffset = compact ? 84 : 88;
+    const moveLabel = this.scene.add.text(moveCenter.x, moveCenter.y + labelOffset, t('hud.move'), { fontFamily: 'Arial Black', fontSize: hudFont(this.scene, 10), color: '#8fcbd6' }).setOrigin(.5).setDepth(61);
+    const aimLabel = this.scene.add.text(aimCenter.x, aimCenter.y + labelOffset, t('hud.aimFire'), { fontFamily: 'Arial Black', fontSize: hudFont(this.scene, 10), color: '#ff9caf' }).setOrigin(.5).setDepth(61);
+    const placeLabel = (label: Phaser.GameObjects.Text, x: number, y: number) =>
+      label.setPosition(Phaser.Math.Clamp(x, 8 + label.width / 2, width - 8 - label.width / 2), y + labelOffset);
+    placeLabel(moveLabel, moveCenter.x, moveCenter.y);
+    placeLabel(aimLabel, aimCenter.x, aimCenter.y);
     // Radius 43 rendered a 43 CSS px hit target on the narrowest phone landscape widths
     // (canvas scale bottoms out around 0.5), just under the ~44px minimum touch target.
     const dash = this.scene.add.circle(width - 226, height - 232, 45, 0x21e6ff, .36)
       .setStrokeStyle(3, 0x73ef62, .8).setInteractive().setDepth(61).setName('mobilecontrols-dash');
-    const dashLabel = this.scene.add.text(dash.x, dash.y, 'DASH', { fontFamily: 'Arial Black', fontSize: '13px', color: '#eaffff' }).setOrigin(.5).setDepth(62);
+    const dashLabel = fitText(this.scene.add.text(dash.x, dash.y, t('hud.dash'), { fontFamily: 'Arial Black', fontSize: hudFont(this.scene, 13), color: '#eaffff' }).setOrigin(.5).setDepth(62), 80, 10);
     const profile = loadProfile();
-    const auto = this.scene.add.rectangle(width - 226, height - 300, 104, 38, 0x07111f, .74)
+    // "AUTO: SÍ" is ~125px at 22px, so the pill widens with the type; it still ends above the
+    // dash pad (pill 398-442, pad from 443).
+    const autoWidth = compact ? 150 : 104;
+    const auto = this.scene.add.rectangle(width - 226, height - 300, autoWidth, compact ? 44 : 38, 0x07111f, .74)
       .setStrokeStyle(3, profile.autoFire ? 0x73ef62 : 0x7594a8, .9).setDepth(61);
-    const autoLabel = this.scene.add.text(auto.x, auto.y, t(profile.autoFire ? 'hud.autoOn' : 'hud.autoOff'), { fontFamily: 'Arial Black', fontSize: '12px', color: '#eaffff' }).setOrigin(.5).setDepth(62);
+    const autoSize = parseFloat(hudFont(this.scene, 12));
+    const autoLabel = this.scene.add.text(auto.x, auto.y, '', { fontFamily: 'Arial Black', fontSize: `${autoSize}px`, color: '#eaffff' }).setOrigin(.5).setDepth(62);
+    const labelAuto = (on: boolean) => fitText(autoLabel.setFontSize(autoSize).setText(t(on ? 'hud.autoOn' : 'hud.autoOff')), autoWidth - 12, 10);
+    labelAuto(profile.autoFire);
     // The pill is only 38px tall logically, which rendered as short as 19 CSS px on the
     // narrowest phone widths -- easy to miss with a thumb. Give it a taller invisible hit
     // zone instead of growing the visual pill, biased upward so it does not creep into the
     // dash pad below.
-    const autoZone = this.scene.add.zone(auto.x, height - 326, 104, 90)
+    const autoZone = this.scene.add.zone(auto.x, height - 326, autoWidth, 90)
       .setInteractive().setDepth(61).setName('mobilecontrols-auto-zone');
     const moveVisuals = [moveBase, moveKnob, moveLabel];
     const aimVisuals = [aimBase, aimKnob, aimLabel];
@@ -56,11 +74,11 @@ export class MobileControls {
     };
     setFocus(moveVisuals, false);
     setFocus(aimVisuals, false);
-    const toggleAuto = () => { this.game.mobileInput.autoFire = !this.game.mobileInput.autoFire; updateProfile({ autoFire: this.game.mobileInput.autoFire }); autoLabel.setText(t(this.game.mobileInput.autoFire ? 'hud.autoOn' : 'hud.autoOff')); auto.setStrokeStyle(3, this.game.mobileInput.autoFire ? 0x73ef62 : 0x7594a8, .9); };
+    const toggleAuto = () => { this.game.mobileInput.autoFire = !this.game.mobileInput.autoFire; updateProfile({ autoFire: this.game.mobileInput.autoFire }); labelAuto(this.game.mobileInput.autoFire); auto.setStrokeStyle(3, this.game.mobileInput.autoFire ? 0x73ef62 : 0x7594a8, .9); };
     autoZone.on('pointerup', toggleAuto); this.disposers.push(() => autoZone.off('pointerup', toggleAuto));
     const positionStick = (center: Phaser.Math.Vector2, x: number, y: number,
       base: Phaser.GameObjects.Arc, knob: Phaser.GameObjects.Arc, label: Phaser.GameObjects.Text) => {
-      center.set(x, y); base.setPosition(x, y); knob.setPosition(x, y); label.setPosition(x, y + 88);
+      center.set(x, y); base.setPosition(x, y); knob.setPosition(x, y); placeLabel(label, x, y);
     };
     const updateStick = (pointer: Phaser.Input.Pointer, center: Phaser.Math.Vector2, knob: Phaser.GameObjects.Arc, output: Phaser.Math.Vector2) => { output.set(pointer.x - center.x, pointer.y - center.y); if (output.length() > 74) output.setLength(74); knob.setPosition(center.x + output.x, center.y + output.y); output.scale(1 / 74); };
     const resetMove = () => { this.movePointer = -1; this.game.mobileInput.movement.set(0, 0); positionStick(moveCenter, moveAnchor.x, moveAnchor.y, moveBase, moveKnob, moveLabel); setFocus(moveVisuals, false); };
@@ -82,7 +100,11 @@ export class MobileControls {
     };
     moveBase.on('pointerdown', beginMove); moveZone.on('pointerdown', beginMove);
     aimBase.on('pointerdown', beginAim); aimZone.on('pointerdown', beginAim);
-    dash.on('pointerdown', () => { this.game.mobileInput.dash = true; this.scene.tweens.add({ targets: [dash, dashLabel], scale: 1.12, duration: 80, yoyo: true }); });
+    dash.on('pointerdown', () => {
+      this.game.mobileInput.dash = true;
+      // The dash itself is the feedback under reduced motion; the pad's pop is decoration.
+      if (!reducedMotion()) this.scene.tweens.add({ targets: [dash, dashLabel], scale: 1.12, duration: 80, yoyo: true });
+    });
     const onVisibility = () => { if (document.hidden) reset(); };
     this.scene.input.on('pointermove', onMove); this.scene.input.on('pointerup', onUp); this.scene.input.on('pointercancel', onUp); this.scene.input.on('gameout', reset);
     window.addEventListener('blur', reset); window.addEventListener('pagehide', reset);

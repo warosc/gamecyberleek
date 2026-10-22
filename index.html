@@ -30,6 +30,28 @@
       <strong>GIRA TU DISPOSITIVO</strong>
       <span>LEEK OPS se juega en horizontal</span>
     </div>
+    <script>
+      // The splash and the rotate notice show before the game's i18n loads, so they read the saved
+      // language here. English players used to see them in Spanish on every load.
+      try {
+        var saved = JSON.parse(localStorage.getItem('leek-ops-profile-v5') || '{}');
+        if (saved && saved.settings && saved.settings.locale === 'en') {
+          document.documentElement.lang = 'en';
+          var texts = {
+            '#boot-splash small': 'LEEK OPS // BOOTING BIO-SYSTEMS',
+            '#boot-status': 'LOADING TACTICAL CORE...',
+            '#rotate-device strong': 'ROTATE YOUR DEVICE',
+            '#rotate-device span': 'LEEK OPS is played in landscape',
+          };
+          for (var selector in texts) {
+            var node = document.querySelector(selector);
+            if (node) node.textContent = texts[selector];
+          }
+        }
+      } catch (error) {
+        // Unreadable storage: keep the Spanish defaults.
+      }
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

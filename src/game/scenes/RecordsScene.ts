@@ -6,7 +6,7 @@ import { ACHIEVEMENTS } from '../progression/Achievements';
 import { loadProfile } from '../systems/ProfileStore';
 import { starterWeapon } from '../weapons/WeaponRegistry';
 import {
-  UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont, type PanelButton,
+  FocusGroup, UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont, type PanelButton,
 } from '../ui/SceneWidgets';
 import { onlineService } from '../online/OnlinePorts';
 import { queueSceneArt } from '../config/SceneArt';
@@ -69,9 +69,20 @@ export class RecordsScene extends Phaser.Scene {
     this.buildAchievements(tabs[2].layer, profile, cx);
     this.buildToday(tabs[3].layer, profile, cx);
     show(0);
-    this.input.keyboard?.on('keydown-LEFT', () => show(active - 1));
-    this.input.keyboard?.on('keydown-RIGHT', () => show(active + 1));
-    backToMenu(this, cx, 652, t('common.back'));
+    const back = backToMenu(this, cx, 652, t('common.back'));
+    // Keyboard and pad: two stops, the tab strip and BACK. LEFT / RIGHT switch tabs on either,
+    // as they always have. The active tab is already lit, so a focused strip shows a rule under it.
+    const flip = (step: 1 | -1) => show(active + step);
+    const stripFocus = this.add.rectangle(cx, 198, tabs.length * (tabWidth + 12) - 12, 3, UI.cyan, 0.9).setVisible(false);
+    new FocusGroup(this)
+      .add({
+        setSelected: selected => { stripFocus.setVisible(selected); },
+        activate: () => flip(1),
+        adjust: flip,
+        hit: tabs.flatMap(tab => tab.button ? [tab.button.box] : []),
+      }, { x: cx })
+      .button(back, { x: cx }, flip)
+      .start(1);
   }
 
   private buildTotals(layer: Layer, profile: Profile, cx: number) {

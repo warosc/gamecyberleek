@@ -4,7 +4,7 @@ import {
   VEGETABLE_ROSTER, resolveVegetableArt, type VegetableType,
 } from '../entities/enemies/VegetableRoster';
 import { t, td } from '../i18n';
-import { UI, fitText, framePanel, hex, panelButton, uiFont } from '../ui/SceneWidgets';
+import { FocusGroup, UI, fitText, framePanel, hex, panelButton, uiFont } from '../ui/SceneWidgets';
 import { backdropTexture, queueSceneArt } from '../config/SceneArt';
 
 const TACTICS: Record<VegetableType, string> = {
@@ -60,7 +60,8 @@ export class BestiaryScene extends Phaser.Scene {
       }).setOrigin(0.5, 0);
     });
     const leave = () => this.scene.start('Menu');
-    panelButton(this, GAME_WIDTH / 2, 636, 300, 56, t('common.back'), UI.cyan, leave, 17);
+    // The only control: focused from the start so ENTER (pad A) leaves as well as ESC (pad B).
+    new FocusGroup(this).button(panelButton(this, GAME_WIDTH / 2, 636, 300, 56, t('common.back'), UI.cyan, leave, 17)).start();
     this.input.keyboard?.on('keydown-ESC', leave);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.keyboard?.off('keydown-ESC', leave));
   }

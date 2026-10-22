@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import type { ContractKind, ContractProgress } from '../systems/ContractSystem';
 import { t, td } from '../i18n';
+import { reducedMotion } from '../systems/RuntimeSettings';
+import { fitText } from './SceneWidgets';
+import { hudPx, isCompactHud } from './HudLayout';
 
 const PANEL_X = 16;
 // Starts below the HP/energy panel (which ends at y=126) and stays clear of the boss banner
@@ -34,6 +37,7 @@ export class ContractHud {
   private readonly rows: Row[] = [];
   private readonly panelWidth: number;
   private readonly rowHeight: number;
+  private readonly fontSize: number;
 
   constructor(scene: Phaser.Scene, contracts: readonly ContractProgress[], mobile: boolean) {
     // ViewportLayout widens the logical canvas to match a phone's aspect ratio (up to 1600
@@ -45,11 +49,17 @@ export class ContractHud {
     // so mobile never renders smaller than desktop's 10px even at the worst-case scale seen
     // across the three phone widths this was measured against (740/844/915 CSS px landscape,
     // ~0.5-0.57 scale): 20 * 0.5 = 10px, matching or beating desktop everywhere else.
-    this.panelWidth = mobile ? 300 : 250;
-    this.rowHeight = mobile ? 46 : 30;
-    const fontSize = mobile ? '20px' : '10px';
-    const textTop = mobile ? 6 : 4;
-    const barInset = mobile ? 10 : 8;
+    // The shared HUD floor (HudLayout) now covers the narrower iPhone Pro Max case (0.46 scale,
+    // where 20px drew at 9 CSS px), and the row widens to 330 so "✓ CADENA LETAL  HECHO" still
+    // fits beside its progress at 22px.
+    const compact = isCompactHud(scene);
+    const large = mobile || compact;
+    this.panelWidth = compact ? 330 : mobile ? 300 : 250;
+    this.rowHeight = large ? 46 : 30;
+    this.fontSize = mobile ? Math.max(20, hudPx(scene, 10)) : hudPx(scene, 10);
+    const fontSize = `${this.fontSize}px`;
+    const textTop = large ? 6 : 4;
+    const barInset = large ? 10 : 8;
     const parts: Phaser.GameObjects.GameObject[] = [];
     contracts.forEach((contract, index) => {
       const y = PANEL_Y + index * (this.rowHeight + ROW_GAP);
@@ -87,14 +97,15 @@ export class ContractHud {
       const ratio = Phaser.Math.Clamp(contract.progress / contract.target, 0, 1);
       row.barFill.width = (this.panelWidth - 24) * ratio;
       const titleText = contract.completed ? `✓ ${td(contract.title)}` : td(contract.title);
-      if (row.lastTitle !== titleText) {
-        row.title.setText(titleText).setColor(contract.completed ? '#73ef62' : '#eaffff');
-        row.lastTitle = titleText;
-      }
       const progressText = contract.completed ? t('contracts.done') : formatProgress(contract);
-      if (row.lastProgress !== progressText) {
+      if (row.lastTitle !== titleText || row.lastProgress !== progressText) {
+        row.title.setText(titleText).setColor(contract.completed ? '#73ef62' : '#eaffff');
         row.progress.setText(progressText);
+        row.lastTitle = titleText;
         row.lastProgress = progressText;
+        // Title and progress share one row: the title gives way, never the number.
+        row.title.setFontSize(this.fontSize);
+        fitText(row.title, this.panelWidth - 30 - row.progress.width, Math.round(this.fontSize * 0.8));
       }
       const color = contract.completed ? COMPLETE_COLOR : ACCENT;
       row.marker.setFillStyle(color, 0.9);
@@ -113,6 +124,9 @@ export class ContractHud {
     if (!row) return;
     const scene = row.back.scene;
     row.back.setStrokeStyle(3, COMPLETE_COLOR, 1);
+    // The green outline, the tick and the audio cue carry it under reduced motion; the pop and the
+    // expanding glow are the decorative part.
+    if (reducedMotion()) return;
     scene.tweens.add({ targets: row.back, scaleY: 1.45, duration: 140, yoyo: true, ease: 'Back.Out' });
     scene.tweens.add({ targets: [row.title, row.progress], scale: 1.35, duration: 140, yoyo: true, ease: 'Back.Out' });
     const glow = scene.add

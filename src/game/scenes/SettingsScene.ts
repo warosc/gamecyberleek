@@ -11,7 +11,7 @@ import { applyRuntimeSettings } from '../systems/RuntimeSettings';
 import { AudioManager, setMusicLightweight } from '../managers/AudioManager';
 import { detectQualityProfile } from '../config/QualityProfile';
 import { queueSceneArt } from '../config/SceneArt';
-import { UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont } from '../ui/SceneWidgets';
+import { FocusGroup, UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont } from '../ui/SceneWidgets';
 
 interface Row {
   label: StringKey;
@@ -25,6 +25,8 @@ const stepVolume = (value: number, step: 1 | -1) => Math.round(Math.min(1, Math.
 /** Persistent accessibility, audio and display preferences, applied without a reload. */
 export class SettingsScene extends Phaser.Scene {
   private audio?: AudioManager;
+  /** Focus to restore after the language row restarts the scene; unset on a fresh visit. */
+  private restartFocus?: number;
   constructor() { super('Settings'); }
 
   preload() {
@@ -34,6 +36,8 @@ export class SettingsScene extends Phaser.Scene {
   create() {
     this.game.canvas.dataset.scene = 'Settings';
     this.audio = new AudioManager(this);
+    const initialFocus = this.restartFocus ?? 1;
+    this.restartFocus = undefined;
     subMenuFrame(this, GAME_WIDTH, GAME_HEIGHT, t('settings.title'), t('settings.subtitle'), 0xd566ff, 'systems');
     const settings = () => loadProfile().settings;
     const set = (patch: Partial<GameSettings>) => {
@@ -62,12 +66,19 @@ export class SettingsScene extends Phaser.Scene {
           const locale = cycle(LOCALE_OPTIONS, settings().locale, step);
           set({ locale });
           setLocale(locale);
+          // The restart rebuilds every label in the new language; keep focus on this row.
+          this.restartFocus = focus.index;
           this.scene.restart();
         } },
     ];
 
     // Centred on the logical width: phones in landscape are wider than the 1280 design width.
     const cx = GAME_WIDTH / 2;
+    // Keyboard and pad: UP / DOWN pick a row, LEFT / RIGHT change it, ENTER steps it forward.
+    // The cloud button above the rows comes first so the order follows the screen.
+    const focus = new FocusGroup(this);
+    const cloud = panelButton(this, cx + 380, 100, 180, 46, t('settings.cloud'), UI.cyan, () => this.scene.start('Cloud'), 15, { name: 'settings-cloud' });
+    focus.button(cloud);
     rows.forEach((row, index) => {
       const y = 158 + index * 55;
       framePanel(this, cx, y, 900, 48, UI.violet, { strokeAlpha: 0.28, band: 0.05, cut: 10, brackets: false });
@@ -82,19 +93,28 @@ export class SettingsScene extends Phaser.Scene {
       const change = (step: 1 | -1) => () => { row.change(step); value.setText(row.value()); fitText(value, 220); };
       fitText(value, 220);
       cell.on('pointerup', change(1));
-      panelButton(this, cx + 52, y, 76, 44, '<', UI.violet, change(-1), 18, { name: `setting-prev-${index}` });
-      panelButton(this, cx + 368, y, 76, 44, '>', UI.violet, change(1), 18, { name: `setting-next-${index}` });
+      const prev = panelButton(this, cx + 52, y, 76, 44, '<', UI.violet, change(-1), 18, { name: `setting-prev-${index}` });
+      const next = panelButton(this, cx + 368, y, 76, 44, '>', UI.violet, change(1), 18, { name: `setting-next-${index}` });
+      focus.add({
+        setSelected: selected => { prev.setSelected(selected); next.setSelected(selected); },
+        activate: change(1),
+        adjust: step => change(step)(),
+        hit: [cell, prev.box, next.box],
+      }, { x: cx });
     });
-    this.add.text(GAME_WIDTH / 2, 588, t('settings.restartHint'), {
+    fitText(this.add.text(GAME_WIDTH / 2, 588, t('settings.restartHint'), {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: UI.muted, letterSpacing: 1,
-    }).setOrigin(0.5);
+    }).setOrigin(0.5), 900);
     const status = this.add.text(cx, 682, '', {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 12), color: '#73ef62',
     }).setOrigin(0.5).setName('settings-backup-status');
-    panelButton(this, cx - 310, 640, 270, 54, t('settings.export'), UI.cyan, () => this.exportSave(), 14, { name: 'settings-export' });
-    panelButton(this, cx + 310, 640, 270, 54, t('settings.import'), UI.gold, () => this.importSave(status), 14, { name: 'settings-import' });
-    backToMenu(this, GAME_WIDTH / 2, 640, t('common.back'));
-    panelButton(this, cx + 380, 100, 180, 46, t('settings.cloud'), UI.cyan, () => this.scene.start('Cloud'), 15, { name: 'settings-cloud' });
+    const exportButton = panelButton(this, cx - 310, 640, 270, 54, t('settings.export'), UI.cyan, () => this.exportSave(), 14, { name: 'settings-export' });
+    const importButton = panelButton(this, cx + 310, 640, 270, 54, t('settings.import'), UI.gold, () => this.importSave(status), 14, { name: 'settings-import' });
+    const back = backToMenu(this, GAME_WIDTH / 2, 640, t('common.back'));
+    const bottom = rows.length + 1;
+    focus.button(exportButton, { row: bottom }).button(back, { row: bottom }).button(importButton, { row: bottom });
+    // Starts on the first setting, not the cloud button above it.
+    focus.start(initialFocus);
   }
 
   /** Downloads the save as a file. The browser, not the game, decides where it goes. */
