@@ -6,6 +6,7 @@ import {
   scaleHealthPool,
   sectorDamageMultiplier,
   sectorHealthFactor,
+  threatHealthFactor,
   timeHealthFactor,
 } from '../src/game/config/EnemyScaling';
 import { HealthComponent } from '../src/game/components/HealthComponent';
@@ -91,6 +92,23 @@ describe('enemy health formulas', () => {
     expect(bossHealth(base, 0, Number.NaN)).toBe(1800);
   });
 
+  it('adds 15 % health per threat level on top of time and sector, clamped to I-V', () => {
+    expect([0, 1, 3, 5].map(threatHealthFactor)).toEqual([1, 1.15, 1.45, 1.75]);
+    expect(threatHealthFactor(-2)).toBe(1);
+    expect(threatHealthFactor(9)).toBe(1.75);
+    expect(threatHealthFactor(Number.NaN)).toBe(1);
+    // Defaults keep every existing caller at the normal threat.
+    expect(enemyHealthMultiplier(240000, 2, 0)).toBe(enemyHealthMultiplier(240000, 2));
+    expect(enemyHealthMultiplier(240000, 2, 3)).toBeCloseTo(4.03 * 1.45);
+    const miniboss = ENEMY_DEFS[EnemyType.MINIBOSS].hp;
+    expect(minibossHealth(miniboss, 2, undefined, 3)).toBe(Math.round(miniboss * 2 * 1.55 * 1.45));
+    const boss = ENEMY_DEFS[EnemyType.BOSS].hp;
+    // Threat multiplies the floor, the DPS target and the cap alike.
+    expect(bossHealth(boss, 0, 0, 2)).toBe(2340);
+    expect(bossHealth(boss, 0, 300, 2)).toBe(5850);
+    expect(bossHealth(boss, 2, 1e6, 5)).toBe(Math.round(16740 * 1.75));
+  });
+
   it('refills the pool and keeps elite affixes multiplying on top', () => {
     const health = scaleHealthPool(new HealthComponent(40), enemyHealthMultiplier(120000, 2));
     expect(health.max).toBe(112);
@@ -151,6 +169,35 @@ describe('enemy creation sites apply the scaling', () => {
     expect(enemies[0].health.current).toBe(4500);
     // The boss panel is told the scaled maximum, or its bar would start overfilled.
     expect(events.at(-1)?.slice(1)).toEqual(['BRÓK-9', 4500]);
+  });
+
+  it('passes the threat level to every creation site', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    const runner = createScaledEnemy(scene, EnemyType.RUNNER, 0, 0, 0, 0, 4) as unknown as FakeEnemy;
+    expect(runner.health.max).toBe(Math.round(24 * 1.6));
+    const spawned: FakeEnemy[] = [];
+    const waves = new SpawnSystem(new EnemyFactory(scene), { add: (e: FakeEnemy) => spawned.push(e), countActive: () => 0 } as never, 0, 2);
+    waves.update(1000, { x: 500, y: 500 }, 60000);
+    expect(spawned[0].health.max).toBe(Math.round(ENEMY_DEFS[spawned[0].enemyType].hp * 1.4 * 1.3));
+    const enemies: FakeEnemy[] = [];
+    const ring = { setStrokeStyle: () => ring, setDepth: () => ring };
+    const fakeScene = {
+      events: { emit: () => {} }, cameras: { main: {} }, add: { circle: () => ring }, tweens: { add: () => {} },
+    };
+    const group = {
+      add: (enemy: FakeEnemy) => enemies.push(enemy), getChildren: () => enemies,
+      clear: () => { enemies.length = 0; }, countActive: () => 1,
+    };
+    const player = { x: 500, y: 500, stats: { attackDamage: 1, projectileCount: 1, extraProjectileDamage: 0, attackCooldown: 1000 } };
+    const encounters = new EncounterSystem(fakeScene as never, group as never, player as never, 0, 2);
+    encounters.spawnMiniboss();
+    expect(enemies[0].health.max).toBe(Math.round(1120 * 1.3));
+    encounters.spawnBoss();
+    expect(enemies[0].health.max).toBe(2340);
+    enemies.length = 0;
+    new BossPhaseDirector(fakeScene as never, group as never, 0, 2).enter(2, { x: 1000, y: 1000 } as never);
+    for (const enemy of enemies)
+      expect(enemy.health.max).toBe(Math.round(ENEMY_DEFS[enemy.enemyType].hp * 2.6 * 1.3));
   });
 
   it('gives boss reinforcements the capped wave scaling', () => {

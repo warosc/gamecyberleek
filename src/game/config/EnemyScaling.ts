@@ -27,9 +27,26 @@ export const SECTOR_DAMAGE_FACTORS = [1, 1.1, 1.2] as const;
 export const BOSS_TARGET_SECONDS = 15;
 /** Ceiling relative to the sector base, so a degenerate build cannot make the fight endless. */
 export const BOSS_HEALTH_CAP_MULTIPLIER = 6;
+/** Highest threat level (AMENAZA V). Threat 0 is the normal operation every sector starts at. */
+export const MAX_THREAT = 5;
+/**
+ * +15 % health per threat level, on top of time and sector: ×1.75 at AMENAZA V. Health only, like
+ * the time scaling: contact damage already compounds against a player whose health does not scale.
+ */
+export const THREAT_HEALTH_STEP = 0.15;
 
 function sectorIndex(sector: number) {
   return Math.min(Math.max(Math.floor(sector) || 0, 0), SECTOR_HEALTH_FACTORS.length - 1);
+}
+
+/** A threat level clamped to [0, MAX_THREAT]; anything unreadable is the normal operation. */
+export function clampThreat(threat: number) {
+  return Math.min(Math.max(Math.floor(threat) || 0, 0), MAX_THREAT);
+}
+
+/** ×1 at threat 0, +0.15 per level up to ×1.75 at AMENAZA V. */
+export function threatHealthFactor(threat: number) {
+  return 1 + THREAT_HEALTH_STEP * clampThreat(threat);
 }
 
 /** 1 + 0.4·minutes, clamped to [0, 4:00]. */
@@ -49,31 +66,33 @@ export function sectorDamageMultiplier(sector: number) {
 }
 
 /**
- * Health multiplier for regular enemies created at `survivalMs` in `sector`. Elite affixes
- * multiply on top of the scaled pool, so an elite stays ~2× its peers at any point of the run.
+ * Health multiplier for regular enemies created at `survivalMs` in `sector` at `threat`. Elite
+ * affixes multiply on top of the scaled pool, so an elite stays ~2× its peers at any point of the run.
  */
-export function enemyHealthMultiplier(survivalMs: number, sector: number) {
-  return timeHealthFactor(survivalMs) * sectorHealthFactor(sector);
+export function enemyHealthMultiplier(survivalMs: number, sector: number, threat = 0) {
+  return timeHealthFactor(survivalMs) * sectorHealthFactor(sector) * threatHealthFactor(threat);
 }
 
 /**
  * Miniboss health: base × sector × the time factor at its scheduled arrival (2:30 → ×2.0), so it
  * keeps pace with the wave around it. 560 base → 1120 / 1400 / 1736 by sector.
  */
-export function minibossHealth(baseHp: number, sector: number, spawnMs = MINIBOSS_START_MS) {
-  return Math.round(baseHp * enemyHealthMultiplier(spawnMs, sector));
+export function minibossHealth(baseHp: number, sector: number, spawnMs = MINIBOSS_START_MS, threat = 0) {
+  return Math.round(baseHp * enemyHealthMultiplier(spawnMs, sector, threat));
 }
 
 /**
  * Commander health: at least the sector base (1800 × sector factor), raised to last
  * ~15 s against the player's sustained DPS at spawn, and capped at 6× the sector base.
- * Time does not apply: the DPS term already measures how far the build has come.
+ * Time does not apply: the DPS term already measures how far the build has come. Threat multiplies
+ * the result, floor and cap included: applied to the base alone it would vanish behind the DPS
+ * term for exactly the strong builds that climb the threat levels.
  */
-export function bossHealth(baseHp: number, sector: number, sustainedDps: number) {
+export function bossHealth(baseHp: number, sector: number, sustainedDps: number, threat = 0) {
   const base = baseHp * sectorHealthFactor(sector);
   const dps = Number.isFinite(sustainedDps) ? Math.max(0, sustainedDps) : 0;
   const target = Math.max(base, BOSS_TARGET_SECONDS * dps);
-  return Math.round(Math.min(target, base * BOSS_HEALTH_CAP_MULTIPLIER));
+  return Math.round(Math.min(target, base * BOSS_HEALTH_CAP_MULTIPLIER) * threatHealthFactor(threat));
 }
 
 /**

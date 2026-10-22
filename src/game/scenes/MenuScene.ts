@@ -6,7 +6,11 @@ import { isSectorUnlocked } from '../systems/UnlockRegistry';
 import { AudioManager } from '../managers/AudioManager';
 import { STARTER_WEAPONS, starterWeapon, type StarterWeaponId } from '../weapons/WeaponRegistry';
 import { masteryRank, type WeaponMastery } from '../weapons/WeaponMastery';
-import { dailyOperation } from '../progression/DailyOperation';
+import { dailyBonus, dailyOperation, streakStatus } from '../progression/DailyOperation';
+import {
+  allowedThreat, availableThreat, threatLabel, threatRewardMultiplier, type ThreatRecord,
+} from '../progression/ThreatLevels';
+import { MAX_THREAT, THREAT_HEALTH_STEP } from '../config/EnemyScaling';
 import { t, td, type StringKey } from '../i18n';
 import { FocusGroup, UI, type FocusItem, drawFrame, fitText, framePanel, hex, isCompact, panelButton, uiFont } from '../ui/SceneWidgets';
 import { onlineService } from '../online/OnlinePorts';
@@ -15,11 +19,16 @@ import { reducedMotion } from '../systems/RuntimeSettings';
 
 /** Last sector chosen in this session, so returning from a sub-menu keeps the selection. */
 const SECTOR_REGISTRY_KEY = 'menu-sector';
+/** Last threat chosen in this session; lowered to what each sector has opened when shown. */
+const THREAT_REGISTRY_KEY = 'menu-threat';
 
 export class MenuScene extends Phaser.Scene {
   private audio?: AudioManager;
   private selectedWeaponId: StarterWeaponId = 'pulse';
   private sector = 0;
+  private threat = 0;
+  /** Re-clamps and redraws the threat row after the sector changes; absent before the first win. */
+  private refreshThreat?: () => void;
   /** Horizontal shift for the right-hand showcase, which centres itself on wide phone canvases. */
   private showcaseX = 0;
   constructor() {
@@ -40,6 +49,8 @@ export class MenuScene extends Phaser.Scene {
     const profile = loadProfile();
     const stored = Number(this.registry.get(SECTOR_REGISTRY_KEY) ?? 0);
     this.sector = isSectorUnlocked(stored, profile.unlocks) ? stored : 0;
+    this.threat = 0;
+    this.refreshThreat = undefined;
     const backdrop = this.add
       .image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'menu-backdrop')
       .setDisplaySize(GAME_WIDTH, GAME_HEIGHT);
@@ -74,18 +85,22 @@ export class MenuScene extends Phaser.Scene {
       letterSpacing: 3,
     });
     const sector = this.createSectorSelector(profile.unlocks);
+    // Threat levels open with the first victory anywhere. Until then the row would only say
+    // "locked", so a new player keeps the brief in its place and sees the same menu as before.
+    const threat = profile.threatCleared.some(level => level >= 0)
+      ? this.createThreatSelector(profile.threatCleared) : undefined;
     // The two-line brief is flavour; on a phone the larger type needs its room for the controls.
-    if (!compact)
+    if (!compact && !threat)
       this.add.text(80, 322, t('menu.brief'), {
         fontSize: '14px',
         color: UI.body,
         lineSpacing: 6,
       });
-    fitText(this.add.text(80, compact ? 350 : 372, t('menu.stats', { credits: profile.bioCredits, level: profile.bestLevel }), {
+    fitText(this.add.text(80, threat ? 374 : compact ? 350 : 372, t('menu.stats', { credits: profile.bioCredits, level: profile.bestLevel }), {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 12), color: '#73ef62', letterSpacing: 1,
     }).setOrigin(0, 0.5).setName('menu-stats'), 470);
 
-    const deploy = () => this.scene.start('Game', { weaponId: this.selectedWeaponId, arenaIndex: this.sector });
+    const deploy = () => this.scene.start('Game', { weaponId: this.selectedWeaponId, arenaIndex: this.sector, threat: this.threat });
     const daily = dailyOperation();
     const deployDaily = () => this.scene.start('Game', {
       weaponId: daily.weaponId, arenaIndex: daily.sector, daily: { date: daily.date, mutator: daily.mutator.id },
@@ -151,6 +166,12 @@ export class MenuScene extends Phaser.Scene {
     })];
     if (profile.daily.date === daily.date && profile.daily.bestScore > 0)
       dailyLines.push(t('menu.dailyBest', { score: profile.daily.bestScore }));
+    // The reason to come back tomorrow: what today's first daily pays and the streak it extends.
+    // The bonus shown is the defeat value; a victory pays x1.5.
+    const streak = streakStatus(profile.daily, daily.date);
+    dailyLines.push(streak.claimed
+      ? t('menu.dailyClaimed', { days: streak.streak })
+      : t('menu.dailyBonus', { bonus: dailyBonus(streak.next, false), days: streak.streak }));
     const dailyChip = this.add.graphics().setDepth(7);
     const dailyInfo = this.add.text(GAME_WIDTH - 50, 72, '', {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: '#ffc857', align: 'right', lineSpacing: 5,
@@ -177,19 +198,23 @@ export class MenuScene extends Phaser.Scene {
 
     // Keyboard and gamepad (the bridge replays the pad as arrows and ENTER): arrows walk the
     // menu, ENTER runs the focused button. Focus starts on DEPLOY, so ENTER alone still deploys.
-    // The sector selector and the loadout are single stops whose LEFT / RIGHT change their value;
-    // 1 / 2 / 3 still pick a weapon from anywhere.
-    new FocusGroup(this)
-      .add(sector, { row: 0 })
-      .button(deployButton, { row: 1 })
-      .button(dailyButton, { row: 1 })
-      .button(howToButton, { row: 2 })
-      .button(enemiesButton, { row: 2 })
-      .button(workshopButton, { row: 3 })
-      .button(settingsButton, { row: 3 })
-      .button(recordsButton, { row: 3 })
-      .add(loadout, { row: 4 })
-      .start(1);
+    // The sector and threat selectors and the loadout are single stops whose LEFT / RIGHT change
+    // their value; 1 / 2 / 3 still pick a weapon from anywhere.
+    const focus = new FocusGroup(this).add(sector, { row: 0 });
+    if (threat) focus.add(threat, { row: 1 });
+    // The threat row, when shown, pushes every row below it down one.
+    const row = (index: number) => index + (threat ? 1 : 0);
+    focus
+      .button(deployButton, { row: row(1) })
+      .button(dailyButton, { row: row(1) })
+      .button(howToButton, { row: row(2) })
+      .button(enemiesButton, { row: row(2) })
+      .button(workshopButton, { row: row(3) })
+      .button(settingsButton, { row: row(3) })
+      .button(recordsButton, { row: row(3) })
+      .add(loadout, { row: row(4) })
+      // Focus starts on DEPLOY, the first item after the selectors.
+      .start(threat ? 2 : 1);
     backdrop.setInteractive();
   }
 
@@ -257,6 +282,7 @@ export class MenuScene extends Phaser.Scene {
       this.registry.set(SECTOR_REGISTRY_KEY, next);
       this.audio?.play('ui_confirm');
       render();
+      this.refreshThreat?.();
     };
     const prev = this.createButton(80, 248, 50, 64, '<', UI.cyan, step(-1), 20, 'menu-sector-prev');
     const next = this.createButton(500, 248, 50, 64, '>', UI.cyan, step(1), 20, 'menu-sector-next');
@@ -266,6 +292,57 @@ export class MenuScene extends Phaser.Scene {
       setSelected: (selected: boolean) => { prev.setSelected(selected); next.setSelected(selected); },
       activate: step(1),
       adjust: (direction: 1 | -1) => step(direction)(),
+      hit: [prev.box, next.box],
+    } satisfies FocusItem;
+  }
+
+  /**
+   * AMENAZA selector, laid out like the sector row in the brief's place. Each sector opens one
+   * level above its best cleared one; the chosen level is remembered for the session and lowered
+   * to what the current sector allows, so switching sectors never deploys at a locked level.
+   */
+  private createThreatSelector(cleared: Readonly<ThreatRecord>) {
+    framePanel(this, 315, 337, 370, 38, UI.gold, { strokeAlpha: 0.25, band: 0.05, cut: 8, brackets: false });
+    const label = this.add.text(315, 337, '', {
+      fontFamily: 'Arial Black', fontSize: uiFont(this, 12), color: '#ffc857', letterSpacing: 1,
+    }).setOrigin(0.5).setName('menu-threat');
+    const render = (note?: string) => {
+      const detail = this.threat === 0 ? '' : `  ·  ${t('menu.threatDetail', {
+        health: Math.round(THREAT_HEALTH_STEP * this.threat * 100),
+        multiplier: threatRewardMultiplier(this.threat),
+      })}`;
+      label.setFontSize(uiFont(this, 12)).setText(note ?? `${threatLabel(this.threat)}${detail}`)
+        .setColor(this.threat === 0 ? UI.muted : '#ffc857');
+      fitText(label, 350);
+    };
+    const set = (level: number) => {
+      this.threat = level;
+      this.registry.set(THREAT_REGISTRY_KEY, level);
+      render();
+    };
+    const step = (direction: 1 | -1, wrap = false) => {
+      const top = availableThreat(cleared, this.sector);
+      let next = this.threat + direction;
+      if (wrap && next > top) next = 0;
+      if (next < 0 || next > top) {
+        this.audio?.play('ui_deny');
+        // Going up past an unlocked top is the case worth explaining: what opens the next level.
+        if (next > top && top < MAX_THREAT) render(t('menu.threatLocked', { current: threatLabel(top) }));
+        return;
+      }
+      this.audio?.play('ui_confirm');
+      set(next);
+    };
+    this.refreshThreat = () => set(allowedThreat(cleared, this.sector, this.threat));
+    this.threat = allowedThreat(cleared, this.sector, Number(this.registry.get(THREAT_REGISTRY_KEY) ?? 0));
+    const prev = this.createButton(80, 318, 50, 38, '<', UI.gold, () => step(-1), 18, 'menu-threat-prev');
+    const next = this.createButton(500, 318, 50, 38, '>', UI.gold, () => step(1), 18, 'menu-threat-next');
+    render();
+    return {
+      setSelected: (selected: boolean) => { prev.setSelected(selected); next.setSelected(selected); },
+      // ENTER cycles back to the normal level from the top, as the sector selector wraps.
+      activate: () => step(1, true),
+      adjust: (direction: 1 | -1) => step(direction),
       hit: [prev.box, next.box],
     } satisfies FocusItem;
   }

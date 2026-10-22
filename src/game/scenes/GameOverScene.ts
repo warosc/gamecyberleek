@@ -8,17 +8,23 @@ import { AudioManager } from '../managers/AudioManager';
 import { t, td } from '../i18n';
 import { FocusGroup, UI, fitText, framePanel, hex, isCompact, panelButton, uiFont } from '../ui/SceneWidgets';
 import { backdropTexture, queueSceneArt } from '../config/SceneArt';
+import { allowedThreat, threatLabel } from '../progression/ThreatLevels';
 
 const BUTTON_WIDTH = 270;
 const BUTTON_GAP = 20;
 
 interface GameOverData {
-  time: number; level: number; victory: boolean; arenaIndex: number; weaponId: string;
+  time: number; level: number; victory: boolean; arenaIndex: number; weaponId: string; threat?: number;
   summary: Readonly<RunRecord>; equipment: string[]; synergy?: string;
   masteryEarned?: number; creditsEarned?: number; newUnlocks?: string[]; contracts?: ContractOutcome;
   newAchievements?: { name: string; reward: number }[];
   daily?: { date: string; mutator: string; score: number };
   dailyBest?: boolean;
+  /** Daily bonus paid by this run; 0 on a repeat attempt the same day. */
+  dailyBonus?: number;
+  dailyStreak?: number;
+  /** The threat level this victory opened in its sector, when it opened one. */
+  threatUnlocked?: number;
 }
 
 export class GameOverScene extends Phaser.Scene {
@@ -65,7 +71,9 @@ export class GameOverScene extends Phaser.Scene {
     const items = data.equipment.length ? data.equipment.slice(-3).map(name => td(name)).join('  ·  ') : t('gameover.noEquipment');
     const build = data.synergy ? t('gameover.synergy', { name: td(data.synergy) })
       : t('gameover.build', { weapon: summary.weapon, count: summary.upgrades.length });
-    fitText(this.add.text(ox + 140, 318, t('gameover.run', { level: data.level, sector: data.arenaIndex + 1, taken: summary.damageTaken }), {
+    const threat = data.threat ?? 0;
+    const runLine = t('gameover.run', { level: data.level, sector: data.arenaIndex + 1, taken: summary.damageTaken });
+    fitText(this.add.text(ox + 140, 318, threat > 0 ? `${runLine}  ·  ${threatLabel(threat)}` : runLine, {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 15), color: UI.text, letterSpacing: 1,
     }).setOrigin(0, 0.5).setName('results-run'), 1000);
     fitText(this.add.text(ox + 140, 356, build, { fontFamily: 'Arial Black', fontSize: uiFont(this, 14), color: '#d49cff' })
@@ -83,11 +91,16 @@ export class GameOverScene extends Phaser.Scene {
 
     // Up to two short lines between the rewards and the buttons, most important first.
     const notes: { text: string; color: string; name: string }[] = [];
-    if (data.daily)
+    if (data.daily) {
+      const streak = data.dailyStreak ?? 0;
+      const bonus = data.dailyBonus
+        ? t('gameover.dailyBonus', { bonus: data.dailyBonus, days: streak })
+        : t('gameover.dailyClaimed', { days: streak });
       notes.push({
-        text: `${t('gameover.daily', { score: data.daily.score })}${data.dailyBest ? `   ${t('gameover.dailyBest')}` : ''}`,
+        text: `${t('gameover.daily', { score: data.daily.score })}${data.dailyBest ? `   ${t('gameover.dailyBest')}` : ''}   ·   ${bonus}`,
         color: '#ffc857', name: 'results-daily',
       });
+    }
     if (data.newAchievements?.length)
       notes.push({
         text: data.newAchievements.map(a => t('gameover.achievement', { name: td(a.name), reward: a.reward })).join('   ·   '),
@@ -95,6 +108,12 @@ export class GameOverScene extends Phaser.Scene {
       });
     if (data.newUnlocks?.length)
       notes.push({ text: t('gameover.unlock', { list: data.newUnlocks.join(' · ') }), color: '#73ef62', name: 'results-unlocks' });
+    // Last: a new sector matters more on a first win, and the selector shows the level anyway.
+    if (data.threatUnlocked)
+      notes.push({
+        text: t('gameover.threatUnlocked', { threat: threatLabel(data.threatUnlocked), sector: data.arenaIndex + 1 }),
+        color: '#ff8a3d', name: 'results-threat',
+      });
     notes.slice(0, 2).forEach((note, index) => fitText(this.add.text(GAME_WIDTH / 2, 500 + index * 28, note.text, {
       fontFamily: 'Arial Black', fontSize: uiFont(this, 14), color: note.color, align: 'center',
     }).setOrigin(0.5).setName(note.name), 1080));
@@ -103,7 +122,9 @@ export class GameOverScene extends Phaser.Scene {
     if (data.newAchievements?.length) audio.play('achievement');
 
     const nextArenaIndex = data.victory ? data.arenaIndex + 1 : data.arenaIndex;
-    const canAdvance = !data.daily && isSectorUnlocked(nextArenaIndex, loadProfile().unlocks);
+    const profile = loadProfile();
+    const canAdvance = !data.daily && isSectorUnlocked(nextArenaIndex, profile.unlocks);
+    const nextArena = data.victory && canAdvance ? nextArenaIndex : data.arenaIndex;
     // The run ends mid-combat, often with ENTER, a click or the pad's A (replayed as ENTER) still
     // being pressed. Until this passes, input is that leftover combat input, not a choice: it
     // would skip the results unread and count as a restart.
@@ -114,8 +135,10 @@ export class GameOverScene extends Phaser.Scene {
       this.scene.start(key, sceneData);
     };
     // A daily retry replays the same sector, weapon and mutator; it never advances a sector.
+    // The same threat again, lowered to what the next sector has opened when advancing.
     const start = go('Game', {
-      arenaIndex: data.victory && canAdvance ? nextArenaIndex : data.arenaIndex,
+      arenaIndex: nextArena,
+      threat: data.daily ? 0 : allowedThreat(profile.threatCleared, nextArena, threat),
       weaponId: data.weaponId,
       daily: data.daily && { date: data.daily.date, mutator: data.daily.mutator },
     });

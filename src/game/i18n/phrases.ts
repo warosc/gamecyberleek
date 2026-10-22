@@ -47,7 +47,7 @@ export const PHRASES_EN: Record<string, string> = {
   'NÚCLEO CRIO': 'CRYO CORE',
   'PURGA DE MUESTRAS': 'SPECIMEN PURGE',
   'Elimina 18 amenazas antes de 01:30': 'Eliminate 18 threats before 01:30',
-  '+6 daño y alijo de equipo': '+6 damage and an equipment cache',
+  '+12% daño y alijo de equipo': '+12% damage and an equipment cache',
   'COSECHA DE BIO-DATOS': 'BIO-DATA HARVEST',
   'Absorbe 22 fragmentos antes de 01:45': 'Absorb 22 shards before 01:45',
   '+20% experiencia y alijo': '+20% experience and a cache',

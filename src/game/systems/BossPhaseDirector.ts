@@ -9,7 +9,7 @@ import { createScaledEnemy } from '../entities/enemies/EnemyFactory';
 export class BossPhaseDirector {
   private readonly entered = new Set<number>();
   constructor(private readonly scene: Phaser.Scene, private readonly enemies: Phaser.Physics.Arcade.Group,
-    private readonly sector: number) {}
+    private readonly sector: number, private readonly threat = 0) {}
 
   enter(phase: 2 | 3, boss: Enemy) {
     if (this.entered.has(phase)) return false;
@@ -23,8 +23,8 @@ export class BossPhaseDirector {
       const x = Phaser.Math.Clamp(boss.x + Math.cos(angle) * 210, 70, ARENA.width - 70);
       const y = Phaser.Math.Clamp(boss.y + Math.sin(angle) * 210, 70, ARENA.height - 70);
       // Phases only start after the commander arrives, where the time factor is capped, so the
-      // boss start stands in for the clock: reinforcements match the last wave (×2.6 × sector).
-      this.enemies.add(createScaledEnemy(this.scene, type, x, y, BOSS_START_MS, this.sector));
+      // boss start stands in for the clock: reinforcements match the last wave (×2.6 × sector × threat).
+      this.enemies.add(createScaledEnemy(this.scene, type, x, y, BOSS_START_MS, this.sector, this.threat));
     });
     const ring = this.scene.add.circle(boss.x, boss.y, 75, phase === 3 ? 0xff476f : 0xffb52e, 0.06)
       .setStrokeStyle(6, phase === 3 ? 0xff476f : 0xffb52e, 0.95).setDepth(15);

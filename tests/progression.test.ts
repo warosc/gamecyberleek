@@ -8,8 +8,12 @@ import {
   ACHIEVEMENTS, EMPTY_LIFETIME, NO_RUN_FACTS, newlyEarned, normalizeHistory, normalizeLifetime,
 } from '../src/game/progression/Achievements';
 import {
-  DAILY_BOARD_SIZE, EMPTY_DAILY, dailyOperation, hashSeed, normalizeDaily, operationScore, recordDailyScore,
+  DAILY_BOARD_SIZE, EMPTY_DAILY, claimDailyBonus, dailyBonus, dailyOperation, hashSeed, normalizeDaily, operationScore,
+  previousDateKey, recordDailyScore, streakStatus,
 } from '../src/game/progression/DailyOperation';
+import {
+  allowedThreat, availableThreat, normalizeThreatCleared, recordThreatClear, threatNumeral, threatRewardMultiplier,
+} from '../src/game/progression/ThreatLevels';
 
 describe('workshop', () => {
   it('charges the next rank and refuses when short or maxed', () => {
@@ -104,8 +108,79 @@ describe('daily operation', () => {
     expect(record.scores).toEqual([70, 60, 50, 30, 20]);
     expect(record.scores).toHaveLength(DAILY_BOARD_SIZE);
     expect(record.attempts).toBe(6);
-    const tomorrow = recordDailyScore(record, '2026-09-24', 5);
-    expect(tomorrow).toEqual({ date: '2026-09-24', bestScore: 5, attempts: 1, scores: [5] });
-    expect(normalizeDaily({ date: 'bad', scores: [3, -1, 9] })).toEqual({ date: '', bestScore: 0, attempts: 0, scores: [9, 3, 0] });
+    const tomorrow = recordDailyScore({ ...record, streak: 3, lastPlayedDate: '2026-09-23' }, '2026-09-24', 5);
+    // The board resets with the day; the streak does not.
+    expect(tomorrow).toEqual({ date: '2026-09-24', bestScore: 5, attempts: 1, scores: [5], streak: 3, lastPlayedDate: '2026-09-23' });
+    expect(normalizeDaily({ date: 'bad', scores: [3, -1, 9] })).toEqual({
+      date: '', bestScore: 0, attempts: 0, scores: [9, 3, 0], streak: 0, lastPlayedDate: '',
+    });
+  });
+
+  it('finds the previous calendar day across months, years and leap days', () => {
+    expect(previousDateKey('2026-10-22')).toBe('2026-10-21');
+    expect(previousDateKey('2026-03-01')).toBe('2026-02-28');
+    expect(previousDateKey('2028-03-01')).toBe('2028-02-29');
+    expect(previousDateKey('2027-01-01')).toBe('2026-12-31');
+  });
+
+  it('pays +20 % per streak day up to a week, x1.5 for a victory', () => {
+    expect([1, 2, 7, 8, 30].map(days => dailyBonus(days, false))).toEqual([100, 120, 220, 220, 220]);
+    expect(dailyBonus(1, true)).toBe(150);
+    expect(dailyBonus(7, true)).toBe(330);
+    expect(dailyBonus(0, false)).toBe(100);
+  });
+
+  it('pays the first daily of each day once, builds the streak and resets it after a gap', () => {
+    const first = claimDailyBonus(EMPTY_DAILY, '2026-10-20', false);
+    expect(first).toMatchObject({ bonus: 100, streak: 1 });
+    // A second attempt the same day pays nothing and leaves the streak alone.
+    expect(claimDailyBonus(first.record, '2026-10-20', true)).toMatchObject({ bonus: 0, streak: 1 });
+    const second = claimDailyBonus(first.record, '2026-10-21', true);
+    expect(second).toMatchObject({ bonus: 180, streak: 2 });
+    // Replaying an older daily (a results-screen retry after midnight) never pays again.
+    expect(claimDailyBonus(second.record, '2026-10-20', true).bonus).toBe(0);
+    // Missing 22 October breaks the streak.
+    expect(claimDailyBonus(second.record, '2026-10-23', false)).toMatchObject({ bonus: 100, streak: 1 });
+    expect(claimDailyBonus(EMPTY_DAILY, 'not-a-date', true).bonus).toBe(0);
+  });
+
+  it('reports the streak the menu shows', () => {
+    const record = { ...EMPTY_DAILY, streak: 4, lastPlayedDate: '2026-10-21' };
+    expect(streakStatus(record, '2026-10-21')).toEqual({ streak: 4, claimed: true, next: 4 });
+    expect(streakStatus(record, '2026-10-22')).toEqual({ streak: 4, claimed: false, next: 5 });
+    expect(streakStatus(record, '2026-10-24')).toEqual({ streak: 0, claimed: false, next: 1 });
+    expect(normalizeDaily({ streak: 5 }).streak).toBe(0);
+    expect(normalizeDaily({ streak: 5, lastPlayedDate: '2026-10-21' }).streak).toBe(5);
+  });
+});
+
+describe('threat levels', () => {
+  it('opens one level above the best clear per sector, up to V', () => {
+    expect(availableThreat([-1, -1, -1], 2)).toBe(0);
+    expect(availableThreat([0, 3, 5], 0)).toBe(1);
+    expect(availableThreat([0, 3, 5], 1)).toBe(4);
+    expect(availableThreat([0, 3, 5], 2)).toBe(5);
+    expect(allowedThreat([0, -1, -1], 0, 4)).toBe(1);
+    expect(allowedThreat([0, -1, -1], 1, 4)).toBe(0);
+    expect(allowedThreat([4, -1, -1], 0, -3)).toBe(0);
+  });
+
+  it('records clears without ever lowering them or skipping a level', () => {
+    expect(recordThreatClear([-1, -1, -1], 2, 0)).toEqual([-1, -1, 0]);
+    expect(recordThreatClear([2, -1, -1], 0, 3)).toEqual([3, -1, -1]);
+    expect(recordThreatClear([3, -1, -1], 0, 1)).toEqual([3, -1, -1]);
+    // A crafted level above the unlocked one counts only as the unlocked one.
+    expect(recordThreatClear([0, -1, -1], 0, 5)).toEqual([1, -1, -1]);
+  });
+
+  it('migrates older saves from their sector victories and validates each slot', () => {
+    expect(normalizeThreatCleared(undefined, [2, 0, 1])).toEqual([0, -1, 0]);
+    expect(normalizeThreatCleared([4, 'x', 9], [0, 3, 0])).toEqual([4, 0, 5]);
+    expect(normalizeThreatCleared([-7, 1.8], [0, 0, 0])).toEqual([-1, 1, -1]);
+  });
+
+  it('pays +0.25 per level and labels I-V', () => {
+    expect([0, 1, 3, 5].map(threatRewardMultiplier)).toEqual([1, 1.25, 1.75, 2.25]);
+    expect([0, 1, 4, 5].map(threatNumeral)).toEqual(['', 'I', 'IV', 'V']);
   });
 });

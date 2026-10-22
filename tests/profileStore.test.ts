@@ -152,6 +152,49 @@ describe('schema v5 progression', () => {
     expect(loadProfile().workshop.plating).toBe(1);
   });
 
+  it('pays threat levels on top of the sector and records the clear', async () => {
+    const { runCredits, saveRun, loadProfile } = await import('../src/game/systems/ProfileStore');
+    const { EMPTY_WORKSHOP } = await import('../src/game/progression/Workshop');
+    // 14*5 + 100 + 110 contracts = 280; x1.5 sector 3 = 420; x1.75 at AMENAZA III = 735.
+    expect(runCredits(14, true, 110, 2, EMPTY_WORKSHOP)).toBe(420);
+    expect(runCredits(14, true, 110, 2, EMPTY_WORKSHOP, 3)).toBe(735);
+    expect(runCredits(14, true, 110, 2, { ...EMPTY_WORKSHOP, salvage: 3 }, 5)).toBe(1229);
+    const run = { sector: 0, durationMs: 300_000, kills: 10, damageDealt: 0, damageTaken: 500, shotsFired: 0, hits: 0, bossDefeated: true };
+    expect(loadProfile().threatCleared).toEqual([-1, -1, -1]);
+    // A threat not yet open is paid and recorded as the highest open one (normal, here).
+    const first = saveRun(10, true, 'pulse', undefined, run, undefined, { threat: 3 });
+    expect(first.threatCleared).toEqual([0, -1, -1]);
+    const second = saveRun(10, true, 'pulse', undefined, run, undefined, { threat: 1 });
+    // 150 x1.25 at AMENAZA I.
+    expect(second.bioCredits - first.bioCredits).toBe(188);
+    expect(second.threatCleared).toEqual([1, -1, -1]);
+    // A defeat clears nothing.
+    expect(saveRun(10, false, 'pulse', undefined, run, undefined, { threat: 2 }).threatCleared).toEqual([1, -1, -1]);
+  });
+
+  it('opens AMENAZA I in sectors an older save already won', async () => {
+    storage.setItem('leek-ops-profile-v5', JSON.stringify({ victories: 2, lifetime: { victoriesBySector: [1, 0, 1] } }));
+    const { loadProfile } = await import('../src/game/systems/ProfileStore');
+    expect(loadProfile().threatCleared).toEqual([0, -1, 0]);
+    expect(loadProfile().daily).toMatchObject({ streak: 0, lastPlayedDate: '' });
+  });
+
+  it('pays the daily bonus once per day, grows it with the streak and keeps the daily at the normal threat', async () => {
+    const { saveRun, loadProfile } = await import('../src/game/systems/ProfileStore');
+    const run = { sector: 0, durationMs: 60_000, kills: 0, damageDealt: 0, damageTaken: 500, shotsFired: 0, hits: 0, bossDefeated: false };
+    // Level 2 defeat: 10 credits + 100 bonus on day one.
+    const day1 = saveRun(2, false, 'pulse', undefined, run, { date: '2026-10-20', score: 300 });
+    expect(day1.bioCredits).toBe(110);
+    expect(day1.daily).toMatchObject({ streak: 1, lastPlayedDate: '2026-10-20', attempts: 1 });
+    expect(day1.history.at(-1)?.credits).toBe(110);
+    const retry = saveRun(2, false, 'pulse', undefined, run, { date: '2026-10-20', score: 500 });
+    expect(retry.bioCredits - day1.bioCredits).toBe(10);
+    expect(retry.daily).toMatchObject({ streak: 1, attempts: 2, bestScore: 500 });
+    const day2 = saveRun(2, false, 'pulse', undefined, run, { date: '2026-10-21', score: 100 }, { threat: 4 });
+    expect(day2.bioCredits - retry.bioCredits).toBe(10 + 120);
+    expect(loadProfile().daily).toMatchObject({ date: '2026-10-21', streak: 2, attempts: 1 });
+  });
+
   it('keeps the best daily score per date', async () => {
     const { saveRun, loadProfile } = await import('../src/game/systems/ProfileStore');
     saveRun(3, false, 'pulse', undefined, undefined, { date: '2026-09-23', score: 900 });

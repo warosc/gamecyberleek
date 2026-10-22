@@ -8,12 +8,16 @@ import type { RunFacts } from '../progression/Achievements';
 import { ACHIEVEMENTS } from '../progression/Achievements';
 import { onlineService } from '../online/OnlinePorts';
 import { submitDailyRun } from '../online/OnlineSync';
+import { dailyBonus } from '../progression/DailyOperation';
+import { allowedThreat, availableThreat } from '../progression/ThreatLevels';
 
 export interface RunEndData {
   time: number;
   level: number;
   victory: boolean;
   arenaIndex: number;
+  /** Threat level (AMENAZA) the run was played at; 0 when absent and always 0 for the daily. */
+  threat?: number;
   weaponId: StarterWeaponId;
   contracts: ContractOutcome;
   summary: Readonly<RunRecord>;
@@ -36,7 +40,7 @@ export class RunEndSystem {
     this.ended = true;
     const before = loadProfile();
     const after = saveRun(data.level, data.victory, data.weaponId, data.contracts, data.facts,
-      data.daily && { date: data.daily.date, score: data.daily.score });
+      data.daily && { date: data.daily.date, score: data.daily.score }, { threat: data.daily ? 0 : data.threat });
     const newUnlocks = after.unlocks.filter(id => !before.unlocks.includes(id));
     // Fire and forget: a network outage must never hold up the results screen.
     const online = onlineService();
@@ -50,9 +54,18 @@ export class RunEndSystem {
       after.achievements.includes(achievement.id) && !before.achievements.includes(achievement.id))
       .map(({ name, reward }) => ({ name, reward }));
     const dailyBest = Boolean(data.daily && (before.daily.date !== data.daily.date || data.daily.score > before.daily.bestScore));
+    // The bonus was paid exactly when the paid date moved; the streak it counted is the saved one.
+    const dailyPaid = Boolean(data.daily && after.daily.lastPlayedDate !== before.daily.lastPlayedDate);
+    const sector = data.arenaIndex;
+    const threatUnlocked = !data.daily && availableThreat(after.threatCleared, sector) > availableThreat(before.threatCleared, sector)
+      ? availableThreat(after.threatCleared, sector) : undefined;
     this.stopUi();
     this.scene.scene.start('GameOver', {
       ...data,
+      threat: data.daily ? 0 : allowedThreat(before.threatCleared, sector, data.threat ?? 0),
+      dailyBonus: dailyPaid ? dailyBonus(after.daily.streak, data.victory) : 0,
+      dailyStreak: data.daily ? after.daily.streak : undefined,
+      threatUnlocked,
       masteryEarned: masteryEarnedForRun(data.level, data.victory),
       creditsEarned: after.bioCredits - before.bioCredits,
       newUnlocks,

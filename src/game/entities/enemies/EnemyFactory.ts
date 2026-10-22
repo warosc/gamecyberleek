@@ -15,14 +15,15 @@ export function createScaledEnemy(
   y: number,
   survivalMs = 0,
   sector = 0,
+  threat = 0,
 ) {
   return new Enemy(scene, x, y, type)
-    .applyScaling(enemyHealthMultiplier(survivalMs, sector), sectorDamageMultiplier(sector));
+    .applyScaling(enemyHealthMultiplier(survivalMs, sector, threat), sectorDamageMultiplier(sector));
 }
 
 export class EnemyFactory {
   constructor(private scene: Phaser.Scene) {}
-  create(type: EnemyType, x: number, y: number, survivalMs = 0, sector = 0) {
-    return createScaledEnemy(this.scene, type, x, y, survivalMs, sector);
+  create(type: EnemyType, x: number, y: number, survivalMs = 0, sector = 0, threat = 0) {
+    return createScaledEnemy(this.scene, type, x, y, survivalMs, sector, threat);
   }
 }

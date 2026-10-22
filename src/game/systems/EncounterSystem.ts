@@ -20,6 +20,8 @@ export class EncounterSystem {
     private readonly enemies: Phaser.Physics.Arcade.Group,
     private readonly player: Player,
     private readonly sector = 0,
+    /** Threat level (AMENAZA); scales both milestones like the waves around them. */
+    private readonly threat = 0,
   ) {}
 
   get hasBossSpawned() {
@@ -40,7 +42,7 @@ export class EncounterSystem {
     // Scaled like the wave it arrives with (time factor at 2:30, ×2.0), not a flat +18 % per
     // sector that left it a 560 HP speed bump for a mid-run build.
     const base = miniboss.health.max;
-    miniboss.applyScaling(minibossHealth(base, this.sector) / base, sectorDamageMultiplier(this.sector));
+    miniboss.applyScaling(minibossHealth(base, this.sector, MINIBOSS_START_MS, this.threat) / base, sectorDamageMultiplier(this.sector));
     this.enemies.add(miniboss);
     const identity = MINIBOSS_VARIANTS[Math.min(this.sector, 2)];
     this.scene.events.emit(Events.MINIBOSS_SPAWNED, identity.name, identity.title, identity.accent, miniboss.health.max);
@@ -67,7 +69,7 @@ export class EncounterSystem {
     // Sized against the build that has to beat it: a flat 1800 HP fell in 2–5 s to a level-12
     // build, so phases 2 and 3 were almost never seen. See bossHealth for the floor and cap.
     const base = boss.health.max;
-    const hp = bossHealth(base, this.sector, combatRating(this.player.stats).dps);
+    const hp = bossHealth(base, this.sector, combatRating(this.player.stats).dps, this.threat);
     boss.applyScaling(hp / base, sectorDamageMultiplier(this.sector));
     this.enemies.add(boss);
     this.scene.events.emit(Events.BOSS_SPAWNED, identity.name, boss.health.max);

@@ -356,7 +356,8 @@ export class UIScene extends Phaser.Scene {
     this.tweens.add({ targets: banner, alpha: 1, scale: 1, duration: 180, hold: 1200, yoyo: true,
       onComplete: () => banner.destroy(true) });
   }
-  private showAbilities(abilities: Ability[]) {
+  /** Also the reroll's redraw: GameScene sends the new hand through the same event. */
+  private showAbilities(abilities: Ability[], rerollsLeft = 0) {
     const parts: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, this.modalWidth(), 570, 0x061323, 0.98)
@@ -406,9 +407,18 @@ export class UIScene extends Phaser.Scene {
         }),
         GAME_WIDTH / 2,
         378,
+        {
+          label: rerollsLeft > 0 ? t('levelup.reroll') : t('levelup.rerollUsed'),
+          key: 'R',
+          enabled: rerollsLeft > 0,
+          accent: 0xffc857,
+          // Between the cards (bottom edge 524, or 543 at phone size) and the hint line.
+          y: this.compact ? 574 : 558,
+          onActivate: () => this.gameScene.rerollUpgrades(),
+        },
       ),
     );
-    parts.push(this.add.text(GAME_WIDTH / 2, 585, this.gameScene.mobileInput.active
+    parts.push(this.add.text(GAME_WIDTH / 2, this.compact ? 622 : 604, this.gameScene.mobileInput.active
       ? t('levelup.tap')
       : t('levelup.keys'), {
       fontFamily: 'monospace', fontSize: hudFont(this, 12), color: '#7594a8', letterSpacing: 2,
@@ -441,7 +451,7 @@ export class UIScene extends Phaser.Scene {
     const rewards = [
       { id: 'repair' as const, name: t('chest.repair'), effect: t('chest.repairEffect'), icon: '✚', color: 0x73ef62 },
       { id: 'charge' as const, name: t('chest.charge'), effect: t('chest.chargeEffect'), icon: '⚡', color: 0x21e6ff },
-      { id: 'weapon' as const, name: t('chest.weapon'), effect: t('chest.weaponEffect'), icon: '✦', color: 0xd566ff },
+      { id: 'module' as const, name: t('chest.module'), effect: t('chest.moduleEffect'), icon: '✦', color: 0xd566ff },
     ];
     const parts: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),

@@ -97,7 +97,9 @@ test('three milestone choices resume safely and the finale starts once at four m
   });
   expect(r.offered).toHaveLength(3);
   expect(r.callouts).toEqual(['DESCARGA DE RED','EMBESTIDA DETECTADA','FUEGO A DISTANCIA','BRECHA ABIERTA','ULTIMA OLEADA']);
-  expect(r.offered.every(o=>o.join(',')==='pulse_protocol,fan,phase_dash')).toBe(true);
+  // The signature leads every milestone; the other two cards are a seeded draw with one of the
+  // milestone-exclusive upgrades always among them.
+  expect(r.offered.every(o=>o.length===3 && new Set(o).size===3 && o[0]==='pulse_protocol' && ['fan','phase_dash'].includes(o[1]))).toBe(true);
   expect(r.protocolLevel).toBe(3); expect(r.weapon).toBe('RAIL SPROUT');
   expect(r.piercing).toBe(2); expect(r.count).toBe(1); expect(r.bosses).toBe(1); expect(r.state).toBe('BOSS');
 });
@@ -401,7 +403,7 @@ test('sector objective grants its advertised combat reward only once', async ({ 
     const copy = panel.list.filter(item => item.type === 'Text').map(item => (item as Phaser.GameObjects.Text).text);
     return { damageBefore, damageAfter, status: scene.objectiveState.status, copy };
   });
-  expect(result.damageAfter - result.damageBefore).toBe(6);
+  expect(result.damageAfter / result.damageBefore).toBeCloseTo(1.12, 6);
   expect(result.status).toBe('complete');
   expect(result.copy.join(' ')).toContain('COMPLETADO');
 });

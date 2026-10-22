@@ -20,6 +20,8 @@ export class SpawnSystem {
     private factory: EnemyFactory,
     private group: Phaser.Physics.Arcade.Group,
     private readonly sector = 0,
+    /** Threat level (AMENAZA); multiplies wave health on top of time and sector. */
+    private readonly threat = 0,
   ) {}
   /**
    * `survivalMs` is the scene's gameplay clock, which drives enemy health scaling. The spawn
@@ -41,9 +43,9 @@ export class SpawnSystem {
     const families = SECTOR_FAMILIES[Math.min(this.sector, SECTOR_FAMILIES.length - 1)];
     if (this.elapsed >= FAMILY_START_MS && runRandom('spawn') < FAMILY_CHANCE)
       type = families[Math.floor(runRandom('spawn') * families.length)];
-    // Health scales with run time and sector before any elite roll, so an affix multiplies the
-    // already scaled pool instead of being overwritten by it.
-    const enemy = this.factory.create(type, x, y, survivalMs ?? this.elapsed, this.sector);
+    // Health scales with run time, sector and threat before any elite roll, so an affix multiplies
+    // the already scaled pool instead of being overwritten by it.
+    const enemy = this.factory.create(type, x, y, survivalMs ?? this.elapsed, this.sector, this.threat);
     // Both statements are the elite branch. Without the braces `makeElite()` ran
     // unconditionally, so every spawn from the first second was an elite: the crown and
     // affix label stopped meaning anything and every grunt carried 2.2x health.

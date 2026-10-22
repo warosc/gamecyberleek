@@ -87,25 +87,90 @@ export interface DailyRecord {
   attempts: number;
   /** Local top scores for the day, highest first. */
   scores: number[];
+  /** Consecutive days with a finished daily, counting `lastPlayedDate`; 0 before the first one. */
+  streak: number;
+  /**
+   * The newest operation date whose bonus was paid. Kept apart from `date`, which follows the
+   * board: a results-screen retry of yesterday's daily after midnight moves the board back a day,
+   * and must not make today's next run look unpaid.
+   */
+  lastPlayedDate: string;
 }
 
-export const EMPTY_DAILY: DailyRecord = { date: '', bestScore: 0, attempts: 0, scores: [] };
+export const EMPTY_DAILY: DailyRecord = { date: '', bestScore: 0, attempts: 0, scores: [], streak: 0, lastPlayedDate: '' };
 export const DAILY_BOARD_SIZE = 5;
 
-/** Records a daily score, resetting the board when the calendar day changes. */
+/**
+ * The first finished daily of each day pays a flat bonus on top of the run's own credits, so the
+ * daily is worth a visit even on a bad run. Flat on purpose: sector, threat and salvage already
+ * scale the run's credits, and a bonus that grew with them would make the daily another farm.
+ */
+export const DAILY_BONUS_CREDITS = 100;
+/** A daily victory pays the bonus ×1.5. */
+export const DAILY_VICTORY_FACTOR = 1.5;
+/** +20 % per consecutive day after the first… */
+export const DAILY_STREAK_STEP = 0.2;
+/** …up to a week, ×2.2: a missed day costs something, but a long streak cannot snowball. */
+export const DAILY_STREAK_CAP = 7;
+
+/** Records a daily score, resetting the board (not the streak) when the calendar day changes. */
 export function recordDailyScore(record: Readonly<DailyRecord>, date: string, score: number): DailyRecord {
-  const current = record.date === date ? record : { ...EMPTY_DAILY, date };
+  const current = record.date === date ? record : { ...record, date, bestScore: 0, attempts: 0, scores: [] };
   const scores = [...current.scores, score].sort((a, b) => b - a).slice(0, DAILY_BOARD_SIZE);
-  return { date, bestScore: Math.max(current.bestScore, score), attempts: current.attempts + 1, scores };
+  return { ...current, date, bestScore: Math.max(current.bestScore, score), attempts: current.attempts + 1, scores };
+}
+
+/** The calendar day before a `YYYY-MM-DD` key. Done in UTC so a DST change cannot skip or repeat a day. */
+export function previousDateKey(date: string) {
+  const [year, month, day] = date.split('-').map(Number);
+  const before = new Date(Date.UTC(year, month - 1, day - 1));
+  return `${before.getUTCFullYear()}-${String(before.getUTCMonth() + 1).padStart(2, '0')}-${String(before.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** Bonus credits for a paid daily at `streak` days. 100 / 150 on day one, 220 / 330 from day seven. */
+export function dailyBonus(streak: number, victory: boolean) {
+  const days = Math.min(Math.max(Math.floor(streak) || 1, 1), DAILY_STREAK_CAP);
+  return Math.round(DAILY_BONUS_CREDITS * (1 + DAILY_STREAK_STEP * (days - 1)) * (victory ? DAILY_VICTORY_FACTOR : 1));
+}
+
+/**
+ * The streak as of `today`: still counting when the last paid daily was today or yesterday,
+ * otherwise broken. `claimed` says whether today's bonus is already paid.
+ */
+export function streakStatus(record: Readonly<DailyRecord>, today: string) {
+  const claimed = record.lastPlayedDate === today;
+  const alive = claimed || record.lastPlayedDate === previousDateKey(today);
+  const streak = alive ? record.streak : 0;
+  // What the next paid daily would count: today's run extends a live streak or starts a new one.
+  const next = claimed ? streak : streak + 1;
+  return { streak, claimed, next };
+}
+
+/**
+ * Pays the daily bonus for a finished run of the operation dated `date`, once per date. Attempts
+ * stay unlimited (the board keeps the best score); only the first one of each day pays. A date
+ * not newer than the last paid one never pays, so replaying an old daily cannot re-earn it.
+ */
+export function claimDailyBonus(record: Readonly<DailyRecord>, date: string, victory: boolean) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date <= record.lastPlayedDate)
+    return { bonus: 0, streak: record.streak, record: { ...record } };
+  const streak = record.lastPlayedDate === previousDateKey(date) ? record.streak + 1 : 1;
+  return { bonus: dailyBonus(streak, victory), streak, record: { ...record, streak, lastPlayedDate: date } };
 }
 
 export function normalizeDaily(value: unknown): DailyRecord {
   const raw = (value && typeof value === 'object' ? value : {}) as Partial<Record<keyof DailyRecord, unknown>>;
   const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
+  const dateKey = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '');
+  const lastPlayedDate = dateKey(raw.lastPlayedDate);
   return {
-    date: typeof raw.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.date) ? raw.date : '',
+    date: dateKey(raw.date),
     bestScore: count(raw.bestScore),
     attempts: count(raw.attempts),
     scores: Array.isArray(raw.scores) ? raw.scores.map(count).sort((a, b) => b - a).slice(0, DAILY_BOARD_SIZE) : [],
+    // Saves from before the streak have neither field and start at 0 with no paid date. A streak
+    // without a date could never be extended, so it is dropped rather than shown.
+    streak: lastPlayedDate ? Math.min(count(raw.streak), 9999) : 0,
+    lastPlayedDate,
   };
 }

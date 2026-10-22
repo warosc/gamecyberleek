@@ -10,7 +10,10 @@ import {
   EMPTY_LIFETIME, MAX_RUN_HISTORY, NO_RUN_FACTS, newlyEarned, normalizeHistory, normalizeLifetime,
   type LifetimeStats, type RunFacts, type RunHistoryEntry,
 } from '../progression/Achievements';
-import { EMPTY_DAILY, normalizeDaily, recordDailyScore, type DailyRecord } from '../progression/DailyOperation';
+import { EMPTY_DAILY, claimDailyBonus, normalizeDaily, recordDailyScore, type DailyRecord } from '../progression/DailyOperation';
+import {
+  NO_THREAT_CLEARED, allowedThreat, normalizeThreatCleared, recordThreatClear, threatRewardMultiplier, type ThreatRecord,
+} from '../progression/ThreatLevels';
 import {
   generateCallsign, generateCode, normalizeCallsign, normalizeIdentity, type OperativeIdentity,
 } from '../online/OperativeIdentity';
@@ -35,6 +38,8 @@ export interface PlayerProfile {
   history: RunHistoryEntry[];
   achievements: string[];
   daily: DailyRecord;
+  /** Highest threat level won per sector, −1 before its first win; AMENAZA n+1 opens above it. */
+  threatCleared: ThreatRecord;
   /** Online identity; absent until the player first uses an online feature. */
   operative?: OperativeIdentity;
 }
@@ -79,6 +84,7 @@ function freshProfile(): PlayerProfile {
     history: [],
     achievements: [],
     daily: { ...EMPTY_DAILY, scores: [] },
+    threatCleared: [...NO_THREAT_CLEARED],
   };
 }
 
@@ -98,6 +104,12 @@ export interface DailyResult {
   score: number;
 }
 
+/** Optional extras of a finished run; an object so later additions do not grow the positional list. */
+export interface RunOptions {
+  /** Threat level the run was played at; lowered to what the sector has unlocked. Ignored for the daily. */
+  threat?: number;
+}
+
 function validNonNegative(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
 }
@@ -115,6 +127,7 @@ function normalizeProfile(value: unknown): PlayerProfile {
   const defaults = freshProfile();
   if (!value || typeof value !== 'object') return defaults;
   const raw = value as Partial<Record<keyof PlayerProfile, unknown>> & { weaponMastery?: Partial<WeaponMastery> };
+  const lifetime = normalizeLifetime(raw.lifetime);
   return {
     schemaVersion: 5,
     runs: Math.floor(validNonNegative(raw.runs, defaults.runs)),
@@ -133,10 +146,11 @@ function normalizeProfile(value: unknown): PlayerProfile {
     perfectContracts: Math.floor(validNonNegative(raw.perfectContracts, defaults.perfectContracts)),
     workshop: normalizeWorkshop(raw.workshop),
     settings: normalizeSettings(raw.settings),
-    lifetime: normalizeLifetime(raw.lifetime),
+    lifetime,
     history: normalizeHistory(raw.history),
     achievements: idList(raw.achievements),
     daily: normalizeDaily(raw.daily),
+    threatCleared: normalizeThreatCleared(raw.threatCleared, lifetime.victoriesBySector),
     operative: normalizeIdentity((raw as { operative?: unknown }).operative),
   };
 }
@@ -237,10 +251,16 @@ export function storageHealthy() {
   return memoryJson === undefined;
 }
 
-/** Credits for one run before achievement bonuses: sector risk and the salvage upgrade scale it. */
-export function runCredits(level: number, victory: boolean, contractCredits: number, sector: number, workshop: WorkshopRanks) {
+/**
+ * Credits for one run before achievement and daily bonuses: sector risk, threat level and the
+ * salvage upgrade scale it. Threat adds +0.25 per level on its own factor (×1.75 at AMENAZA III),
+ * so sector 3 at AMENAZA V pays 1.5 × 2.25 = ×3.375 for enemies with ×1.75 health.
+ */
+export function runCredits(
+  level: number, victory: boolean, contractCredits: number, sector: number, workshop: WorkshopRanks, threat = 0,
+) {
   const base = level * 5 + (victory ? 100 : 0) + contractCredits;
-  return Math.round(base * sectorRewardMultiplier(sector) * creditMultiplier(workshop));
+  return Math.round(base * sectorRewardMultiplier(sector) * threatRewardMultiplier(threat) * creditMultiplier(workshop));
 }
 
 export function saveRun(
@@ -250,8 +270,11 @@ export function saveRun(
   contracts: RunContractOutcome = NO_CONTRACTS,
   run: RunFacts = NO_RUN_FACTS,
   daily?: DailyResult,
+  options: RunOptions = {},
 ) {
   const profile = loadProfile();
+  // The daily is a fair board: always the normal threat, whatever the caller passed.
+  const threat = daily ? 0 : allowedThreat(profile.threatCleared, run.sector, options.threat ?? 0);
   profile.runs++;
   profile.bestLevel = Math.max(profile.bestLevel, level);
   profile.victories += Number(victory);
@@ -259,7 +282,7 @@ export function saveRun(
   if (contracts.perfect) profile.perfectContracts++;
   profile.weaponMastery[weaponId] += masteryEarnedForRun(level, victory);
 
-  const credits = runCredits(level, victory, contracts.creditsEarned, run.sector, profile.workshop);
+  const credits = runCredits(level, victory, contracts.creditsEarned, run.sector, profile.workshop, threat);
   const life = profile.lifetime;
   life.kills += run.kills;
   life.bossKills += Number(run.bossDefeated);
@@ -272,10 +295,18 @@ export function saveRun(
     life.victoriesBySector[Math.min(Math.max(run.sector, 0), 2)]++;
     if (run.durationMs > 0 && (!life.fastestVictoryMs || run.durationMs < life.fastestVictoryMs))
       life.fastestVictoryMs = run.durationMs;
+    profile.threatCleared = recordThreatClear(profile.threatCleared, run.sector, threat);
+  }
+  // First finished daily of the day: the streak advances and the bonus is paid with the run.
+  let dailyBonus = 0;
+  if (daily) {
+    const payout = claimDailyBonus(profile.daily, daily.date, victory);
+    dailyBonus = payout.bonus;
+    profile.daily = recordDailyScore(payout.record, daily.date, daily.score);
   }
 
   const earned = newlyEarned(profile.achievements, profile, { ...run, victory });
-  const bonus = earned.reduce((sum, achievement) => sum + achievement.reward, 0);
+  const bonus = earned.reduce((sum, achievement) => sum + achievement.reward, 0) + dailyBonus;
   profile.achievements.push(...earned.map(achievement => achievement.id));
   profile.bioCredits += credits + bonus;
   life.creditsEarned += credits + bonus;
@@ -284,7 +315,6 @@ export function saveRun(
     at: new Date().toISOString(), sector: run.sector, weaponId, level, victory,
     durationMs: run.durationMs, kills: run.kills, credits: credits + bonus,
   }].slice(-MAX_RUN_HISTORY);
-  if (daily) profile.daily = recordDailyScore(profile.daily, daily.date, daily.score);
 
   for (const definition of UNLOCKS) {
     if (!profile.unlocks.includes(definition.id) && definition.requirement(profile))

@@ -1,7 +1,7 @@
 import type { PlayerStats } from '../entities/player/PlayerStats';
 import type { StarterWeaponId } from '../weapons/WeaponRegistry';
 import { CHILL_SLOW } from '../systems/StatusEffects';
-import { runRandom } from '../systems/RunRandom';
+import { randomFrom } from '../systems/RunRandom';
 export interface Ability {
   id: string;
   name: string;
@@ -135,17 +135,76 @@ const SIGNATURE_ABILITIES: Record<StarterWeaponId, string> = {
 export const signatureAbilityId = (weaponId: StarterWeaponId) => SIGNATURE_ABILITIES[weaponId];
 export const isSignatureAbility = (id: string) => Object.values(SIGNATURE_ABILITIES).includes(id);
 /** Fisher-Yates over a copy. Kept engine-free so this data module stays runtime-independent. */
-function shuffled<T>(items: readonly T[]): T[] {
+function shuffled<T>(items: readonly T[], random: () => number): T[] {
   const result = [...items];
   for (let index = result.length - 1; index > 0; index--) {
-    const swap = Math.floor(runRandom('upgrades') * (index + 1));
+    const swap = Math.floor(random() * (index + 1));
     [result[index], result[swap]] = [result[swap], result[index]];
   }
   return result;
 }
-/** Offered only at the timed milestones (see GameScene.openLevelUp), never in the random draw. */
-const MILESTONE_ONLY = ['fan', 'phase_dash', ...Object.values(SIGNATURE_ABILITIES)];
-export function chooseAbilities(levels: Map<string, number>, count = 3) {
-  return shuffled(ABILITIES.filter((a) => !MILESTONE_ONLY.includes(a.id) && (levels.get(a.id) ?? 0) < a.maxLevel)).slice(0, count);
+/**
+ * A seeded draw of `count` cards. Cards in `avoid` (the offer a reroll replaces) go to the back,
+ * so a reroll shows fresh cards first and repeats one only when the pool has nothing else left.
+ */
+function draw(pool: readonly Ability[], count: number, random: () => number, avoid: ReadonlySet<string>) {
+  const order = shuffled(pool, random);
+  return [...order.filter(a => !avoid.has(a.id)), ...order.filter(a => avoid.has(a.id))].slice(0, count);
+}
+const open = (levels: ReadonlyMap<string, number>) => (ability: Ability) => (levels.get(ability.id) ?? 0) < ability.maxLevel;
+/** Kept out of the regular draw so the timed milestones always hold something the level-ups do not. */
+const MILESTONE_EXCLUSIVE = ['fan', 'phase_dash'];
+const regularPool = () => ABILITIES.filter(a => !MILESTONE_EXCLUSIVE.includes(a.id) && !isSignatureAbility(a.id));
+
+export interface OfferOptions {
+  /** The weapon's signature protocol, once the first milestone has offered it (see GameScene). */
+  signature?: string;
+  random?: () => number;
+  /** The offer being rerolled; its cards are drawn last. */
+  avoid?: ReadonlySet<string>;
+}
+/**
+ * The regular level-up draw. The signature protocol joins it after the first milestone: it has
+ * three levels and there are three milestones, so when it was offered only there, evolving the
+ * weapon meant taking it every time and the milestone was no choice at all. Joining the regular
+ * pool lets a player who skips it at a milestone still finish it from ordinary level-ups.
+ */
+export function chooseAbilities(levels: ReadonlyMap<string, number>, count = 3, options: OfferOptions = {}) {
+  const { signature, random = randomFrom('upgrades'), avoid = new Set<string>() } = options;
+  const pool = [...regularPool(), ...ABILITIES.filter(a => a.id === signature)].filter(open(levels));
+  return draw(pool, count, random, avoid);
+}
+/**
+ * A timed milestone: the weapon's signature protocol while it can still level, one of the
+ * milestone-exclusive upgrades (ABANICO VERDE, PASO FANTASMA) and the rest drawn from everything
+ * else. The exclusive slot is reserved because a uniform draw over the whole pool would show
+ * each of them about one card in seven, and they appear nowhere but here. The signature is
+ * always present so a milestone never hides the evolution; it is no longer forced, because the
+ * regular draw also offers it after the first milestone.
+ */
+export function milestoneOffer(levels: ReadonlyMap<string, number>, weaponId: StarterWeaponId, options: Omit<OfferOptions, 'signature'> = {}) {
+  const { random = randomFrom('upgrades'), avoid = new Set<string>() } = options;
+  const available = open(levels);
+  const signature = ABILITIES.filter(a => a.id === signatureAbilityId(weaponId) && available(a));
+  const exclusive = draw(ABILITIES.filter(a => MILESTONE_EXCLUSIVE.includes(a.id) && available(a)), 1, random, avoid);
+  const taken = new Set([...signature, ...exclusive].map(a => a.id));
+  const rest = draw(ABILITIES.filter(a => !taken.has(a.id) && !isSignatureAbility(a.id) && available(a)),
+    3 - taken.size, random, avoid);
+  return [...signature, ...exclusive, ...rest];
+}
+/**
+ * What GameScene offers for a level-up or a milestone. A reroll calls it again with the offer it
+ * replaces as `avoid`, from the same seeded stream, so a daily reroll lands on the same cards for
+ * everyone who rerolled at that point.
+ */
+export function upgradeOffer(
+  levels: ReadonlyMap<string, number>,
+  weaponId: StarterWeaponId,
+  context: { milestone: boolean; milestonesReached: number },
+  options: Omit<OfferOptions, 'signature'> = {},
+) {
+  if (context.milestone) return milestoneOffer(levels, weaponId, options);
+  const signature = context.milestonesReached > 0 ? signatureAbilityId(weaponId) : undefined;
+  return chooseAbilities(levels, 3, { ...options, signature });
 }
 export const getAbilityById = (id: string) => ABILITIES.find((ability) => ability.id === id);

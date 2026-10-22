@@ -9,9 +9,10 @@ import { Enemy } from '../entities/enemies/Enemy';
 import { EnemyType } from '../entities/enemies/EnemyTypes';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { ExperienceSystem } from '../systems/ExperienceSystem';
-import { chooseAbilities, getAbilityById, isSignatureAbility, signatureAbilityId } from '../abilities/AbilityRegistry';
+import { getAbilityById, isSignatureAbility, upgradeOffer } from '../abilities/AbilityRegistry';
 import { ExperienceOrb } from '../entities/experience/ExperienceOrb';
 import { orbPullSpeed } from '../systems/OrbMagnet';
+import { clampThreat } from '../config/EnemyScaling';
 import { setRunSeed } from '../systems/RunRandom';
 import { AudioManager } from '../managers/AudioManager';
 import { ARENA_THEMES } from '../config/ArenaDefinitions';
@@ -103,6 +104,8 @@ export class GameScene extends Phaser.Scene {
   abilityLevels = new Map<string, number>();
   survivalMs = 0;
   arenaIndex = 0;
+  /** AMENAZA level of this run (0 = normal); public so the results and e2e tests can read it. */
+  threat = 0;
   arenaName = ARENA_THEMES[0].name;
   private spawn!: SpawnSystem;
   private audio!: AudioManager;
@@ -112,6 +115,10 @@ export class GameScene extends Phaser.Scene {
   private milestoneIndex = 0;
   private lastRunPhaseAt = 0;
   private offeredAbilities: string[] = [];
+  /** Whether the open offer is a milestone's, so a reroll redraws the same kind of hand. */
+  private offerIsMilestone = false;
+  /** One reroll per run, for the level-up and milestone cards (not the supply chest). */
+  rerollsLeft = 1;
   private victoryPending = false;
   private deaths = new EnemyDeathResolver();
   private momentum = new CombatMomentum();
@@ -214,8 +221,10 @@ export class GameScene extends Phaser.Scene {
     const floor = ARENA_THEMES[this.arenaIndex].floor;
     if (floor && !this.textures.exists(floor.key)) this.load.image(floor.key, floor.path);
   }
-  init(data: { arenaIndex?: number; weaponId?: StarterWeaponId; daily?: { date: string; mutator: string } }) {
+  init(data: { arenaIndex?: number; weaponId?: StarterWeaponId; daily?: { date: string; mutator: string }; threat?: number }) {
     this.daily = data.daily;
+    // The daily is a fair board: always normal threat.
+    this.threat = this.daily ? 0 : clampThreat(data.threat ?? 0);
     // Before anything rolls: a daily run replays the same waves, offers, loot and contracts for
     // everyone that day; any other run is unseeded.
     setRunSeed(this.daily && `${this.daily.date}:${this.daily.mutator}`);
@@ -231,6 +240,8 @@ export class GameScene extends Phaser.Scene {
     this.milestoneIndex = 0;
     this.lastRunPhaseAt = 0;
     this.offeredAbilities = [];
+    this.offerIsMilestone = false;
+    this.rerollsLeft = 1;
     this.specialLastUsed = { nova: -99999, shield: -99999, overdrive: -99999 };
     this.nextChestAt = GAMEPLAY.chestFirstMs;
     this.finalChestDropped = false;
@@ -279,7 +290,7 @@ export class GameScene extends Phaser.Scene {
       maxSize: GAMEPLAY.maxXpOrbs,
       runChildUpdate: false,
     });
-    this.spawn = new SpawnSystem(new EnemyFactory(this), this.enemies, this.arenaIndex);
+    this.spawn = new SpawnSystem(new EnemyFactory(this), this.enemies, this.arenaIndex, this.threat);
     this.audio = new AudioManager(this);
     this.effects = new CombatEffects(this);
     this.impacts = new ImpactPresenter(this, this.effects, this.audio);
@@ -294,8 +305,8 @@ export class GameScene extends Phaser.Scene {
     this.objective = new SectorObjectiveSystem(this.arenaIndex,
       state => this.events.emit(Events.OBJECTIVE_CHANGED, state),
       state => this.completeObjective(state.metric));
-    this.encounters = new EncounterSystem(this, this.enemies, this.player, this.arenaIndex);
-    this.bossPhases = new BossPhaseDirector(this, this.enemies, this.arenaIndex);
+    this.encounters = new EncounterSystem(this, this.enemies, this.player, this.arenaIndex, this.threat);
+    this.bossPhases = new BossPhaseDirector(this, this.enemies, this.arenaIndex, this.threat);
     this.runEnd = new RunEndSystem(this, () => this.scene.stop('UI'));
     this.worldProps = new ExplosiveBarrelSystem(this, (x, y, damage, radius) =>
       this.plasmaExplosion(x, y, damage, radius, undefined, 'environment'),
@@ -600,9 +611,9 @@ export class GameScene extends Phaser.Scene {
   }
   private openLevelUp(milestone = false) {
     if (this.victoryPending) return;
-    const options = milestone ? [signatureAbilityId(this.selectedWeaponId), 'fan', 'phase_dash'].map(id => getAbilityById(id)!)
-      .filter(ability => (this.abilityLevels.get(ability.id) ?? 0) < ability.maxLevel) : chooseAbilities(this.abilityLevels);
+    const options = this.drawOffer(milestone);
     this.offeredAbilities = options.map(ability => ability.id);
+    this.offerIsMilestone = milestone;
     if (options.length === 0) {
       this.player.health.heal(20);
       this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
@@ -612,7 +623,27 @@ export class GameScene extends Phaser.Scene {
     this.physics.pause();
     this.audio.play('level_up');
     this.events.emit(Events.STATE_CHANGED, this.state);
-    this.events.emit(Events.PLAYER_LEVEL_UP, options);
+    this.events.emit(Events.PLAYER_LEVEL_UP, options, this.rerollsLeft);
+  }
+  /** `milestoneIndex` already counts the milestone being opened, so it is "milestones reached". */
+  private drawOffer(milestone: boolean, avoid?: ReadonlySet<string>) {
+    return upgradeOffer(this.abilityLevels, this.selectedWeaponId,
+      { milestone, milestonesReached: this.milestoneIndex }, { avoid });
+  }
+  /**
+   * Spends the run's reroll on the open level-up or milestone offer. The new hand comes from the
+   * same seeded stream, preferring cards the old one did not show. A chest also uses the
+   * LEVEL_UP state but leaves `offeredAbilities` empty, so it cannot be rerolled.
+   */
+  rerollUpgrades() {
+    if (this.state !== GameState.LEVEL_UP || this.offeredAbilities.length === 0 || this.rerollsLeft <= 0) return false;
+    const options = this.drawOffer(this.offerIsMilestone, new Set(this.offeredAbilities));
+    if (options.length === 0) return false;
+    this.rerollsLeft--;
+    this.offeredAbilities = options.map(ability => ability.id);
+    this.audio.tone(660, 0.14, 0.035);
+    this.events.emit(Events.PLAYER_LEVEL_UP, options, this.rerollsLeft);
+    return true;
   }
   selectAbility(id: string) {
     if (this.state !== GameState.LEVEL_UP || !this.offeredAbilities.includes(id)) return;
@@ -637,6 +668,9 @@ export class GameScene extends Phaser.Scene {
       this.player.health.heal(25);
       this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
     }
+    // R rerolls inside the modal and Q/E/R presses there do nothing, but Phaser keeps a press
+    // until JustDown reads it, so the first resumed frame would fire that special. Read them now.
+    for (const key of Object.values(this.specialKeys)) Phaser.Input.Keyboard.JustDown(key);
     this.state = this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
     this.physics.resume();
     this.events.emit(Events.ABILITY_SELECTED, id);
@@ -752,17 +786,22 @@ export class GameScene extends Phaser.Scene {
     if (this.activeSynergy) applyEquipmentModifiers(this.player.stats, this.activeSynergy.modifiers);
     this.player.setWeaponTier(this.activeSynergy ? 2 : (this.inventory.equippedWeapon?.rarity === 'LEGENDARY' ? 2 : 1));
   }
-  selectChestReward(id: 'repair' | 'charge' | 'weapon') {
+  selectChestReward(id: 'repair' | 'charge' | 'module') {
     if (id === 'repair') {
       this.player.health.heal(40);
       this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
     } else if (id === 'charge') {
       this.specialLastUsed = { nova: -99999, shield: -99999, overdrive: -99999 };
       this.player.activateShield(1800);
-    } else this.player.stats.attackDamage += 6;
+    }
     this.state = this.encounters.hasBossSpawned ? GameState.BOSS : GameState.PLAYING;
     this.physics.resume();
     this.events.emit(Events.STATE_CHANGED, this.state);
+    // Was +6 flat damage: half the pulse gun's base at minute one, a rounding error once enemy HP
+    // scales. A drop from the loot stream is rolled for the current level, so it keeps its worth
+    // all run, and the player still decides whether to install it. Spawned after resuming so its
+    // pickup cannot open the loot modal inside the chest's own step.
+    if (id === 'module') this.loot.spawnEquipmentDrop();
   }
   /** Q/E/R cooldown after OVERCLOCK; the ability bar shows its remaining seconds from this too. */
   getSpecialCooldown(id: SpecialAbilityId) {
@@ -884,6 +923,7 @@ export class GameScene extends Phaser.Scene {
       level: this.xp.level,
       victory,
       arenaIndex: this.arenaIndex,
+      threat: this.threat,
       weaponId: this.selectedWeaponId,
       contracts: this.contracts.summary(),
       summary,
@@ -968,7 +1008,7 @@ export class GameScene extends Phaser.Scene {
       const angle = (Math.PI * 2 * index) / spawns;
       // Split runners scale like any spawn at this moment, or late broods would burst into base-HP runners.
       this.enemies.add(createScaledEnemy(this, EnemyType.RUNNER, x + Math.cos(angle) * spread, y + Math.sin(angle) * spread,
-        this.survivalMs, this.arenaIndex));
+        this.survivalMs, this.arenaIndex, this.threat));
     }
   }
   /** Single fan-out point for momentum state: keeps `MOMENTUM_CHANGED` and the kill-streak
@@ -1095,7 +1135,9 @@ export class GameScene extends Phaser.Scene {
     this.objective.record('devices');
   }
   private completeObjective(metric: ObjectiveMetric) {
-    if (metric === 'kills') this.player.stats.attackDamage += 6;
+    // Proportional, like POWER: a flat +6 was most of a starter's damage early and nothing once
+    // enemy HP scales with the sector.
+    if (metric === 'kills') this.player.stats.attackDamage *= 1.12;
     else if (metric === 'shards') this.player.stats.xpMultiplier += 0.2;
     else {
       this.player.stats.maxHp += 18;

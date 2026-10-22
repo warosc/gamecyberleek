@@ -18,7 +18,7 @@ export interface SectorObjectiveState extends SectorObjectiveDefinition {
 
 export const SECTOR_OBJECTIVES: readonly SectorObjectiveDefinition[] = [
   { id: 'lab-purge', title: 'PURGA DE MUESTRAS', brief: 'Elimina 18 amenazas antes de 01:30',
-    metric: 'kills', target: 18, deadlineMs: 90000, reward: '+6 daño y alijo de equipo', color: 0x21e6ff },
+    metric: 'kills', target: 18, deadlineMs: 90000, reward: '+12% daño y alijo de equipo', color: 0x21e6ff },
   { id: 'bio-harvest', title: 'COSECHA DE BIO-DATOS', brief: 'Absorbe 22 fragmentos antes de 01:45',
     metric: 'shards', target: 22, deadlineMs: 105000, reward: '+20% experiencia y alijo', color: 0x73ef62 },
   { id: 'cryo-control', title: 'CONTROL DEL REACTOR', brief: 'Activa 2 dispositivos antes de 02:15',

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { hudFont, isCompactHud } from './HudLayout';
+import { fitText } from './SceneWidgets';
 
 export interface RewardCardSpec {
   accent: number;
@@ -12,6 +13,18 @@ export interface RewardCardSpec {
   footer?: string;
   /** Filled/total pips, so current strength and the cap are visible without reading. */
   pips?: { filled: number; total: number };
+}
+
+/** A secondary action under the cards that does not close the modal (the level-up reroll). */
+export interface RewardExtraAction {
+  label: string;
+  /** Phaser key name, bound while the action is enabled and shown on its badge. */
+  key: string;
+  enabled: boolean;
+  accent: number;
+  /** Centre of the button. */
+  y: number;
+  onActivate: () => void;
 }
 
 /**
@@ -49,13 +62,14 @@ export class RewardChooser {
   private focus = 0;
   private resolved = false;
   private armedAt = 0;
+  private extra?: { button: Phaser.GameObjects.Rectangle; action: RewardExtraAction; used: boolean };
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly onSelect: (index: number) => void,
   ) {}
 
-  build(specs: RewardCardSpec[], centerX: number, centerY: number) {
+  build(specs: RewardCardSpec[], centerX: number, centerY: number, extra?: RewardExtraAction) {
     this.armedAt = this.scene.time.now + REWARD_ARM_MS;
     const parts: Phaser.GameObjects.GameObject[] = [];
     const layout = rewardCardLayout(isCompactHud(this.scene));
@@ -144,8 +158,48 @@ export class RewardChooser {
       this.glows.push(glow);
     });
 
+    if (extra) parts.push(...this.buildExtra(extra, centerX));
     this.bindKeyboard(specs.length);
     this.setFocus(0);
+    return parts;
+  }
+
+  /**
+   * The button sits under the cards so DOWN reaches it: the pad bridge replays the d-pad as
+   * arrows and A as ENTER here, which gives the pad the action without a button of its own.
+   * Spent, it stays on screen greyed out, so the player learns there was one per run.
+   */
+  private buildExtra(action: RewardExtraAction, centerX: number) {
+    const compact = isCompactHud(this.scene);
+    const width = compact ? 420 : 300;
+    const height = compact ? 46 : 38;
+    const color = action.enabled ? action.accent : 0x4d6070;
+    const hex = `#${color.toString(16).padStart(6, '0')}`;
+    const button = this.scene.add
+      .rectangle(centerX, action.y, width, height, 0x0b1d30, 0.98)
+      .setStrokeStyle(2, color, action.enabled ? 0.9 : 0.5);
+    const label = this.scene.add
+      .text(centerX + 14, action.y, action.label, {
+        fontFamily: 'Arial Black', fontSize: hudFont(this.scene, 13), color: hex, letterSpacing: 2,
+      })
+      .setOrigin(0.5);
+    fitText(label, width - 70, 10);
+    const badgeX = centerX - width / 2 + 22;
+    const badge = this.scene.add.circle(badgeX, action.y, compact ? 16 : 13, 0x06101d, 1).setStrokeStyle(2, color, 0.95);
+    const badgeLabel = this.scene.add
+      .text(badgeX, action.y, action.key, { fontFamily: 'Arial Black', fontSize: hudFont(this.scene, 12), color: '#ffffff' })
+      .setOrigin(0.5);
+    const parts = [button, label, badge, badgeLabel];
+    if (!action.enabled) {
+      parts.forEach(part => part.setAlpha(0.55));
+      return parts;
+    }
+    this.extra = { button, action, used: false };
+    button.setInteractive({ useHandCursor: true });
+    button.on('pointerdown', () => {
+      if (this.armed) this.activateExtra();
+    });
+    button.on('pointerover', () => this.setFocus(this.cards.length));
     return parts;
   }
 
@@ -155,12 +209,30 @@ export class RewardChooser {
     const handlers: Array<[string, () => void]> = [];
     for (let index = 0; index < Math.min(count, HOTKEYS.length); index++)
       handlers.push([`keydown-${HOTKEYS[index]}`, () => this.select(index)]);
-    handlers.push(['keydown-LEFT', () => this.setFocus((this.focus + count - 1) % count)]);
-    handlers.push(['keydown-RIGHT', () => this.setFocus((this.focus + 1) % count)]);
+    // From the extra button LEFT / RIGHT go back to the cards: the first card, or the last.
+    handlers.push(['keydown-LEFT', () => this.setFocus(this.focus >= count ? count - 1 : (this.focus + count - 1) % count)]);
+    handlers.push(['keydown-RIGHT', () => this.setFocus(this.focus >= count ? 0 : (this.focus + 1) % count)]);
+    let cardFocus = 0;
+    handlers.push(['keydown-DOWN', () => {
+      if (!this.extra || this.focus >= count) return;
+      cardFocus = this.focus;
+      this.setFocus(count);
+    }]);
+    handlers.push(['keydown-UP', () => {
+      if (this.focus >= count) this.setFocus(cardFocus);
+    }]);
+    // The extra action's key is armed like ENTER: R is also the OVERDRIVE special, and a player
+    // still pressing it when the modal opens must not spend the run's only reroll by accident.
+    if (this.extra)
+      handlers.push([`keydown-${this.extra.action.key}`, (event?: KeyboardEvent) => {
+        if (this.armed && !event?.repeat) this.activateExtra();
+      }]);
     // Enter only. SPACE is the dash key, so confirming with it would fire a dash the instant
     // the modal closed and the run resumed.
     const confirm = (event?: KeyboardEvent) => {
-      if (this.armed && !event?.repeat) this.select(this.focus);
+      if (!this.armed || event?.repeat) return;
+      if (this.focus >= count) this.activateExtra();
+      else this.select(this.focus);
     };
     for (const [event, handler] of [...handlers, ['keydown-ENTER', confirm] as const]) {
       keyboard.on(event, handler);
@@ -180,6 +252,16 @@ export class RewardChooser {
       card.setScale(focused ? 1.03 : 1);
       this.glows[position].setScale(focused ? 1.03 : 1);
     });
+    const extraFocused = index >= this.cards.length;
+    this.extra?.button.setFillStyle(extraFocused ? 0x12304a : 0x0b1d30, extraFocused ? 1 : 0.98)
+      .setScale(extraFocused ? 1.04 : 1);
+  }
+
+  /** Once per chooser: the action replaces the modal, and a second press must not spend twice. */
+  private activateExtra() {
+    if (!this.extra || this.extra.used || this.resolved) return;
+    this.extra.used = true;
+    this.extra.action.onActivate();
   }
 
   private select(index: number) {
