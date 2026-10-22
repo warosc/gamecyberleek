@@ -21,6 +21,7 @@ import type { RunPhaseCallout } from '../config/RunPacing';
 import { MomentumHud } from '../ui/MomentumHud';
 import type { MomentumState } from '../systems/CombatMomentum';
 import { ContractHud } from '../ui/ContractHud';
+import { AchievementToast } from '../ui/AchievementToast';
 import { contractDescription, type ContractProgress } from '../systems/ContractSystem';
 import { MinibossBanner } from '../ui/MinibossBanner';
 import { buildInventoryPanel, buildLootDecision, showLootBanner } from '../ui/LootPanels';
@@ -78,8 +79,10 @@ export class UIScene extends Phaser.Scene {
   private objectiveProgress!: Phaser.GameObjects.Text;
   /** Phone-sized display (HudLayout): larger type and the roomier layouts that go with it. */
   private compact = false;
-  private briefing?: Phaser.GameObjects.Container;
+  /** True until the contracts have been introduced on their rows (see revealBriefing). */
+  private briefingPending = false;
   private briefingWaitMs = 0;
+  private achievements!: AchievementToast;
   /** Last frame's "fully charged" state per power, to spot the first charge and the first use. */
   private readonly powerCharged = new Map<SpecialAbilityId, boolean>();
   constructor() {
@@ -88,7 +91,7 @@ export class UIScene extends Phaser.Scene {
   create(data: { game: GameScene }) {
     this.gameScene = data.game;
     this.compact = isCompactHud(this);
-    this.briefing = undefined;
+    this.briefingPending = false;
     this.briefingWaitMs = 0;
     this.powerCharged.clear();
     this.modal = new ModalOverlay(this);
@@ -119,7 +122,8 @@ export class UIScene extends Phaser.Scene {
     this.contractHud = new ContractHud(this, this.gameScene.contracts.list, this.gameScene.mobileInput.active);
     // Built now (hidden) and revealed by revealBriefing(): at once for experienced players, after
     // the movement and aim hints on a first run.
-    this.briefing = this.buildContractBriefing();
+    this.briefingPending = true;
+    this.achievements = new AchievementToast(this, this.gameScene.mobileInput.active);
     this.minibossBanner = new MinibossBanner(this);
     // Top-anchored so the panel can grow downward when the brief wraps at phone size.
     const column = rightColumn(this.gameScene.mobileInput.active, this.compact);
@@ -198,6 +202,7 @@ export class UIScene extends Phaser.Scene {
       this.mobileControls?.destroy();
       this.hints?.destroy();
       this.contractHud.destroy();
+      this.achievements.destroy();
       this.gameScene.events.off('weapon-fired', this.onWeaponFired, this);
       this.gameScene.events.off(Events.PLAYER_DASHED, this.onDashed, this);
       this.gameScene.events.off(Events.PLAYER_DAMAGED, this.onHealth, this);
@@ -237,7 +242,7 @@ export class UIScene extends Phaser.Scene {
     const live = (this.gameScene.state === GameState.PLAYING || this.gameScene.state === GameState.BOSS) && !this.modal.active;
     this.trackPowers();
     this.hints?.update(delta, live, this.hintDevice());
-    if (this.briefing && !this.briefing.visible) {
+    if (this.briefingPending) {
       if (live) this.briefingWaitMs += delta;
       if (this.hints?.controlsLearned !== false || this.briefingWaitMs >= BRIEFING_FALLBACK_MS) this.revealBriefing();
     }
@@ -338,8 +343,8 @@ export class UIScene extends Phaser.Scene {
     else fitText(this.objectiveProgress, inner, 9);
     if (state.status !== 'active') {
       if (!reducedMotion()) this.tweens.add({ targets: this.objectivePanel, scale: 1.08, duration: 120, yoyo: true });
-      if (state.status === 'complete') this.phaseBanner.show({
-        title: t('objective.done'), brief: td(state.reward), color: state.color,
+      if (state.status === 'complete') this.achievements.show({
+        kicker: t('objective.done'), title: td(state.title), detail: td(state.reward), icon: '★', color: state.color,
       });
       // A finished objective has nothing left to track; it used to sit in the corner for the
       // rest of the run. It stays long enough to read the outcome, then gives the arena back.
@@ -567,74 +572,22 @@ export class UIScene extends Phaser.Scene {
   }
   private onContractCompleted(contract: ContractProgress) {
     this.contractHud.celebrate(contract.kind);
+    // The row's pop alone was easy to miss in a fight: completions also get an achievement plate.
+    this.achievements.show({
+      kicker: t('achievement.contract'), title: td(contract.title),
+      detail: t('achievement.credits', { credits: contract.reward }), icon: '✓', color: 0x73ef62,
+    });
     if (loadProfile().vibration) pulseHaptics(20);
   }
   /**
-   * One-off intro banner spelling out what the three rolled contracts actually ask for.
-   * The compact HUD only has room for a short title (e.g. "SABOTAJE"), which reads fine once
-   * a player already knows the system but not on a first look — this is the one place the
-   * full `contractDescription()` text (already written, previously unused anywhere) is shown.
-   * Purely decorative: it never pauses gameplay, same as PhaseBanner. Built hidden; see
-   * revealBriefing() for when it appears.
+   * Introduces the rolled contracts on their own rows (ContractHud.introduce). The compact rows
+   * only fit a short title such as "SABOTAJE"; this is where the full objective is spelled out,
+   * without the centre panel that used to cover the player for four seconds.
    */
-  private buildContractBriefing() {
-    const contracts = this.gameScene.contracts.list;
-    const lines = contracts.map((contract) => `${td(contract.title)} — ${contractDescription(contract)}`);
-    // Kept clear of the right-hand HUD column (objective, chain, live board: 350 px wide). At
-    // phone size the lines are 22px and wrap, so the banner takes more of the wider canvas.
-    const width = this.compact
-      ? Math.max(540, Math.min(860, GAME_WIDTH - 2 * 350))
-      : Math.min(this.gameScene.mobileInput.active ? 640 : 720, GAME_WIDTH - 2 * 370);
-    const title = this.add
-      .text(0, 0, t('contracts.assigned'), {
-        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this, 16), color: '#21e6ff', letterSpacing: 3,
-      })
-      .setOrigin(0.5);
-    const rows = lines.map((line) => this.add
-      .text(0, 0, line, {
-        fontFamily: 'monospace', fontSize: hudFont(this, 13), color: '#c7d9e2', align: 'center',
-        wordWrap: { width: width - 32 },
-      })
-      .setOrigin(0.5, 0));
-    // Stacked by measured height: desktop keeps its 28px rhythm, wrapped phone lines take the
-    // room they need.
-    let cursor = 24 + title.height / 2 + 8;
-    const tops = rows.map((row) => {
-      const top = cursor;
-      cursor += row.height + (this.compact ? 8 : 13);
-      return top;
-    });
-    const height = Math.ceil(cursor + 16);
-    title.setY(-height / 2 + 24);
-    rows.forEach((row, index) => row.setY(-height / 2 + tops[index]));
-    const parts: Phaser.GameObjects.GameObject[] = [
-      this.add.rectangle(0, 0, width, height, 0x06101d, 0.95).setStrokeStyle(3, 0x21e6ff, 0.75),
-      title,
-      ...rows,
-    ];
-    // Depth 95: above the phase banner (90) so it isn't lost under one at the same instant,
-    // below every modal (100+) so a level-up or chest reward still takes priority.
-    return this.add
-      .container(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 30, parts)
-      .setDepth(95)
-      .setAlpha(0)
-      .setVisible(false)
-      .setName('contract-briefing');
-  }
   private revealBriefing() {
-    const banner = this.briefing;
-    if (!banner || banner.visible) return;
-    const still = reducedMotion();
-    banner.setVisible(true).setScale(still ? 1 : 0.9);
-    this.tweens.add({
-      targets: banner, alpha: 1, scale: 1, duration: 260, ease: still ? 'Linear' : 'Back.Out',
-      // Wrapped phone lines are more to read, so it holds a second longer there.
-      hold: this.compact ? 4400 : 3400, yoyo: true,
-      onComplete: () => {
-        if (this.briefing === banner) this.briefing = undefined;
-        banner.destroy(true);
-      },
-    });
+    if (!this.briefingPending) return;
+    this.briefingPending = false;
+    this.contractHud.introduce(this.gameScene.contracts.list.map(contract => contractDescription(contract)));
   }
   private onState(state: GameState) {
     if (state === GameState.PAUSED && !this.modal.active) {

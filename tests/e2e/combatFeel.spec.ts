@@ -321,30 +321,43 @@ test('contracts roll three distinct objectives, track progress from combat event
   expect(credited.bioCredits).toBeGreaterThanOrEqual(45 + 60 + 70 + 120);
 });
 
-test('shows a one-time briefing naming each rolled contract\'s full objective', async ({ page }) => {
+test('introduces each rolled contract beside its row without covering the arena centre', async ({ page }) => {
   await deploy(page);
+  // A fresh profile waits for the movement/aim hints (or 10 s of play); reveal it directly.
+  await page.evaluate(() => (window.combatGame.scene.getScene('UI') as unknown as { revealBriefing: () => void }).revealBriefing());
+  await page.waitForTimeout(1400);
   const result = await page.evaluate(() => {
     const scene = window.combatGame.scene.getScene('Game') as GameScene;
     const ui = window.combatGame.scene.getScene('UI');
-    const findByName = (list: unknown, targetName: string): { list?: unknown } | null => {
-      for (const child of list as { name?: string; list?: unknown }[]) {
-        if (child.name === targetName) return child;
-        if (child.list) {
-          const found = findByName(child.list, targetName);
-          if (found) return found;
-        }
-      }
-      return null;
+    const chips = [0, 1, 2].map(index => ui.children.getByName(`contract-brief-${index}`) as Phaser.GameObjects.Container | null);
+    return {
+      count: scene.contracts.list.length,
+      texts: chips.map(chip => (chip?.list.find(item => item.type === 'Text') as Phaser.GameObjects.Text | undefined)?.text ?? ''),
+      // The old briefing was a centre panel; the chips must stay in the left part of the screen.
+      rightEdges: chips.map(chip => (chip ? chip.getBounds().right : 0)),
+      oldPanel: Boolean(ui.children.getByName('contract-briefing')),
+      width: window.combatGame.scale.gameSize.width,
     };
-    const banner = findByName(ui.children.list, 'contract-briefing');
-    const lines = (banner?.list as { text?: string }[] | undefined)
-      ?.map((child) => child.text)
-      .filter((text): text is string => Boolean(text));
-    return { titles: scene.contracts.list.map((c) => c.title), lines };
   });
-  expect(result.lines).toBeDefined();
-  expect(result.lines).toContain('CONTRATOS ASIGNADOS');
-  for (const title of result.titles) expect(result.lines!.some((line) => line.startsWith(title))).toBe(true);
+  expect(result.oldPanel).toBe(false);
+  expect(result.texts.filter(Boolean)).toHaveLength(result.count);
+  for (const text of result.texts) expect(text.length).toBeGreaterThan(8);
+  for (const right of result.rightEdges) expect(right).toBeLessThan(result.width * 0.65);
+});
+
+test('a completed contract raises an achievement plate without pausing play', async ({ page }) => {
+  await deploy(page);
+  const result = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const contract = scene.contracts.list[0];
+    scene.events.emit('contract-completed', { ...contract, completed: true });
+    const ui = window.combatGame.scene.getScene('UI');
+    const plate = ui.children.getByName('achievement-toast') as Phaser.GameObjects.Container | null;
+    const texts = (plate?.list ?? []).filter(item => item.type === 'Text').map(item => (item as Phaser.GameObjects.Text).text);
+    return { state: scene.state, texts };
+  });
+  expect(result.state).toBe('PLAYING');
+  expect(result.texts.join(' ')).toContain('CONTRATO COMPLETADO');
 });
 
 test('wide Safari landscape fills the complete viewport without side bars', async ({ page }) => {

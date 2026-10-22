@@ -144,6 +144,51 @@ export class ContractHud {
     });
   }
 
+  /**
+   * Introduces the rolled contracts where they live instead of in a centre panel. That panel
+   * stopped play reading for four seconds at the start of every run and covered the player;
+   * now each row flashes in turn and a chip slides out beside it with the full objective, then
+   * fades. The rows themselves never move or resize, so the tracker's layout guarantees hold.
+   */
+  introduce(descriptions: readonly string[]) {
+    const scene = this.container.scene;
+    const still = reducedMotion();
+    const holdMs = this.rowHeight > 30 ? 5600 : 4600;
+    this.rows.forEach((row, index) => {
+      const description = descriptions[index];
+      if (!description) return;
+      const delay = index * 380;
+      const y = row.back.y + this.rowHeight / 2;
+      const chipX = PANEL_X + this.panelWidth + 8;
+      const text = scene.add.text(14, 0, description, {
+        fontFamily: 'monospace', fontSize: `${Math.round(this.fontSize * 1.05)}px`, color: '#d9f6ff',
+      }).setOrigin(0, 0.5);
+      const width = Math.ceil(text.width) + 26;
+      const chip = scene.add.container(chipX, y, [
+        scene.add.rectangle(0, 0, width, this.rowHeight - 4, 0x06101d, 0.86).setOrigin(0, 0.5).setStrokeStyle(1, ACCENT, 0.45),
+        scene.add.rectangle(0, 0, 4, this.rowHeight - 4, ACCENT, 0.95).setOrigin(0, 0.5),
+        text,
+      ]).setDepth(69).setName(`contract-brief-${index}`).setAlpha(0);
+      if (still) {
+        scene.tweens.add({ targets: chip, alpha: 1, delay, duration: 160, hold: holdMs, yoyo: true, onComplete: () => chip.destroy(true) });
+        return;
+      }
+      chip.setX(chipX - 24);
+      scene.tweens.add({
+        targets: chip, alpha: 1, x: chipX, delay, duration: 300, ease: 'Cubic.Out', hold: holdMs, yoyo: true,
+        onComplete: () => chip.destroy(true),
+      });
+      // A light sweeping the row as its chip arrives: the eye follows it down the list.
+      const sweep = scene.add.rectangle(PANEL_X, y, 36, this.rowHeight, 0xffffff, 0.28)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(71).setAlpha(0);
+      scene.tweens.add({
+        targets: sweep, alpha: { from: 0.9, to: 0 }, x: PANEL_X + this.panelWidth, delay, duration: 520, ease: 'Sine.Out',
+        onComplete: () => sweep.destroy(),
+      });
+      scene.tweens.add({ targets: row.marker, scaleY: 1.4, delay, duration: 160, yoyo: true });
+    });
+  }
+
   destroy() {
     this.container.destroy(true);
   }
