@@ -5,6 +5,7 @@ import type { LiveEntry } from '../online/LiveRanking';
 import { reducedMotion } from '../systems/RuntimeSettings';
 import { fitText } from './SceneWidgets';
 import { RIGHT_EDGE_INSET, hudFont, hudPx, isCompactHud, rightColumn } from './HudLayout';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /**
  * Live daily board: who else is playing today's daily right now, and their live score. Sits
@@ -38,7 +39,7 @@ export class LiveBoardHud {
     const left = -this.width / 2 + 15;
     this.back = scene.add.rectangle(0, 0, this.width, 60, 0x06101d, 0.9).setOrigin(0.5, 0).setStrokeStyle(2, 0xff476f, 0.6);
     this.title = scene.add.text(left, 8, t('live.connecting'), {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 12), color: '#ff476f', letterSpacing: 1,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 12), color: '#ff476f', letterSpacing: 1,
     });
     this.recordTop = 8 + Math.ceil(this.title.height) + 2;
     this.rowsTop = this.recordTop + 2;

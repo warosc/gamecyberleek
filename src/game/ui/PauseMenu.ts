@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import type { GameScene } from '../scenes/GameScene';
 import { t, td } from '../i18n';
 import { FocusGroup, UI, framePanel, isCompact, panelButton, uiFont, type PanelButton } from './SceneWidgets';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /** Builds the pause overlay. The objects are handed to `ModalOverlay`, which owns their life. */
 export class PauseMenu {
@@ -25,7 +26,7 @@ export class PauseMenu {
     parts.push(
       this.scene.add
         .text(GAME_WIDTH / 2, 240, t('pause.title'), {
-          fontFamily: 'Arial Black',
+          fontFamily: DISPLAY_FONT, fontStyle: 'bold',
           fontSize: uiFont(this.scene, 34),
           color: '#eaffff',
         })
@@ -42,7 +43,7 @@ export class PauseMenu {
             percent: Math.round(this.game.player.stats.damageReduction * 100),
           }),
           {
-            fontFamily: 'Arial Black',
+            fontFamily: DISPLAY_FONT, fontStyle: 'bold',
             fontSize: uiFont(this.scene, 12),
             color: '#73ef62',
             letterSpacing: 1,
@@ -55,7 +56,7 @@ export class PauseMenu {
     parts.push(...resume.parts, ...menu.parts);
     const volumeLabel = this.scene.add
       .text(GAME_WIDTH / 2, 505, '', {
-        fontFamily: 'Arial Black',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold',
         fontSize: uiFont(this.scene, 14),
         color: '#eaffff',
         letterSpacing: 1,

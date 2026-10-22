@@ -9,6 +9,7 @@ import { t, td } from '../i18n';
 import { FocusGroup, UI, fitText, framePanel, hex, isCompact, panelButton, uiFont } from '../ui/SceneWidgets';
 import { backdropTexture, queueSceneArt } from '../config/SceneArt';
 import { allowedThreat, threatLabel } from '../progression/ThreatLevels';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 const BUTTON_WIDTH = 270;
 const BUTTON_GAP = 20;
@@ -49,11 +50,11 @@ export class GameOverScene extends Phaser.Scene {
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020710, own ? 0.3 : 0.68);
     framePanel(this, GAME_WIDTH / 2, 358, 1140, 640, accent, { fill: 0x07111f, fillAlpha: own ? 0.74 : 0.96, band: 0.06, strokeAlpha: 0.85, cut: 26, glow: 0.12 });
     this.add.text(GAME_WIDTH / 2, 80, t(data.victory ? 'gameover.victory' : 'gameover.defeat'), {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 42), color: hex(accent),
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 42), color: hex(accent),
       stroke: '#020710', strokeThickness: 8,
     }).setOrigin(0.5).setShadow(0, 0, hex(accent), 14, false, true);
     this.add.text(GAME_WIDTH / 2, 128, t(data.victory ? 'gameover.victorySub' : 'gameover.defeatSub'), {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 13), color: '#21e6ff', letterSpacing: isCompact(this) ? 2 : 4,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 13), color: '#21e6ff', letterSpacing: isCompact(this) ? 2 : 4,
     }).setOrigin(0.5);
     // Everything below is laid out on the 1280 design width and centred on wider phone canvases.
     const ox = (GAME_WIDTH - 1280) / 2;
@@ -74,11 +75,11 @@ export class GameOverScene extends Phaser.Scene {
     const threat = data.threat ?? 0;
     const runLine = t('gameover.run', { level: data.level, sector: data.arenaIndex + 1, taken: summary.damageTaken });
     fitText(this.add.text(ox + 140, 318, threat > 0 ? `${runLine}  ·  ${threatLabel(threat)}` : runLine, {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 15), color: UI.text, letterSpacing: 1,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 15), color: UI.text, letterSpacing: 1,
     }).setOrigin(0, 0.5).setName('results-run'), 1000);
-    fitText(this.add.text(ox + 140, 356, build, { fontFamily: 'Arial Black', fontSize: uiFont(this, 14), color: '#d49cff' })
+    fitText(this.add.text(ox + 140, 356, build, { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 14), color: '#d49cff' })
       .setOrigin(0, 0.5).setName('results-build'), 1000);
-    fitText(this.add.text(ox + 140, 394, t('gameover.equipment', { items }), { fontFamily: 'Arial Black', fontSize: uiFont(this, 13), color: '#9dc5d6' })
+    fitText(this.add.text(ox + 140, 394, t('gameover.equipment', { items }), { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 13), color: '#9dc5d6' })
       .setOrigin(0, 0.5).setName('results-equipment'), 1000);
 
     const reward = t('gameover.rewards', {
@@ -86,7 +87,7 @@ export class GameOverScene extends Phaser.Scene {
     });
     framePanel(this, GAME_WIDTH / 2, 452, 960, 60, UI.gold, { fill: 0x102a32, fillAlpha: 0.92, band: 0.1, strokeAlpha: 0.75, cut: 12 });
     fitText(this.add.text(GAME_WIDTH / 2, 452, reward, {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 19), color: '#ffc857', letterSpacing: 2,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 19), color: '#ffc857', letterSpacing: 2,
     }).setOrigin(0.5).setName('results-rewards'), 920);
 
     // Up to two short lines between the rewards and the buttons, most important first.
@@ -115,7 +116,7 @@ export class GameOverScene extends Phaser.Scene {
         color: '#ff8a3d', name: 'results-threat',
       });
     notes.slice(0, 2).forEach((note, index) => fitText(this.add.text(GAME_WIDTH / 2, 500 + index * 28, note.text, {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 14), color: note.color, align: 'center',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 14), color: note.color, align: 'center',
     }).setOrigin(0.5).setName(note.name), 1080));
     const audio = new AudioManager(this);
     audio.playStinger(data.victory ? 'victory' : 'defeat');
@@ -166,8 +167,8 @@ export class GameOverScene extends Phaser.Scene {
   private statCard(x: number, y: number, label: string, value: string, name: string) {
     framePanel(this, x, y, 236, 110, UI.cyan, { fill: 0x0b1b2b, strokeAlpha: 0.4, band: 0.08, cut: 14 });
     fitText(this.add.text(x, y - 28, label, {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: UI.muted, letterSpacing: 2,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 11), color: UI.muted, letterSpacing: 2,
     }).setOrigin(0.5), 216);
-    this.add.text(x, y + 16, value, { fontFamily: 'Arial Black', fontSize: uiFont(this, 30), color: UI.text }).setOrigin(0.5).setName(name);
+    this.add.text(x, y + 16, value, { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 30), color: UI.text }).setOrigin(0.5).setName(name);
   }
 }

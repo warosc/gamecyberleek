@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAbilities';
 import { t, td } from '../i18n';
 import { hudFont, isCompactHud } from './HudLayout';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /** Owns the special-ability buttons and their cooldown readouts on both layouts. */
 export class AbilityBar {
@@ -31,7 +32,9 @@ export class AbilityBar {
       scene.add
         .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 84, compact ? 3 * width + 2 * (spacing - width) + 42 : 430, compact ? 100 : 96, 0x04101c, 0.7)
         .setStrokeStyle(2, 0x21e6ff, 0.22)
-        .setDepth(1);
+        // Behind the buttons: at depth 1 this 70 % backdrop sat on top of them, so ready powers
+        // looked greyed out on every phone.
+        .setDepth(-1);
     SPECIAL_ABILITIES.forEach((ability, index) => {
       // Desktop keeps the group's right edge 45px from the canvas edge whatever the button width.
       const x = mobile ? GAME_WIDTH / 2 + (index - 1) * spacing : GAME_WIDTH - 45 - width / 2 - (2 - index) * spacing;
@@ -49,7 +52,7 @@ export class AbilityBar {
       scene.add.circle(keyX, rowY, keyRadius, 0x06101d).setStrokeStyle(2, ability.color);
       scene.add
         .text(keyX, rowY, ability.key, {
-          fontFamily: 'Arial Black',
+          fontFamily: DISPLAY_FONT, fontStyle: 'bold',
           fontSize: hudFont(scene, 15),
           color: '#ffffff',
         })
@@ -62,7 +65,7 @@ export class AbilityBar {
       const labelWidth = labelRight - labelLeft;
       const label = scene.add
         .text(labelLeft + labelWidth / 2, rowY, td(ability.name), {
-          fontFamily: 'Arial Black',
+          fontFamily: DISPLAY_FONT, fontStyle: 'bold',
           fontSize: hudFont(scene, 10),
           color: '#eaffff',
           align: 'center',
@@ -72,7 +75,7 @@ export class AbilityBar {
       if (label.width > labelWidth) label.setScale(labelWidth / label.width);
       const cooldownText = scene.add
         .text(x, y + (compact ? 12 : 8), t('hud.ready'), {
-          fontFamily: 'Arial Black',
+          fontFamily: DISPLAY_FONT, fontStyle: 'bold',
           fontSize: hudFont(scene, 10),
           color: '#ffffff',
         })

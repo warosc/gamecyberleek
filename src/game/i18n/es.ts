@@ -30,6 +30,7 @@ export const es = {
   'menu.dailyInfo': 'DIARIA {date}  ·  {sector}  ·  {weapon}  ·  {mutator}',
   'menu.dailyBest': 'MEJOR HOY  {score}',
   'menu.dailyBonus': 'BONUS DIARIO +{bonus}  ·  RACHA {days}',
+  'menu.dailyBonusFirst': 'BONUS DIARIO +{bonus}  ·  EMPIEZA TU RACHA',
   'menu.dailyClaimed': 'BONUS DE HOY COBRADO  ·  RACHA {days}',
   'menu.threatDetail': '+{health}% PV ENEMIGO  ·  CRÉDITOS ×{multiplier}',
   'menu.threatLocked': 'BLOQUEADA — GANA ESTE SECTOR EN {current}',

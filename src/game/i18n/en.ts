@@ -32,6 +32,7 @@ export const en: Record<StringKey, string> = {
   'menu.dailyInfo': 'DAILY {date}  ·  {sector}  ·  {weapon}  ·  {mutator}',
   'menu.dailyBest': "TODAY'S BEST  {score}",
   'menu.dailyBonus': 'DAILY BONUS +{bonus}  ·  STREAK {days}',
+  'menu.dailyBonusFirst': 'DAILY BONUS +{bonus}  ·  START YOUR STREAK',
   'menu.dailyClaimed': "TODAY'S BONUS CLAIMED  ·  STREAK {days}",
   'menu.threatDetail': '+{health}% ENEMY HP  ·  CREDITS ×{multiplier}',
   'menu.threatLocked': 'LOCKED — WIN THIS SECTOR AT {current}',

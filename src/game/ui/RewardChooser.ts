@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { hudFont, isCompactHud } from './HudLayout';
 import { fitText } from './SceneWidgets';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 export interface RewardCardSpec {
   accent: number;
@@ -90,11 +91,11 @@ export class RewardChooser {
         .circle(x, top + layout.icon, layout.iconRadius, 0x06101d, 1)
         .setStrokeStyle(3, spec.accent, 0.95);
       const iconLabel = this.scene.add
-        .text(x, top + layout.icon, spec.icon, { fontFamily: 'Arial Black', fontSize: '30px', color: hex })
+        .text(x, top + layout.icon, spec.icon, { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '30px', color: hex })
         .setOrigin(0.5);
       const title = this.scene.add
         .text(x, top + layout.title, spec.name, {
-          fontFamily: 'Arial Black',
+          fontFamily: DISPLAY_FONT, fontStyle: 'bold',
           fontSize: hudFont(this.scene, 19),
           color: '#eaffff',
           align: 'center',
@@ -109,6 +110,11 @@ export class RewardChooser {
           wordWrap: { width: CARD_WIDTH - 44 },
         })
         .setOrigin(0.5);
+      // A two-line name ("REPARACIÓN DE CAMPO") centred on its slot reached up into the icon, so
+      // the name hangs from just under the icon and the effect moves down when it needs to.
+      const titleTop = Math.max(top + layout.title - title.height / 2, top + layout.icon + layout.iconRadius + 8);
+      title.setOrigin(0.5, 0).setY(titleTop);
+      effect.setY(Math.max(top + layout.effect, titleTop + title.height + 8 + effect.height / 2));
       parts.push(glow, card, icon, iconLabel, title, effect);
 
       if (spec.pips) {
@@ -130,7 +136,7 @@ export class RewardChooser {
         parts.push(
           this.scene.add
             .text(x, top + layout.footer, spec.footer, {
-              fontFamily: 'Arial Black',
+              fontFamily: DISPLAY_FONT, fontStyle: 'bold',
               fontSize: hudFont(this.scene, 12),
               color: hex,
             })
@@ -143,7 +149,7 @@ export class RewardChooser {
         .setStrokeStyle(2, spec.accent, 0.95);
       const badgeLabel = this.scene.add
         .text(x - CARD_WIDTH / 2 + 22, top + layout.badge, String(index + 1), {
-          fontFamily: 'Arial Black',
+          fontFamily: DISPLAY_FONT, fontStyle: 'bold',
           fontSize: hudFont(this.scene, 14),
           color: '#ffffff',
         })
@@ -180,14 +186,14 @@ export class RewardChooser {
       .setStrokeStyle(2, color, action.enabled ? 0.9 : 0.5);
     const label = this.scene.add
       .text(centerX + 14, action.y, action.label, {
-        fontFamily: 'Arial Black', fontSize: hudFont(this.scene, 13), color: hex, letterSpacing: 2,
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this.scene, 13), color: hex, letterSpacing: 2,
       })
       .setOrigin(0.5);
     fitText(label, width - 70, 10);
     const badgeX = centerX - width / 2 + 22;
     const badge = this.scene.add.circle(badgeX, action.y, compact ? 16 : 13, 0x06101d, 1).setStrokeStyle(2, color, 0.95);
     const badgeLabel = this.scene.add
-      .text(badgeX, action.y, action.key, { fontFamily: 'Arial Black', fontSize: hudFont(this.scene, 12), color: '#ffffff' })
+      .text(badgeX, action.y, action.key, { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this.scene, 12), color: '#ffffff' })
       .setOrigin(0.5);
     const parts = [button, label, badge, badgeLabel];
     if (!action.enabled) {

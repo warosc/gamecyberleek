@@ -31,6 +31,7 @@ import type { LiveEntry } from '../online/LiveRanking';
 import { abilityText, t, td } from '../i18n';
 import type { BuildSynergy, combatRating } from '../systems/BuildProgression';
 import type { SectorObjectiveState } from '../systems/SectorObjectiveSystem';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /**
  * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
@@ -126,7 +127,7 @@ export class UIScene extends Phaser.Scene {
     this.objectiveBack = this.add.rectangle(0, 0, objectiveWidth, 70, 0x06101d, 0.9)
       .setOrigin(0.5, 0).setStrokeStyle(2, 0x21e6ff, 0.55);
     this.objectiveTitle = this.add.text(-objectiveWidth / 2 + 17, this.compact ? 9 : 13, t('objective.optional'), {
-      fontFamily: 'Arial Black', fontSize: hudFont(this, 11), color: '#21e6ff', letterSpacing: 1,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this, 11), color: '#21e6ff', letterSpacing: 1,
     });
     this.objectiveProgress = this.add.text(-objectiveWidth / 2 + 17, this.compact ? 11 + Math.ceil(this.objectiveTitle.height) : 39, '', {
       fontFamily: 'monospace', fontSize: hudFont(this, 11), color: '#c7d9e2',
@@ -291,7 +292,7 @@ export class UIScene extends Phaser.Scene {
     const plate = this.add.rectangle(GAME_WIDTH / 2, centerY, width, this.compact ? 84 : 62, 0x061323, 0.94)
       .setStrokeStyle(2, 0x73ef62, 0.85);
     const title = fitText(this.add.text(GAME_WIDTH / 2, centerY - (this.compact ? 16 : 12), t('xp.title'), {
-      fontFamily: 'Arial Black', fontSize: hudFont(this, 16), color: '#73ef62', letterSpacing: 2,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this, 16), color: '#73ef62', letterSpacing: 2,
     }).setOrigin(0.5), width - 30, 12);
     const brief = fitText(this.add.text(GAME_WIDTH / 2, centerY + (this.compact ? 18 : 13), t('xp.brief'), {
       fontFamily: 'monospace', fontSize: hudFont(this, 11), color: '#c7d9e2', letterSpacing: 1,
@@ -340,13 +341,20 @@ export class UIScene extends Phaser.Scene {
       if (state.status === 'complete') this.phaseBanner.show({
         title: t('objective.done'), brief: td(state.reward), color: state.color,
       });
+      // A finished objective has nothing left to track; it used to sit in the corner for the
+      // rest of the run. It stays long enough to read the outcome, then gives the arena back.
+      this.time.delayedCall(6000, () => {
+        if (reducedMotion()) this.objectivePanel.setVisible(false);
+        else this.tweens.add({ targets: this.objectivePanel, alpha: 0, duration: 500,
+          onComplete: () => this.objectivePanel.setVisible(false) });
+      });
     }
   }
   private onUpgradeApplied(name: string, description: string, level: number, rating: ReturnType<typeof combatRating>) {
     const width = this.compact ? 780 : 600;
     const plate = this.add.rectangle(0, 0, width, this.compact ? 108 : 94, 0x061323, 0.96).setStrokeStyle(3, 0x73ef62, 0.9);
     const title = fitText(this.add.text(0, this.compact ? -22 : -20, t('upgrade.level', { name, level }), {
-      fontFamily: 'Arial Black', fontSize: hudFont(this, 21), color: '#73ef62',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this, 21), color: '#73ef62',
     }).setOrigin(0.5), width - 40, 14);
     const detail = fitText(this.add.text(0, this.compact ? 20 : 16, t('upgrade.rating', { description, dps: rating.dps, critical: rating.critical }), {
       fontFamily: 'monospace', fontSize: hudFont(this, 12), color: '#d8e7ed',
@@ -364,13 +372,13 @@ export class UIScene extends Phaser.Scene {
         .setStrokeStyle(2, 0x21e6ff, 0.5),
       this.add
         .text(GAME_WIDTH / 2, 118, t('levelup.title', { level: this.gameScene.xp.level }), {
-          fontFamily: 'Arial Black',
+          fontFamily: DISPLAY_FONT, fontStyle: 'bold',
           fontSize: '42px',
           color: '#73ef62',
         })
         .setOrigin(0.5),
       this.add.text(GAME_WIDTH / 2, 164, t('levelup.subtitle'), {
-        fontFamily: 'Arial Black', fontSize: hudFont(this, 12), color: '#8ba5b8', letterSpacing: 3,
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this, 12), color: '#8ba5b8', letterSpacing: 3,
       }).setOrigin(0.5),
     ];
     // The expanding ring is decoration; under reduced motion the title and cards are enough.
@@ -459,13 +467,13 @@ export class UIScene extends Phaser.Scene {
         .setStrokeStyle(2, 0x73ef62, 0.5),
       this.add
         .text(GAME_WIDTH / 2, 140, t('chest.title'), {
-          fontFamily: 'Arial Black',
+          fontFamily: DISPLAY_FONT, fontStyle: 'bold',
           fontSize: '42px',
           color: '#73ef62',
         })
         .setOrigin(0.5),
       this.add.text(GAME_WIDTH / 2, 182, t('chest.subtitle'), {
-        fontFamily: 'Arial Black', fontSize: hudFont(this, 12), color: '#8ba5b8', letterSpacing: 3,
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this, 12), color: '#8ba5b8', letterSpacing: 3,
       }).setOrigin(0.5),
     ];
     // A modal can replace another one; the old chooser would keep answering 1/2/3 and ENTER.
@@ -545,7 +553,7 @@ export class UIScene extends Phaser.Scene {
       fontFamily: 'monospace', fontSize: hudFont(this, 13), color: tint, letterSpacing: 4,
     }).setOrigin(0.5);
     const title = fitText(this.add.text(GAME_WIDTH / 2, 270, td(name), {
-      fontFamily: 'Arial Black', fontSize: '30px', color: '#ffffff', letterSpacing: 2,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '30px', color: '#ffffff', letterSpacing: 2,
     }).setOrigin(0.5), 580, 18);
     // Under reduced motion it fades in place instead of dropping in.
     const banner = this.add.container(0, reducedMotion() ? 0 : -30, [back, kicker, title]).setDepth(140).setAlpha(0);
@@ -579,7 +587,7 @@ export class UIScene extends Phaser.Scene {
       : Math.min(this.gameScene.mobileInput.active ? 640 : 720, GAME_WIDTH - 2 * 370);
     const title = this.add
       .text(0, 0, t('contracts.assigned'), {
-        fontFamily: 'Arial Black', fontSize: hudFont(this, 16), color: '#21e6ff', letterSpacing: 3,
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this, 16), color: '#21e6ff', letterSpacing: 3,
       })
       .setOrigin(0.5);
     const rows = lines.map((line) => this.add

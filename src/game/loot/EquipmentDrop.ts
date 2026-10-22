@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Equipment } from './Equipment';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 export class EquipmentDrop extends Phaser.GameObjects.Container {
   constructor(scene: Phaser.Scene, x: number, y: number, readonly equipment: Equipment) {
@@ -9,7 +10,7 @@ export class EquipmentDrop extends Phaser.GameObjects.Container {
     const glow = scene.add.circle(0, 0, 31, equipment.color, 0.16).setStrokeStyle(2, equipment.color, 0.8);
     const caseBody = scene.add.rectangle(0, 0, 42, 30, 0x07111f, 0.96).setStrokeStyle(3, equipment.color);
     const icon = scene.add.text(0, -1, equipment.kind === 'weapon' ? '⚡' : '◆', {
-      fontFamily: 'Arial Black', fontSize: '19px', color: '#ffffff',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '19px', color: '#ffffff',
     }).setOrigin(0.5);
     const beam = scene.add.rectangle(0, -55, 5, 75, equipment.color, 0.22);
     this.add([beam, glow, caseBody, icon]);

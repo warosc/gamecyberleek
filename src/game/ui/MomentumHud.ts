@@ -4,6 +4,7 @@ import { MOMENTUM_WINDOW_MS, type MomentumState } from '../systems/CombatMomentu
 import { t } from '../i18n';
 import { reducedMotion } from '../systems/RuntimeSettings';
 import { RIGHT_EDGE_INSET, hudFont, isCompactHud, rightColumn } from './HudLayout';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 export class MomentumHud {
   private readonly panel: Phaser.GameObjects.Container;
@@ -22,7 +23,7 @@ export class MomentumHud {
     this.barWidth = width - 28;
     const back = scene.add.rectangle(0, 0, width, height, 0x06101d, 0.88).setStrokeStyle(2, 0xffc857, 0.75);
     this.count = scene.add.text(-width / 2 + 18, -height / 2 + 14, t('hud.chain', { chain: 2 }), {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 16), color: '#ffffff',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 16), color: '#ffffff',
     });
     this.bonus = scene.add.text(width / 2 - 18, -height / 2 + 16, t('hud.chainBonus', { percent: 0 }), {
       fontFamily: 'monospace', fontSize: hudFont(scene, 11), color: '#ffc857',

@@ -6,6 +6,7 @@ import { parseMidi } from '../audio/MidiFile';
 import type { MusicCue, MusicManifest } from '../audio/MusicDirector';
 import { registerMusic } from '../managers/AudioManager';
 import { t } from '../i18n';
+import { DISPLAY_FONT } from '../config/Fonts';
 export class PreloadScene extends Phaser.Scene {
   private startedAt = 0;
   private bar?: Phaser.GameObjects.Rectangle;
@@ -30,17 +31,17 @@ export class PreloadScene extends Phaser.Scene {
     this.tweens.add({ targets: scanner, angle: 360, scale: 1.12, alpha: { from: 0.35, to: 1 },
       duration: 1100, repeat: -1, yoyo: true });
     this.add.text(width / 2, height / 2 - 80, 'L', {
-      fontFamily: 'Arial Black', fontSize: '54px', color: '#73ef62',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '54px', color: '#73ef62',
     }).setOrigin(0.5).setShadow(0, 0, '#21e6ff', 12, true, true);
     this.add.text(width / 2, height / 2 + 8, 'CYBERLEEK', {
-      fontFamily: 'Arial Black', fontSize: '42px', color: '#eaffff', letterSpacing: 5,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '42px', color: '#eaffff', letterSpacing: 5,
     }).setOrigin(0.5);
     this.add.rectangle(width / 2, height / 2 + 78, 524, 20, 0x02060c, 1)
       .setStrokeStyle(2, 0x21e6ff, 0.8);
     this.bar = this.add.rectangle(width / 2 - 256, height / 2 + 78, 1, 12, 0x73ef62)
       .setOrigin(0, 0.5);
     this.percent = this.add.text(width / 2, height / 2 + 110, '0%', {
-      fontFamily: 'Arial Black', fontSize: '17px', color: '#73ef62',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '17px', color: '#73ef62',
     }).setOrigin(0.5);
     this.status = this.add.text(width / 2, height / 2 + 145, t('preload.booting'), {
       fontFamily: 'monospace', fontSize: '12px', color: '#789bab', letterSpacing: 2,

@@ -7,6 +7,7 @@ import { AudioManager } from '../managers/AudioManager';
 import { FocusGroup, UI, backToMenu, framePanel, hex, panelButton, subMenuFrame, uiFont, type PanelButton } from '../ui/SceneWidgets';
 import { shakeCamera } from '../systems/RuntimeSettings';
 import { iconKey, queueSceneArt } from '../config/SceneArt';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /** Spends bio-credits on small permanent upgrades; the only credit sink outside a run. */
 export class WorkshopScene extends Phaser.Scene {
@@ -30,7 +31,7 @@ export class WorkshopScene extends Phaser.Scene {
     this.rows.clear();
     subMenuFrame(this, GAME_WIDTH, GAME_HEIGHT, t('workshop.title'), t('workshop.subtitle'), 0xffc857, 'workshop');
     this.balance = this.add.text(GAME_WIDTH / 2, 150, '', {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 20), color: '#ffc857', letterSpacing: 2,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 20), color: '#ffc857', letterSpacing: 2,
     }).setOrigin(0.5).setName('workshop-balance');
 
     // Offset from the 1280 design width so the list stays centred on wide phone canvases.
@@ -52,7 +53,7 @@ export class WorkshopScene extends Phaser.Scene {
       } else this.add.rectangle(ox + 128, y, 5, 46, upgrade.color, 0.9);
       const textX = this.textures.exists(icon) ? ox + 194 : ox + 146;
       this.add.text(textX, y - 14, td(upgrade.name), {
-        fontFamily: 'Arial Black', fontSize: uiFont(this, 18), color: hex(upgrade.color),
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 18), color: hex(upgrade.color),
       }).setOrigin(0, 0.5);
       this.add.text(textX, y + 16, td(upgrade.effect), {
         fontFamily: 'Arial', fontSize: uiFont(this, 14), color: UI.body,
@@ -60,7 +61,7 @@ export class WorkshopScene extends Phaser.Scene {
       const pips = upgrade.costs.map((_, pip) =>
         this.add.rectangle(ox + 560 + pip * 34, y - 10, 26, 14, upgrade.color, 0.15).setStrokeStyle(2, upgrade.color, 0.7));
       const rank = this.add.text(ox + 548, y + 16, '', {
-        fontFamily: 'Arial Black', fontSize: uiFont(this, 12), color: UI.muted,
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 12), color: UI.muted,
       }).setOrigin(0, 0.5);
       const button = panelButton(this, ox + 1010, y, 230, 54, '', upgrade.color, () => this.buy(upgrade.id), 15,
         { name: `workshop-buy-${upgrade.id}` });

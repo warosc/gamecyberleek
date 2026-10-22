@@ -4,6 +4,7 @@ import { detectQualityProfile } from '../config/QualityProfile';
 import { impactProfile, type ImpactTier } from '../presentation/ImpactFeedback';
 import type { WeaponMode } from '../entities/player/WeaponSilhouettes';
 import { reducedMotion } from '../systems/RuntimeSettings';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /** Particle count the quality profile is expressed against, so tiers scale relative to it. */
 const IMPACT_PARTICLE_BASELINE = 3;
@@ -228,7 +229,7 @@ export class CombatEffects {
 
   floatingText(x: number, y: number, text: string, color: string, size = 18) {
     const label = this.track(this.scene.add
-      .text(x, y, text, { fontFamily: 'Arial Black', fontSize: `${size}px`, color })
+      .text(x, y, text, { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: `${size}px`, color })
       .setOrigin(0.5)
       .setDepth(30));
     if (!label) return;
@@ -251,7 +252,7 @@ export class CombatEffects {
     const label = this.track(
       this.scene.add
         .text(x, y, critical ? `${amount}!` : `${amount}`, {
-          fontFamily: 'Arial Black',
+          fontFamily: DISPLAY_FONT, fontStyle: 'bold',
           fontSize: `${profile.textSize}px`,
           color: profile.textColor,
           stroke: '#04121c',

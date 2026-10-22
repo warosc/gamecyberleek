@@ -4,6 +4,7 @@ import { td } from '../i18n';
 import { reducedMotion } from '../systems/RuntimeSettings';
 import { fitText } from './SceneWidgets';
 import { hudFont, isCompactHud } from './HudLayout';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /** Short tactical callout shown only when the enemy roster changes. */
 export class PhaseBanner {
@@ -22,7 +23,7 @@ export class PhaseBanner {
       .setStrokeStyle(3, phase.color, 0.92);
     const marker = this.scene.add.rectangle(-width / 2 + 6, 0, 8, height - 16, phase.color, 1);
     const title = fitText(this.scene.add.text(0, compact ? -17 : -14, td(phase.title), {
-      fontFamily: 'Arial Black', fontSize: hudFont(this.scene, this.mobile ? 20 : 23), color: '#ffffff', letterSpacing: 2,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this.scene, this.mobile ? 20 : 23), color: '#ffffff', letterSpacing: 2,
     }).setOrigin(0.5), width - 40, 14);
     const brief = fitText(this.scene.add.text(0, compact ? 22 : 18, td(phase.brief), {
       fontFamily: 'monospace', fontSize: hudFont(this.scene, this.mobile ? 11 : 12),

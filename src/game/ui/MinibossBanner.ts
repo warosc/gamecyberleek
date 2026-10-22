@@ -4,6 +4,7 @@ import { t, td } from '../i18n';
 import { reducedMotion } from '../systems/RuntimeSettings';
 import { fitText } from './SceneWidgets';
 import { hudFont, hudPx, isCompactHud } from './HudLayout';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /** Compact mid-run encounter panel that stays clear of the permanent HUD. */
 export class MinibossBanner {
@@ -28,7 +29,7 @@ export class MinibossBanner {
     this.fill = scene.add.rectangle(GAME_WIDTH / 2 - this.barWidth / 2, centerY + (this.compact ? 15 : 8), this.barWidth, 8, 0xff3b76)
       .setOrigin(0, 0.5);
     this.name = scene.add.text(GAME_WIDTH / 2, centerY - 8, '', {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 11), color: '#ffd7e5', letterSpacing: 2,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 11), color: '#ffd7e5', letterSpacing: 2,
     }).setOrigin(0.5);
     this.panel = scene.add.container(0, 0, [back, this.fill, this.name]).setVisible(false);
   }
@@ -52,7 +53,7 @@ export class MinibossBanner {
     const banner = this.scene.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 35).setDepth(120);
     const plate = this.scene.add.rectangle(0, 0, plateWidth, this.compact ? 106 : 92, 0x160811, 0.95).setStrokeStyle(3, color);
     const titleText = fitText(this.scene.add.text(0, this.compact ? -16 : -13, label, {
-      fontFamily: 'Arial Black', fontSize: '34px', color: '#ffd7e5', stroke: '#24030f', strokeThickness: 6,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '34px', color: '#ffd7e5', stroke: '#24030f', strokeThickness: 6,
     }).setOrigin(0.5), plateWidth - 40, 22);
     const brief = fitText(this.scene.add.text(0, this.compact ? 30 : 25, t('miniboss.brief'), {
       fontFamily: 'monospace', fontSize: hudFont(this.scene, 13), color: '#ff6f9f', letterSpacing: 3,

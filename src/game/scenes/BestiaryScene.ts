@@ -6,6 +6,7 @@ import {
 import { t, td } from '../i18n';
 import { FocusGroup, UI, fitText, framePanel, hex, panelButton, uiFont } from '../ui/SceneWidgets';
 import { backdropTexture, queueSceneArt } from '../config/SceneArt';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 const TACTICS: Record<VegetableType, string> = {
   GRUNT: 'Te persigue y prepara un golpe. Al ver el aro rojo, sepárate.',
@@ -31,10 +32,10 @@ export class BestiaryScene extends Phaser.Scene {
     if (this.textures.exists(backdrop))
       this.add.image(GAME_WIDTH / 2, 360, backdrop).setDisplaySize(GAME_WIDTH, 720).setAlpha(backdrop === 'menu-backdrop' ? 0.22 : 0.8);
     this.add.text(GAME_WIDTH / 2, 52, td('FUERZAS DE LA BRECHA'), {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 34), color: '#73ef62', stroke: '#020710', strokeThickness: 6,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 34), color: '#73ef62', stroke: '#020710', strokeThickness: 6,
     }).setOrigin(0.5).setShadow(0, 0, '#73ef62', 12, false, true);
     this.add.text(GAME_WIDTH / 2, 96, td('CYBERLEEK  //  ARCHIVO DE ENEMIGOS'), {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 13), color: '#21e6ff', letterSpacing: 2,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 13), color: '#21e6ff', letterSpacing: 2,
     }).setOrigin(0.5);
     const types = Object.keys(VEGETABLE_ROSTER) as VegetableType[];
     // Wide phone canvases get wider cards, which the larger phone type needs.
@@ -49,9 +50,9 @@ export class BestiaryScene extends Phaser.Scene {
       const sprite = this.add.image(x, 262, art.key);
       sprite.setScale(Math.min(180 / sprite.height, (pitch - 36) / sprite.width));
       if (art.tint !== undefined) sprite.setTint(art.tint);
-      fitText(this.add.text(x, 392, spec.name, { fontFamily: 'Arial Black', fontSize: uiFont(this, 21), color }).setOrigin(0.5), pitch - 24);
+      fitText(this.add.text(x, 392, spec.name, { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 21), color }).setOrigin(0.5), pitch - 24);
       fitText(this.add.text(x, 422, td(spec.role), {
-        fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: UI.text,
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 11), color: UI.text,
       }).setOrigin(0.5), pitch - 24);
       this.add.rectangle(x, 442, pitch - 48, 1, spec.color, 0.5);
       this.add.text(x, 454, td(TACTICS[type]), {

@@ -16,6 +16,7 @@ import { FocusGroup, UI, type FocusItem, drawFrame, fitText, framePanel, hex, is
 import { onlineService } from '../online/OnlinePorts';
 import { iconKey, queueSceneArt } from '../config/SceneArt';
 import { reducedMotion } from '../systems/RuntimeSettings';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /** Last sector chosen in this session, so returning from a sub-menu keeps the selection. */
 const SECTOR_REGISTRY_KEY = 'menu-sector';
@@ -62,7 +63,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.add
       .text(72, 70, 'LEEK OPS', {
-        fontFamily: 'Arial Black',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold',
         fontSize: '76px',
         color: '#73ef62',
         stroke: '#07111f',
@@ -70,7 +71,7 @@ export class MenuScene extends Phaser.Scene {
       })
       .setShadow(0, 0, '#21e6ff', 18, true, true);
     fitText(this.add.text(78, 160, t('menu.tagline'), {
-      fontFamily: 'Arial Black',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold',
       fontSize: uiFont(this, 15),
       color: '#21e6ff',
       letterSpacing: compact ? 2 : 5,
@@ -79,7 +80,7 @@ export class MenuScene extends Phaser.Scene {
     this.add.rectangle(80, 206, 90, 3, UI.cyan, 0.9).setOrigin(0, 0.5);
 
     this.add.text(80, 222, t('menu.operation'), {
-      fontFamily: 'Arial Black',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold',
       fontSize: uiFont(this, 12),
       color: UI.muted,
       letterSpacing: 3,
@@ -97,7 +98,7 @@ export class MenuScene extends Phaser.Scene {
         lineSpacing: 6,
       });
     fitText(this.add.text(80, threat ? 374 : compact ? 350 : 372, t('menu.stats', { credits: profile.bioCredits, level: profile.bestLevel }), {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 12), color: '#73ef62', letterSpacing: 1,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 12), color: '#73ef62', letterSpacing: 1,
     }).setOrigin(0, 0.5).setName('menu-stats'), 470);
 
     const deploy = () => this.scene.start('Game', { weaponId: this.selectedWeaponId, arenaIndex: this.sector, threat: this.threat });
@@ -119,12 +120,12 @@ export class MenuScene extends Phaser.Scene {
       profile.unlocks.length > 0
         ? t('menu.unlocks', { list: profile.unlocks.join('  ·  ').toUpperCase() })
         : t('menu.noUnlocks'), {
-        fontFamily: 'Arial Black', fontSize: uiFont(this, 10), color: '#21e6ff', letterSpacing: 1,
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 10), color: '#21e6ff', letterSpacing: 1,
         wordWrap: { width: 480 }, lineSpacing: 2,
       });
     const controls = this.add
       .text(80, 590, t('menu.controls'), {
-        fontFamily: 'Arial Black',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold',
         fontSize: uiFont(this, 12),
         color: '#ccebf2',
         backgroundColor: '#06101df2',
@@ -150,7 +151,7 @@ export class MenuScene extends Phaser.Scene {
       }).setOrigin(0, 1);
     this.add
       .text(GAME_WIDTH - 38, 30, t('menu.madeBy'), {
-        fontFamily: 'Arial Black',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold',
         fontSize: uiFont(this, 14),
         color: '#eaffff',
         letterSpacing: 2,
@@ -171,15 +172,18 @@ export class MenuScene extends Phaser.Scene {
     const streak = streakStatus(profile.daily, daily.date);
     dailyLines.push(streak.claimed
       ? t('menu.dailyClaimed', { days: streak.streak })
-      : t('menu.dailyBonus', { bonus: dailyBonus(streak.next, false), days: streak.streak }));
+      // "RACHA 0" read like a penalty to a first-time player; the streak shows once there is one.
+      : streak.streak > 0
+        ? t('menu.dailyBonus', { bonus: dailyBonus(streak.next, false), days: streak.streak })
+        : t('menu.dailyBonusFirst', { bonus: dailyBonus(streak.next, false) }));
     const dailyChip = this.add.graphics().setDepth(7);
     const dailyInfo = this.add.text(GAME_WIDTH - 50, 72, '', {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: '#ffc857', align: 'right', lineSpacing: 5,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 11), color: '#ffc857', align: 'right', lineSpacing: 5,
     }).setOrigin(1, 0).setDepth(8).setName('menu-daily-info');
     // Private browsing or a full quota: runs still count this session but vanish on reload,
     // which a player would otherwise only discover after losing them.
     const storageNote = storageHealthy() ? undefined : fitText(this.add.text(GAME_WIDTH - 50, 0, t('menu.storageWarning'), {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: '#ffc857', align: 'right',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 11), color: '#ffc857', align: 'right',
       backgroundColor: '#06101dee', padding: { x: 10, y: 6 },
     }).setOrigin(1, 0).setDepth(8).setName('menu-storage-warning'), GAME_WIDTH - 700);
     const setDaily = (lines: string[]) => {
@@ -239,7 +243,7 @@ export class MenuScene extends Phaser.Scene {
     void online.cloudSaveInfo(code).then(cloud => {
       if (!cloud || cloud.runs <= localRuns || !this.sys.isActive()) return;
       fitText(this.add.text(GAME_WIDTH - 50, below(), t('menu.cloudAhead', { runs: cloud.runs }), {
-        fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: '#ff476f', align: 'right',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 11), color: '#ff476f', align: 'right',
         backgroundColor: '#06101dee', padding: { x: 10, y: 6 },
       }).setOrigin(1, 0).setDepth(8).setName('menu-cloud-ahead'), GAME_WIDTH - 700);
     }).catch(() => undefined);
@@ -252,10 +256,10 @@ export class MenuScene extends Phaser.Scene {
   private createSectorSelector(unlocks: readonly string[]) {
     framePanel(this, 315, 280, 370, 64, UI.cyan, { strokeAlpha: 0.25, band: 0.05, cut: 10, brackets: false });
     const name = this.add.text(315, 266, '', {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 22), color: '#eaffff',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 22), color: '#eaffff',
     }).setOrigin(0.5).setName('menu-sector-name');
     const detail = this.add.text(315, 296, '', {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: UI.muted, letterSpacing: 1,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 11), color: UI.muted, letterSpacing: 1,
     }).setOrigin(0.5).setName('menu-sector-detail');
     const render = () => {
       const theme = ARENA_THEMES[this.sector];
@@ -304,7 +308,7 @@ export class MenuScene extends Phaser.Scene {
   private createThreatSelector(cleared: Readonly<ThreatRecord>) {
     framePanel(this, 315, 337, 370, 38, UI.gold, { strokeAlpha: 0.25, band: 0.05, cut: 8, brackets: false });
     const label = this.add.text(315, 337, '', {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 12), color: '#ffc857', letterSpacing: 1,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 12), color: '#ffc857', letterSpacing: 1,
     }).setOrigin(0.5).setName('menu-threat');
     const render = (note?: string) => {
       const detail = this.threat === 0 ? '' : `  ·  ${t('menu.threatDetail', {
@@ -356,7 +360,7 @@ export class MenuScene extends Phaser.Scene {
     // With icons the badges stand over the cards' top edge, so the label sits above them.
     const withIcons = STARTER_WEAPONS.every(weapon => this.textures.exists(iconKey(`weapon-${weapon.id}`)));
     const label = this.add.text(centre, withIcons ? 488 : 522, t(compact ? 'menu.loadoutTouch' : 'menu.loadout'), {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 12), color: '#eaffff', letterSpacing: 2,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 12), color: '#eaffff', letterSpacing: 2,
       backgroundColor: '#06101de6', padding: { x: 14, y: 7 },
     }).setOrigin(0.5).setDepth(9);
     let bob: Phaser.Tweens.Tween | undefined;
@@ -389,7 +393,7 @@ export class MenuScene extends Phaser.Scene {
       // The 1 / 2 / 3 key hint only matters with a keyboard.
       if (!compact)
         this.add.text(x - 84, top + 16, String(index + 1), {
-          fontFamily: 'Arial Black', fontSize: '14px', color,
+          fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '14px', color,
         }).setOrigin(0.5).setDepth(10);
       let icon: Phaser.GameObjects.Image | undefined;
       const iconY = top - 4;
@@ -400,13 +404,13 @@ export class MenuScene extends Phaser.Scene {
       // Text starts below the badge when there is one.
       const shift = withIcons ? (compact ? 14 : 16) : 0;
       fitText(this.add.text(x, top + shift + (compact ? 38 : 30), weapon.name, {
-        fontFamily: 'Arial Black', fontSize: uiFont(this, 15), color: '#ffffff', align: 'center',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 15), color: '#ffffff', align: 'center',
       }).setOrigin(0.5).setDepth(10), 184);
       fitText(this.add.text(x, top + shift + (compact ? 68 : 52), t(`weapon.${weapon.id}.role` as StringKey), {
-        fontFamily: 'Arial Black', fontSize: uiFont(this, 10), color,
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 10), color,
       }).setOrigin(0.5).setDepth(10), 184);
       fitText(this.add.text(x, top + shift + (compact ? 96 : 71), t('menu.mastery', { rank: masteryRank(mastery[weapon.id]), points: mastery[weapon.id] }), {
-        fontFamily: 'Arial Black', fontSize: uiFont(this, 9), color: '#ffc857',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 9), color: '#ffc857',
       }).setOrigin(0.5).setDepth(10), 184);
       // The one-line pitch only fits at desktop type sizes.
       if (!compact)

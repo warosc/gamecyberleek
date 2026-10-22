@@ -12,6 +12,7 @@ import { RestOnlineService } from './game/online/RestOnlineService';
 import { flushDailyRuns } from './game/online/OnlineSync';
 import { onlineService } from './game/online/OnlinePorts';
 import { ensureOperative } from './game/systems/ProfileStore';
+import { loadDisplayFont } from './game/config/Fonts';
 
 installDevTelemetry();
 // Before the game exists: quality, locale and mixer levels are read by the first scene.
@@ -26,6 +27,8 @@ setOnlineService(onlineUrl
   : new OfflineOnlineService(() => loadProfile().daily));
 // Scores a dropped connection left behind get another chance at startup.
 void flushDailyRuns(onlineService());
+// Text is drawn once into canvases: the display face must be ready before the first scene.
+await loadDisplayFont();
 const game = new Phaser.Game(gameConfig);
 installGamepadBridge(game);
 

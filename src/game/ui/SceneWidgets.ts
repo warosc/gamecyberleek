@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { AudioManager } from '../managers/AudioManager';
 import { backdropTexture, type BackdropId } from '../config/SceneArt';
 import { FocusNavigator, type FocusDirection, type FocusSlot } from './FocusNavigator';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 export const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
 
@@ -169,7 +170,7 @@ export function panelButton(
   if (options.name) box.setName(options.name);
   const primary = !!options.primary;
   const text = scene.add.text(x, y, label, {
-    fontFamily: 'Arial Black', fontSize: uiFont(scene, fontSize), color: primary ? '#04121c' : UI.text,
+    fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(scene, fontSize), color: primary ? '#04121c' : UI.text,
     letterSpacing: 1, align: 'center',
   }).setOrigin(0.5).setDepth(depth);
   const fit = () => fitText(text, width - 18);
@@ -346,10 +347,10 @@ export function subMenuFrame(
     fill: 0x07111f, fillAlpha: own ? 0.62 : 0.9, band: 0.05, strokeAlpha: 0.5, cut: 26, glow: 0.08,
   });
   scene.add.text(width / 2, 60, title, {
-    fontFamily: 'Arial Black', fontSize: uiFont(scene, 36), color: hex(accent), stroke: '#020710', strokeThickness: 6,
+    fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(scene, 36), color: hex(accent), stroke: '#020710', strokeThickness: 6,
   }).setOrigin(0.5).setShadow(0, 0, hex(accent), 12, false, true);
   const sub = scene.add.text(width / 2, 103, subtitle, {
-    fontFamily: 'Arial Black', fontSize: uiFont(scene, 12), color: UI.muted, letterSpacing: isCompact(scene) ? 1 : 3,
+    fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(scene, 12), color: UI.muted, letterSpacing: isCompact(scene) ? 1 : 3,
   }).setOrigin(0.5);
   fitText(sub, width - 160);
   // Divider: a faint rule with a bright accent segment in the middle.

@@ -1,3 +1,14 @@
+/* The display face (src/game/config/Fonts.ts): Arial Black where the system has it, otherwise the
+   heaviest Arial or Helvetica the device ships. iOS and Android have no Arial Black and drew
+   every title in the default serif. System fonts only, so nothing is downloaded. */
+@font-face {
+  font-family: LeekDisplay;
+  src: local('Arial Black'), local('Arial-Black'), local('ArialMT-Black'), local('Arial-BoldMT'),
+    local('Arial Bold'), local('HelveticaNeue-Bold'), local('Helvetica Neue Bold'), local('Roboto-Black'),
+    local('Roboto Black'), local('Roboto-Bold'), local('Roboto Bold');
+  /* Matches the bold the game asks for without the browser thickening Arial Black further. */
+  font-weight: 100 900;
+}
 :root {
   font-family: Inter, system-ui, sans-serif;
   color: #e9ffff;
@@ -72,7 +83,7 @@ body {
 }
 .boot-mark::after { transform: scaleX(-1) rotate(-28deg); }
 .boot-mark span { position: absolute; inset: 31px; border-radius: 50%; background: #73ef62; box-shadow: 0 0 20px #73ef62; }
-#boot-splash strong { z-index: 1; color: #73ef62; font: 900 clamp(38px, 7vw, 70px)/1 'Arial Black', sans-serif; letter-spacing: 5px; text-shadow: 0 0 20px #21e6ff88; }
+#boot-splash strong { z-index: 1; color: #73ef62; font: 900 clamp(38px, 7vw, 70px)/1 LeekDisplay, 'Arial Black', sans-serif; letter-spacing: 5px; text-shadow: 0 0 20px #21e6ff88; }
 #boot-splash small, #boot-status { z-index: 1; font: 700 clamp(10px, 1.6vw, 14px)/1.2 monospace; letter-spacing: 3px; color: #8db7c7; }
 .boot-track { z-index: 1; width: min(520px, 72vw); height: 12px; padding: 2px; border: 1px solid #21e6ff99; background: #02070d; box-shadow: 0 0 18px #21e6ff33; }
 .boot-track i { display: block; width: 3%; height: 100%; background: linear-gradient(90deg, #21e6ff, #73ef62); box-shadow: 0 0 12px #73ef62; transition: width 120ms ease; }
@@ -125,7 +136,7 @@ canvas {
   }
   #rotate-device strong {
     color: #73ef62;
-    font: 900 clamp(24px, 8vw, 48px) / 1 Arial Black, sans-serif;
+    font: 900 clamp(24px, 8vw, 48px) / 1 LeekDisplay, 'Arial Black', sans-serif;
     text-shadow: 0 0 18px #21e6ff;
   }
   #rotate-device span {

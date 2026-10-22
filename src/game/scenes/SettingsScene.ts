@@ -12,6 +12,7 @@ import { AudioManager, setMusicLightweight } from '../managers/AudioManager';
 import { detectQualityProfile } from '../config/QualityProfile';
 import { queueSceneArt } from '../config/SceneArt';
 import { FocusGroup, UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont } from '../ui/SceneWidgets';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 interface Row {
   label: StringKey;
@@ -83,12 +84,12 @@ export class SettingsScene extends Phaser.Scene {
       const y = 158 + index * 55;
       framePanel(this, cx, y, 900, 48, UI.violet, { strokeAlpha: 0.28, band: 0.05, cut: 10, brackets: false });
       fitText(this.add.text(cx - 425, y, t(row.label), {
-        fontFamily: 'Arial Black', fontSize: uiFont(this, 15), color: UI.text,
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 15), color: UI.text,
       }).setOrigin(0, 0.5), 420);
       // The whole value cell is a forward tap target, which matters on a phone-sized canvas.
       const cell = this.add.rectangle(cx + 210, y, 240, 48, 0x000000, 0.001).setInteractive({ useHandCursor: true });
       const value = this.add.text(cx + 210, y, row.value(), {
-        fontFamily: 'Arial Black', fontSize: uiFont(this, 15), color: '#e59cff',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 15), color: '#e59cff',
       }).setOrigin(0.5).setName(`setting-${row.label}`);
       const change = (step: 1 | -1) => () => { row.change(step); value.setText(row.value()); fitText(value, 220); };
       fitText(value, 220);
@@ -103,10 +104,10 @@ export class SettingsScene extends Phaser.Scene {
       }, { x: cx });
     });
     fitText(this.add.text(GAME_WIDTH / 2, 588, t('settings.restartHint'), {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 11), color: UI.muted, letterSpacing: 1,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 11), color: UI.muted, letterSpacing: 1,
     }).setOrigin(0.5), 900);
     const status = this.add.text(cx, 682, '', {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 12), color: '#73ef62',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 12), color: '#73ef62',
     }).setOrigin(0.5).setName('settings-backup-status');
     const exportButton = panelButton(this, cx - 310, 640, 270, 54, t('settings.export'), UI.cyan, () => this.exportSave(), 14, { name: 'settings-export' });
     const importButton = panelButton(this, cx + 310, 640, 270, 54, t('settings.import'), UI.gold, () => this.importSave(status), 14, { name: 'settings-import' });

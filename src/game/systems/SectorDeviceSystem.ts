@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SECTOR_DEVICES, SECTOR_DEVICE_POSITIONS, type SectorDeviceEffect } from '../config/SectorDevices';
 import type { Projectile } from '../entities/projectiles/Projectile';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 export interface SectorDeviceActivation {
   x: number;
@@ -36,7 +37,7 @@ export class SectorDeviceSystem {
     const core = this.scene.add.circle(x, y, 22, sector === 1 ? 0x24472c : 0x101a35, 1)
       .setStrokeStyle(4, this.definition.color, 0.95).setDepth(5).setName(`sector-device-${this.definition.effect}`);
     const icon = this.scene.add.text(x, y, sector === 0 ? '⚡' : sector === 1 ? '✦' : '❄', {
-      fontFamily: 'Arial Black', fontSize: '19px', color: `#${this.definition.color.toString(16).padStart(6, '0')}`,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '19px', color: `#${this.definition.color.toString(16).padStart(6, '0')}`,
     }).setOrigin(0.5).setDepth(6);
     core.setData({ armed: true, halo, icon });
     this.group.add(core);

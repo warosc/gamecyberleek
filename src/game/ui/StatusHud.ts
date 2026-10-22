@@ -6,6 +6,7 @@ import { reducedMotion } from '../systems/RuntimeSettings';
 import { fitText } from './SceneWidgets';
 import { hudFont, hudPx, isCompactHud } from './HudLayout';
 import { t, td } from '../i18n';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /** GameScene's "nothing equipped" armor value: a Spanish data string, shown through t(). */
 const NO_ARMOR = 'SIN ARMADURA';
@@ -53,35 +54,39 @@ export class StatusHud {
     // The status panel ends at 386 and the right-hand buttons start about 430 from the edge.
     this.centreWidth = Math.max(300, GAME_WIDTH - 2 * 410);
     this.phaseSize = hudPx(scene, mobile ? 14 : 12);
-    this.frame = scene.add.rectangle(16, 14, 370, 112, 0x06101d, 0.94)
+    // Translucent enough that the arena under the corners still reads; the strokes carry the shape.
+    this.frame = scene.add.rectangle(16, 14, 370, 112, 0x06101d, 0.78)
       .setOrigin(0, 0).setStrokeStyle(3, 0x21e6ff, 0.7).setName('hud-hp-panel');
     scene.add.rectangle(24, 22, 88, 88, 0x0b1e30, 1)
       .setOrigin(0, 0).setStrokeStyle(4, 0x73ef62, 0.8);
     scene.add.image(68, 66, 'leek-avatar').setDisplaySize(80, 80);
-    scene.add.circle(104, 104, 20, 0x07111f, 1).setStrokeStyle(3, 0x73ef62, 0.9);
-    const operationPanel = scene.add.rectangle(GAME_WIDTH - 16, 14, 290, 72, 0x06101d, 0.86)
+    // Inside the panel: at (104, 104) with r 20 the badge broke through the frame's bottom edge.
+    scene.add.circle(100, 100, 18, 0x07111f, 1).setStrokeStyle(3, 0x73ef62, 0.9);
+    const operationPanel = scene.add.rectangle(GAME_WIDTH - 16, 14, 290, 72, 0x06101d, 0.74)
       .setOrigin(1, 0).setStrokeStyle(2, 0x73ef62, 0.45).setVisible(!mobile).setName('hud-operation-panel');
-    // At 22px the readout's caps would sit on the bar below it; lifted, they clear it.
-    this.hp = scene.add.text(126, compact ? 18 : 29, t('hud.hp', { current: 100, max: 100 }), {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 16), color: '#eaffff',
-    });
-    scene.add.rectangle(124, 54, 246, 22, 0x260c17, 1)
+    // The readout sits inside its bar: above it, it crowded the panel's top edge and the bar.
+    const hpHeight = compact ? 34 : 28;
+    scene.add.rectangle(124, 50, 246, hpHeight, 0x260c17, 1)
       .setOrigin(0, 0.5).setStrokeStyle(2, 0x5f2235, 1);
-    this.hpFill = scene.add.rectangle(127, 54, 240, 16, 0xd83952).setOrigin(0, 0.5);
+    this.hpFill = scene.add.rectangle(127, 50, 240, hpHeight - 6, 0xd83952).setOrigin(0, 0.5);
+    this.hp = scene.add.text(247, 50, t('hud.hp', { current: 100, max: 100 }), {
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 15), color: '#ffffff',
+      stroke: '#1a0710', strokeThickness: 4,
+    }).setOrigin(0.5);
     // The dash label is written over its bar, so the bar grows with the phone-sized type.
     scene.add.rectangle(124, 88, 246, compact ? 26 : 18, 0x07152a, 1)
       .setOrigin(0, 0.5).setStrokeStyle(2, 0x164f7d, 1);
     this.energyFill = scene.add.rectangle(127, 88, 240, compact ? 20 : 12, 0x21aee6).setOrigin(0, 0.5);
     this.energyText = scene.add.text(247, 88, t('hud.dashEnergy'), {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 10), color: '#eaffff',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 10), color: '#eaffff',
       stroke: '#07152a', strokeThickness: compact ? 3 : 0,
     }).setOrigin(0.5);
     fitText(this.energyText, 236, 9);
-    this.level = scene.add.text(104, 104, '1', {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 18), color: '#eaffff',
+    this.level = scene.add.text(100, 100, '1', {
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 18), color: '#eaffff',
     }).setOrigin(0.5);
     const arena = fitText(scene.add.text(GAME_WIDTH - 28, 22, td(arenaName), {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 16), color: '#73ef62',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 16), color: '#73ef62',
     }).setOrigin(1, 0).setVisible(!mobile).setName('hud-arena-name'), 258, 10);
     const operation = scene.add.text(GAME_WIDTH - 28, 51, t('hud.activeOperation'), {
       fontSize: hudFont(scene, 11), color: '#8ba5b8', letterSpacing: 2,
@@ -95,7 +100,7 @@ export class StatusHud {
     const pauseButton = scene.add.rectangle(pauseX, pauseY, pauseSize, pauseSize, 0x06101d, 0.88)
       .setStrokeStyle(2, 0x21e6ff, 0.7).setInteractive({ useHandCursor: true }).setName('hud-pause');
     const pauseLabel = scene.add.text(pauseX, pauseY, 'Ⅱ', {
-      fontFamily: 'Arial Black', fontSize: mobile ? '28px' : '18px', color: '#eaffff',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: mobile ? '28px' : '18px', color: '#eaffff',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     pauseButton.on('pointerup', onPause);
     pauseLabel.on('pointerup', onPause);
@@ -105,30 +110,32 @@ export class StatusHud {
     const inventoryButton = scene.add.rectangle(inventoryX, 42, inventoryWidth, mobile ? 52 : 44, 0x06101d, 0.88)
       .setStrokeStyle(2, 0x73ef62, 0.75).setInteractive({ useHandCursor: true }).setName('hud-inventory');
     const inventoryLabel = fitText(scene.add.text(inventoryX, 42, t('hud.inventoryShort'), {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 13), color: '#73ef62',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 13), color: '#73ef62',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }), inventoryWidth - 10, 9);
     inventoryButton.on('pointerup', onInventory);
     inventoryLabel.on('pointerup', onInventory);
     // Compact stack: clock 8-42, weapon line 44-75, phase chip 78-112, so the boss bar (from 120
     // there, see BossBanner) never covers the clock in the fight that most needs it.
     this.timer = scene.add.text(GAME_WIDTH / 2, compact ? 8 : 24, '00:00', {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 24), color: '#21e6ff',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 24), color: '#21e6ff',
     }).setOrigin(0.5, 0);
-    this.phase = scene.add.text(GAME_WIDTH / 2, 78, '', {
+    // Desktop shows the loadout in the sector card, so the centre is just the clock and the
+    // phase; the phone has no sector card and keeps the weapon line between them.
+    this.phase = scene.add.text(GAME_WIDTH / 2, mobile ? 78 : 60, '', {
       fontFamily: 'monospace', fontSize: `${this.phaseSize}px`, color: '#ffc857',
       backgroundColor: '#07111fcc', padding: { x: 8, y: 4 },
     }).setOrigin(0.5, 0);
     this.weaponText = scene.add.text(GAME_WIDTH / 2, compact ? 44 : 55, '', {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 11), color: '#a9bbc9', letterSpacing: 2,
-    }).setOrigin(0.5, 0);
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 11), color: '#a9bbc9', letterSpacing: 2,
+    }).setOrigin(0.5, 0).setVisible(mobile);
     this.setLootSummary(td(weaponName));
     // Weapon and armor share the sector card's second line; as separate tags below it they ran
     // under the objective and chain panels.
     this.weaponSlot = scene.add.text(GAME_WIDTH - 294, 62, '', {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 12), color: '#21e6ff',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 12), color: '#21e6ff',
     }).setOrigin(0, 0.5).setVisible(!mobile).setName('hud-weapon-slot');
     this.armorSlot = scene.add.text(GAME_WIDTH - 28, 62, '', {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 12), color: '#73ef62',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 12), color: '#73ef62',
     }).setOrigin(1, 0.5).setVisible(!mobile).setName('hud-armor-slot');
     this.setEquipment(weaponName, '');
     // Keep references alive for Phaser's scene ownership while documenting the intentionally
@@ -139,14 +146,12 @@ export class StatusHud {
     scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 22, GAME_WIDTH - 64, xpInner + 8, 0x07111f, 0.96)
       .setStrokeStyle(3, 0x21e6ff, 0.65);
     this.xpFill = scene.add.rectangle(35, GAME_HEIGHT - 22, 0, xpInner, 0x73ef62).setOrigin(0, 0.5);
+    // White on the bright green fill was unreadable without an outline. The tenths ticks meant
+    // nothing to the player and cut through the label, so they are gone.
     this.xpLabel = scene.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 22, t('hud.xpStart'), {
-      fontFamily: 'Arial Black', fontSize: hudFont(scene, 10), color: '#eaffff',
-      stroke: '#07111f', strokeThickness: compact ? 3 : 0,
-    }).setOrigin(0.5);
-    for (let index = 1; index < 10; index++)
-      scene.add.rectangle(32 + ((GAME_WIDTH - 64) * index) / 10, GAME_HEIGHT - 22, 2, xpInner, 0x07111f, 0.7);
-    // The tick marks are drawn after the label; keep the label on top so they never cut through it.
-    this.xpLabel.setDepth(1);
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(scene, 11), color: '#ffffff',
+      stroke: '#07111f', strokeThickness: compact ? 4 : 3,
+    }).setOrigin(0.5).setDepth(1);
   }
 
   update(delta: number, survivalMs: number, dashCharge: number) {

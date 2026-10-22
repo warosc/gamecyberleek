@@ -5,6 +5,7 @@ import type { Equipment } from '../loot/Equipment';
 import type { BuildSynergy, combatRating } from '../systems/BuildProgression';
 import { RewardChooser } from './RewardChooser';
 import { FocusGroup, hex } from './SceneWidgets';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 type Rating = ReturnType<typeof combatRating>;
 
@@ -43,7 +44,7 @@ export function buildInventoryPanel(
   actions: InventoryActions,
 ) {
   const close = scene.add.text(GAME_WIDTH - 82, 50, t('inventory.close'), {
-    fontFamily: 'Arial Black', fontSize: '14px', color: '#73ef62', backgroundColor: '#07111f', padding: { x: 14, y: 9 },
+    fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '14px', color: '#73ef62', backgroundColor: '#07111f', padding: { x: 14, y: 9 },
   }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
   close.on('pointerup', actions.close);
   const focus = new FocusGroup(scene, close);
@@ -57,7 +58,7 @@ export function buildInventoryPanel(
     scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.95),
     scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, Math.min(1120, GAME_WIDTH - 44), 650, 0x061323, 0.98)
       .setStrokeStyle(3, synergy?.color ?? 0x21e6ff, 0.8),
-    scene.add.text(80, 42, t('inventory.title'), { fontFamily: 'Arial Black', fontSize: '30px', color: '#eaffff' }),
+    scene.add.text(80, 42, t('inventory.title'), { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '30px', color: '#eaffff' }),
     scene.add.text(82, 82, t('inventory.rating', {
       damage: rating.damage, dps: rating.dps, cadence: rating.cadence, critical: rating.critical, armor: rating.armor, speed: rating.speed,
     }), { fontFamily: 'monospace', fontSize: '14px', color: '#9fd8e8' }),
@@ -67,7 +68,7 @@ export function buildInventoryPanel(
     ? t('inventory.synergyActive', { name: td(synergy.name), description: td(synergy.description) })
     : t('inventory.synergyHint');
   parts.push(scene.add.text(GAME_WIDTH / 2, 122, synergyText, {
-    fontFamily: 'Arial Black', fontSize: '13px', color: synergy ? hex(synergy.color) : '#708b9b',
+    fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '13px', color: synergy ? hex(synergy.color) : '#708b9b',
   }).setOrigin(0.5));
 
   for (let index = 0; index < 6; index++) {
@@ -90,7 +91,7 @@ export function buildInventoryPanel(
         fontFamily: 'monospace', fontSize: '11px', color: hex(color),
       }),
       scene.add.text(x - 138, y - 48, td(item.name), {
-        fontFamily: 'Arial Black', fontSize: '16px', color: '#eaffff', wordWrap: { width: 276 },
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '16px', color: '#eaffff', wordWrap: { width: 276 },
       }),
       scene.add.text(x - 138, y - 14, `${kindLabel(item.kind)}  ·  ${t('loot.power', { power: item.power })}\n${td(item.description)}`, {
         fontSize: '12px', color: '#a9bdc9', wordWrap: { width: 276 }, lineSpacing: 4,
@@ -98,7 +99,7 @@ export function buildInventoryPanel(
     );
     if (item.kind === 'weapon') {
       const equip = scene.add.text(x - 138, y + 56, t(active ? 'inventory.equipped' : 'inventory.equip'), {
-        fontFamily: 'Arial Black', fontSize: '12px', color: active ? '#73ef62' : '#21e6ff',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '12px', color: active ? '#73ef62' : '#21e6ff',
         backgroundColor: '#06101d', padding: { x: 11, y: 7 },
       });
       if (!active) {
@@ -109,7 +110,7 @@ export function buildInventoryPanel(
     }
     if (!active) {
       const recycle = scene.add.text(x + 138, y + 56, t('loot.recycle'), {
-        fontFamily: 'Arial Black', fontSize: '11px', color: '#ff9a65', backgroundColor: '#06101d', padding: { x: 10, y: 7 },
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '11px', color: '#ff9a65', backgroundColor: '#06101d', padding: { x: 10, y: 7 },
       }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
       recycle.on('pointerup', () => actions.recycle(index));
       focus.add(focusableText(recycle, keep(() => actions.recycle(index))), { row: 1 + Math.floor(index / 3), x: centreX(recycle) });
@@ -141,17 +142,17 @@ export function buildLootDecision(
     scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020711, 0.93),
     scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 760, 550, 0x061323, 0.98).setStrokeStyle(3, equipment.color, 0.75),
     scene.add.text(GAME_WIDTH / 2, 105, t('loot.found'), {
-      fontFamily: 'Arial Black', fontSize: '34px', color: '#ffffff',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '34px', color: '#ffffff',
     }).setOrigin(0.5),
     scene.add.text(GAME_WIDTH / 2, 148, t('loot.header', {
       rarity: equipment.rarity, level: equipment.itemLevel, power: equipment.power, kind: kindLabel(equipment.kind),
     }), { fontFamily: 'monospace', fontSize: '14px', color, letterSpacing: 3 }).setOrigin(0.5),
-    scene.add.text(GAME_WIDTH / 2, 184, td(equipment.name), { fontFamily: 'Arial Black', fontSize: '25px', color }).setOrigin(0.5),
+    scene.add.text(GAME_WIDTH / 2, 184, td(equipment.name), { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '25px', color }).setOrigin(0.5),
     scene.add.text(GAME_WIDTH / 2, 220, td(equipment.description), {
       fontSize: '16px', color: '#c7d9e2', align: 'center', wordWrap: { width: 620 },
     }).setOrigin(0.5),
     scene.add.text(GAME_WIDTH / 2, 254, t('loot.backpack', { count }), {
-      fontFamily: 'Arial Black', fontSize: '13px', color: full ? '#ff476f' : '#8ba5b8', letterSpacing: 2,
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '13px', color: full ? '#ff476f' : '#8ba5b8', letterSpacing: 2,
     }).setOrigin(0.5),
   ];
   const replacing = equipment.kind === 'weapon' && activeWeapon !== undefined;
@@ -182,10 +183,10 @@ export function showLootBanner(scene: Phaser.Scene, equipment: Equipment) {
   const color = hex(equipment.color);
   const panel = scene.add.rectangle(GAME_WIDTH / 2, 175, 560, 112, 0x06101d, 0.96).setStrokeStyle(4, equipment.color, 0.95);
   const rarity = scene.add.text(GAME_WIDTH / 2, 141, `${equipment.rarity}  //  ${kindLabel(equipment.kind)}`, {
-    fontFamily: 'Arial Black', fontSize: '13px', color, letterSpacing: 3,
+    fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '13px', color, letterSpacing: 3,
   }).setOrigin(0.5);
   const title = scene.add.text(GAME_WIDTH / 2, 170, td(equipment.name), {
-    fontFamily: 'Arial Black', fontSize: '23px', color: '#ffffff',
+    fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '23px', color: '#ffffff',
   }).setOrigin(0.5);
   const description = scene.add.text(GAME_WIDTH / 2, 202, td(equipment.description), { fontSize: '14px', color: '#c7d9e2' }).setOrigin(0.5);
   const banner = scene.add.container(0, -35, [panel, rarity, title, description]).setDepth(130).setAlpha(0);

@@ -10,6 +10,7 @@ import { applyRuntimeSettings } from '../systems/RuntimeSettings';
 import { AudioManager } from '../managers/AudioManager';
 import { queueSceneArt } from '../config/SceneArt';
 import { FocusGroup, UI, backToMenu, fitText, framePanel, panelButton, subMenuFrame, uiFont } from '../ui/SceneWidgets';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /**
  * Cloud save and online identity. The operative code is the only key to a cloud save, so the
@@ -31,13 +32,13 @@ export class CloudScene extends Phaser.Scene {
     subMenuFrame(this, GAME_WIDTH, GAME_HEIGHT, t('cloud.title'), t(online ? 'cloud.online' : 'cloud.offline'), 0x21e6ff, 'systems');
     const cx = GAME_WIDTH / 2;
     const operative = ensureOperative();
-    const label = { fontFamily: 'Arial Black', fontSize: uiFont(this, 13), color: UI.muted, letterSpacing: 2 };
+    const label = { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 13), color: UI.muted, letterSpacing: 2 };
 
     // Identity card: callsign and code on the left, their actions on the right.
     framePanel(this, cx, 256, 960, 214, UI.cyan, { strokeAlpha: 0.4, band: 0.05, cut: 16 });
     this.add.text(cx - 440, 178, t('cloud.callsign'), label).setOrigin(0, 0.5);
     const callsign = this.add.text(cx - 440, 212, operative.callsign, {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 26), color: '#73ef62',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 26), color: '#73ef62',
     }).setOrigin(0, 0.5).setName('cloud-callsign');
     const rename = panelButton(this, cx + 320, 196, 240, 52, t('cloud.rename'), UI.green, () => {
       const answer = window.prompt(t('cloud.renamePrompt'), loadProfile().operative?.callsign ?? '');
@@ -65,7 +66,7 @@ export class CloudScene extends Phaser.Scene {
     const restore = panelButton(this, cx + 165, 434, 300, 60, t('cloud.restore'), UI.violet, () => void this.restore(), 16, { name: 'cloud-restore' });
     if (!online) for (const button of [upload, restore]) button.setEnabled(false);
     this.status = this.add.text(cx, 504, '', {
-      fontFamily: 'Arial Black', fontSize: uiFont(this, 14), color: '#73ef62', align: 'center', wordWrap: { width: 900 },
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: uiFont(this, 14), color: '#73ef62', align: 'center', wordWrap: { width: 900 },
     }).setOrigin(0.5).setName('cloud-status');
     this.add.text(cx, 566, t('cloud.autoNote'), {
       fontFamily: 'Arial', fontSize: uiFont(this, 12), color: UI.muted, align: 'center', wordWrap: { width: 900 },

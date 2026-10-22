@@ -4,6 +4,7 @@ import { t, td } from '../i18n';
 import { reducedMotion } from '../systems/RuntimeSettings';
 import { fitText } from './SceneWidgets';
 import { hudPx, isCompactHud } from './HudLayout';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 const PANEL_X = 16;
 // Starts below the HP/energy panel (which ends at y=126) and stays clear of the boss banner
@@ -71,13 +72,13 @@ export class ContractHud {
       const marker = scene.add.rectangle(PANEL_X + 3, y + 4, 4, this.rowHeight - 8, ACCENT, 0.9).setOrigin(0, 0);
       const title = scene.add
         .text(PANEL_X + 12, y + textTop, td(contract.title), {
-          fontFamily: 'Arial Black', fontSize, color: '#eaffff', letterSpacing: 1,
+          fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize, color: '#eaffff', letterSpacing: 1,
         })
         .setOrigin(0, 0)
         .setName(`contract-row-${index}-title`);
       const progress = scene.add
         .text(PANEL_X + this.panelWidth - 8, y + textTop, '', {
-          fontFamily: 'Arial Black', fontSize, color: '#8ba5b8',
+          fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize, color: '#8ba5b8',
         })
         .setOrigin(1, 0);
       const barBack = scene.add

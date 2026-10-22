@@ -6,6 +6,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { t } from '../i18n';
 import { fitText } from './SceneWidgets';
 import { hudFont, isCompactHud } from './HudLayout';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /** Owns touch controls and guarantees that interrupted pointers never stick. */
 export class MobileControls {
@@ -39,8 +40,8 @@ export class MobileControls {
     // FUEGO" is ~240px wide and, centred under the aim stick, ran past the right edge.
     const compact = isCompactHud(this.scene);
     const labelOffset = compact ? 84 : 88;
-    const moveLabel = this.scene.add.text(moveCenter.x, moveCenter.y + labelOffset, t('hud.move'), { fontFamily: 'Arial Black', fontSize: hudFont(this.scene, 10), color: '#8fcbd6' }).setOrigin(.5).setDepth(61);
-    const aimLabel = this.scene.add.text(aimCenter.x, aimCenter.y + labelOffset, t('hud.aimFire'), { fontFamily: 'Arial Black', fontSize: hudFont(this.scene, 10), color: '#ff9caf' }).setOrigin(.5).setDepth(61);
+    const moveLabel = this.scene.add.text(moveCenter.x, moveCenter.y + labelOffset, t('hud.move'), { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this.scene, 10), color: '#8fcbd6' }).setOrigin(.5).setDepth(61);
+    const aimLabel = this.scene.add.text(aimCenter.x, aimCenter.y + labelOffset, t('hud.aimFire'), { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this.scene, 10), color: '#ff9caf' }).setOrigin(.5).setDepth(61);
     const placeLabel = (label: Phaser.GameObjects.Text, x: number, y: number) =>
       label.setPosition(Phaser.Math.Clamp(x, 8 + label.width / 2, width - 8 - label.width / 2), y + labelOffset);
     placeLabel(moveLabel, moveCenter.x, moveCenter.y);
@@ -49,7 +50,7 @@ export class MobileControls {
     // (canvas scale bottoms out around 0.5), just under the ~44px minimum touch target.
     const dash = this.scene.add.circle(width - 226, height - 232, 45, 0x21e6ff, .36)
       .setStrokeStyle(3, 0x73ef62, .8).setInteractive().setDepth(61).setName('mobilecontrols-dash');
-    const dashLabel = fitText(this.scene.add.text(dash.x, dash.y, t('hud.dash'), { fontFamily: 'Arial Black', fontSize: hudFont(this.scene, 13), color: '#eaffff' }).setOrigin(.5).setDepth(62), 80, 10);
+    const dashLabel = fitText(this.scene.add.text(dash.x, dash.y, t('hud.dash'), { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: hudFont(this.scene, 13), color: '#eaffff' }).setOrigin(.5).setDepth(62), 80, 10);
     const profile = loadProfile();
     // "AUTO: SÍ" is ~125px at 22px, so the pill widens with the type; it still ends above the
     // dash pad (pill 398-442, pad from 443).
@@ -57,7 +58,7 @@ export class MobileControls {
     const auto = this.scene.add.rectangle(width - 226, height - 300, autoWidth, compact ? 44 : 38, 0x07111f, .74)
       .setStrokeStyle(3, profile.autoFire ? 0x73ef62 : 0x7594a8, .9).setDepth(61);
     const autoSize = parseFloat(hudFont(this.scene, 12));
-    const autoLabel = this.scene.add.text(auto.x, auto.y, '', { fontFamily: 'Arial Black', fontSize: `${autoSize}px`, color: '#eaffff' }).setOrigin(.5).setDepth(62);
+    const autoLabel = this.scene.add.text(auto.x, auto.y, '', { fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: `${autoSize}px`, color: '#eaffff' }).setOrigin(.5).setDepth(62);
     const labelAuto = (on: boolean) => fitText(autoLabel.setFontSize(autoSize).setText(t(on ? 'hud.autoOn' : 'hud.autoOff')), autoWidth - 12, 10);
     labelAuto(profile.autoFire);
     // The pill is only 38px tall logically, which rendered as short as 19 CSS px on the
@@ -86,15 +87,25 @@ export class MobileControls {
     const reset = () => { resetMove(); resetAim(); this.game.mobileInput.dash = false; };
     const onMove = (p: Phaser.Input.Pointer) => { if (p.id === this.movePointer) updateStick(p, moveCenter, moveKnob, this.game.mobileInput.movement); if (p.id === this.aimPointer) updateStick(p, aimCenter, aimKnob, this.game.mobileInput.aim); };
     const onUp = (p: Phaser.Input.Pointer) => { if (p.id === this.movePointer) resetMove(); if (p.id === this.aimPointer) resetAim(); };
+    // The stick labels only teach the first touch: afterwards they crowd the XP bar below and
+    // repeat the onboarding hint above, so each fades out once its stick has been used.
+    const retire = (label: Phaser.GameObjects.Text) => {
+      if (!label.visible || label.getData('retiring')) return;
+      label.setData('retiring', true);
+      if (reducedMotion()) label.setVisible(false);
+      else this.scene.tweens.add({ targets: label, alpha: 0, duration: 400, onComplete: () => label.setVisible(false) });
+    };
     const beginMove = (p: Phaser.Input.Pointer) => {
       if (this.movePointer !== -1) return;
       this.movePointer = p.id;
+      retire(moveLabel);
       positionStick(moveCenter, Phaser.Math.Clamp(p.x, 90, width * .38), Phaser.Math.Clamp(p.y, height * .52, height - 105), moveBase, moveKnob, moveLabel);
       setFocus(moveVisuals, true);
     };
     const beginAim = (p: Phaser.Input.Pointer) => {
       if (this.aimPointer !== -1) return;
       this.aimPointer = p.id; this.game.mobileInput.firing = true;
+      retire(aimLabel);
       positionStick(aimCenter, Phaser.Math.Clamp(p.x, width * .62, width - 90), Phaser.Math.Clamp(p.y, height * .52, height - 105), aimBase, aimKnob, aimLabel);
       setFocus(aimVisuals, true);
     };

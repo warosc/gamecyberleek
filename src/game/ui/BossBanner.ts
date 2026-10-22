@@ -5,6 +5,7 @@ import { t, td } from '../i18n';
 import { reducedMotion } from '../systems/RuntimeSettings';
 import { fitText } from './SceneWidgets';
 import { hudFont, isCompactHud } from './HudLayout';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /** Owns the boss health panel, its arrival banner and the phase callouts. */
 export class BossBanner {
@@ -33,7 +34,7 @@ export class BossBanner {
     const labelY = centerY - (this.compact ? 14 : 12);
     const name = scene.add
       .text(GAME_WIDTH / 2 - 130, labelY, td(this.identity.name), {
-        fontFamily: 'Arial Black',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold',
         fontSize: hudFont(scene, 15),
         color: '#f4d7ff',
       })
@@ -77,7 +78,7 @@ export class BossBanner {
       .setStrokeStyle(3, 0xd566ff, 0.9);
     const title = this.scene.add
       .text(0, this.compact ? -18 : -14, `${td(this.identity.name)} // ${t('boss.commander')}`, {
-        fontFamily: 'Arial Black',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold',
         fontSize: '38px',
         color: '#f4d7ff',
         stroke: '#1a0326',
@@ -87,7 +88,7 @@ export class BossBanner {
     fitText(title, plateWidth - 40, 24);
     const subtitle = this.scene.add
       .text(0, this.compact ? 32 : 26, td(this.identity.title), {
-        fontFamily: 'Arial Black',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold',
         fontSize: hudFont(this.scene, 13),
         color: '#d566ff',
         letterSpacing: 5,
@@ -130,7 +131,7 @@ export class BossBanner {
     const flashY = this.compact ? 228 : 208;
     const flash = this.scene.add
       .text(GAME_WIDTH / 2, still ? flashY - 20 : flashY, td(BOSS_IDENTITY.phases[phase - 1]), {
-        fontFamily: 'Arial Black',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold',
         fontSize: '44px',
         color: phase === 3 ? '#ff476f' : '#ffb52e',
         stroke: '#1a0326',

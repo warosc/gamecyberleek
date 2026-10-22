@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config/Constants';
 import { t, type StringKey } from '../i18n';
 import { reducedMotion } from '../systems/RuntimeSettings';
 import { hudFont } from './HudLayout';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 export type HintAction = 'move' | 'aim' | 'fire' | 'dash' | 'special';
 /** The device the player is using right now: it picks the vocabulary of every hint. */
@@ -167,7 +168,7 @@ export class OnboardingHints {
     const spot = anchor(action, this.device);
     const label = this.scene.add
       .text(spot.x, spot.y, t(key), {
-        fontFamily: 'Arial Black',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold',
         fontSize: hudFont(this.scene, 15),
         color: '#eaffff',
         backgroundColor: '#04121ccc',

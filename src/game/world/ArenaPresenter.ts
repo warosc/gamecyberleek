@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { ARENA } from '../config/Constants';
 import type { ArenaTheme } from '../config/ArenaDefinitions';
 import { detectQualityProfile } from '../config/QualityProfile';
+import { DISPLAY_FONT } from '../config/Fonts';
 
 /**
  * Arena decoration: floor, grid, landmarks and ambient machinery. Presentation only —
@@ -47,7 +48,7 @@ export class ArenaPresenter {
     this.drawDebris(theme, random);
     this.scene.add
       .text(ARENA.width / 2, 70, `${theme.name}  //  ${theme.subtitle}`, {
-        fontFamily: 'Arial Black',
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold',
         fontSize: '24px',
         color: `#${theme.accent.toString(16).padStart(6, '0')}`,
       })

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS } from '../../config/Constants';
+import { DISPLAY_FONT } from '../../config/Fonts';
 export class ExperienceOrb extends Phaser.GameObjects.Arc {
   value = 0;
   /** Gameplay time this orb was last spawned, used to recycle the stalest orb first. */
@@ -19,7 +20,7 @@ export class ExperienceOrb extends Phaser.GameObjects.Arc {
     this.badge = scene.add.circle(0, 0, 12, 0x06131a, 0.96)
       .setStrokeStyle(2, COLORS.green, 0.95);
     this.glyph = scene.add.text(0, 0, 'XP', {
-      fontFamily: 'Arial Black', fontSize: '13px', color: '#73ef62',
+      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '13px', color: '#73ef62',
       stroke: '#07111f', strokeThickness: 2,
     }).setOrigin(0.5);
     this.visual = scene.add.container(x, y, [this.halo, this.badge, this.glyph]).setDepth(7);
