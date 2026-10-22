@@ -39,7 +39,8 @@ import { RunInventory } from '../systems/RunInventory';
 import { applyEquipmentModifiers, removeEquipmentModifiers, type Equipment } from '../loot/Equipment';
 import { activeBuildSynergy, combatRating, type BuildSynergy } from '../systems/BuildProgression';
 import { SectorObjectiveSystem, type ObjectiveMetric } from '../systems/SectorObjectiveSystem';
-import { shakeCamera } from '../systems/RuntimeSettings';
+import { reducedMotion, shakeCamera } from '../systems/RuntimeSettings';
+import { RunMoments, type RunMoment } from '../systems/RunMoments';
 import { FAMILY_RULES } from '../entities/enemies/EnemyTypes';
 import { applyWorkshop } from '../progression/Workshop';
 import { abilityText, t, td } from '../i18n';
@@ -135,6 +136,10 @@ export class GameScene extends Phaser.Scene {
   private encounters!: EncounterSystem;
   private runEnd!: RunEndSystem;
   private lastBossPhase = 1;
+  private moments!: RunMoments;
+  private hitStopActive = false;
+  private hitStopUntil = 0;
+  private lastHitStopAt = -Infinity;
   private xpIntroduced = false;
   private sectorHazards!: SectorHazardSystem;
   private sectorDevices!: SectorDeviceSystem;
@@ -153,6 +158,9 @@ export class GameScene extends Phaser.Scene {
       const reset = this.momentum.break();
       if (reset) this.applyMomentum(reset);
     }
+  };
+  private readonly handleMinibossSpawned = () => {
+    this.audio.play('miniboss_spawn');
   };
   private readonly handleBossSpawned = () => {
     this.telemetry.bossSpawned();
@@ -263,7 +271,14 @@ export class GameScene extends Phaser.Scene {
     // Auto-fire is a phone aid. A touch-screen laptop also shows the touch controls, but its player
     // aims with the mouse: auto-fire there pinned the aim to the idle stick and shot the wrong way.
     const touchFirst = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
-    this.mobileInput.autoFire = Boolean(touchFirst) && loadProfile().autoFire;
+    const profile = loadProfile();
+    this.mobileInput.autoFire = Boolean(touchFirst) && profile.autoFire;
+    this.moments = new RunMoments({
+      owned: profile.achievements, context: profile, bestLevel: profile.bestLevel, sector: this.arenaIndex,
+    });
+    this.hitStopActive = false;
+    this.hitStopUntil = 0;
+    this.lastHitStopAt = -Infinity;
     this.equippedWeapon = starterWeapon(this.selectedWeaponId).name;
     this.equippedArmor = 'SIN ARMADURA';
   }
@@ -353,6 +368,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on(Events.PLAYER_DAMAGED, this.handlePlayerDamaged);
     this.events.on(Events.PLAYER_DIED, this.handlePlayerDied);
     this.events.on(Events.BOSS_SPAWNED, this.handleBossSpawned);
+    this.events.on(Events.MINIBOSS_SPAWNED, this.handleMinibossSpawned);
     this.events.on('weapon-fired', this.handleWeaponFired);
     this.events.on('enemy-warning', this.handleEnemyWarning);
     this.events.on('enemy-attack', this.handleEnemyAttack);
@@ -378,6 +394,7 @@ export class GameScene extends Phaser.Scene {
       this.events.off(Events.PLAYER_DAMAGED, this.handlePlayerDamaged);
       this.events.off(Events.PLAYER_DIED, this.handlePlayerDied);
       this.events.off(Events.BOSS_SPAWNED, this.handleBossSpawned);
+      this.events.off(Events.MINIBOSS_SPAWNED, this.handleMinibossSpawned);
       this.events.off('weapon-fired', this.handleWeaponFired);
       this.events.off('enemy-warning', this.handleEnemyWarning);
       this.events.off('enemy-attack', this.handleEnemyAttack);
@@ -409,6 +426,12 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     if (this.victoryPending) return;
     if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
+    // Hit-stop: the whole simulation holds for a few frames, the clock included.
+    if (this.hitStopActive) {
+      if (this.time.now < this.hitStopUntil) return;
+      this.hitStopActive = false;
+      this.physics.resume();
+    }
     this.survivalMs += delta;
     this.encounters.update(this.survivalMs);
     this.objective.update(this.survivalMs);
@@ -476,6 +499,7 @@ export class GameScene extends Phaser.Scene {
           this.cameras.main.flash(180, 213, 102, 255, false);
           shakeCamera(this.cameras.main, 220, 0.008);
           this.audio.play('boss_phase');
+          this.hitStop(140);
           this.bossPhases.enter(enemy.bossPhase as 2 | 3, enemy);
         }
         const preparing = enemy.isPreparingAttack;
@@ -606,6 +630,7 @@ export class GameScene extends Phaser.Scene {
       for (let level = previousLevel + 1; level <= this.xp.level; level++)
         if (level % GAMEPLAY.equipmentEveryLevels === 0) this.pendingEquipmentDrop = true;
       this.openLevelUp();
+      this.publishMoments(this.moments.levelReached(this.xp.level));
     }
     this.events.emit(Events.XP_COLLECTED, this.xp.xp, this.xp.level);
   }
@@ -641,7 +666,7 @@ export class GameScene extends Phaser.Scene {
     if (options.length === 0) return false;
     this.rerollsLeft--;
     this.offeredAbilities = options.map(ability => ability.id);
-    this.audio.tone(660, 0.14, 0.035);
+    this.audio.play('reroll');
     this.events.emit(Events.PLAYER_LEVEL_UP, options, this.rerollsLeft);
     return true;
   }
@@ -1095,6 +1120,43 @@ export class GameScene extends Phaser.Scene {
   private announceContractCompleted(contract: ContractProgress) {
     this.audio.play('contract_complete');
     this.events.emit(Events.CONTRACT_COMPLETED, contract);
+    // The third contract can complete CONTRATISTA on the spot.
+    this.publishMoments(this.moments.achievements(this.momentFacts()));
+  }
+  private momentFacts() {
+    return {
+      kills: this.telemetry.kills, damageTaken: this.telemetry.damageTaken, durationMs: this.survivalMs,
+      perfectContracts: this.contracts.list.every(contract => contract.completed),
+    };
+  }
+  /** Sounds and world feedback here; the plates for achievements and records live in UIScene. */
+  private publishMoments(moments: RunMoment[]) {
+    for (const moment of moments) {
+      if (moment.kind === 'achievement') this.audio.play('achievement');
+      else if (moment.kind === 'record') this.audio.play('record');
+      else {
+        this.audio.play('streak_milestone');
+        const colors: Record<number, string> = { 10: '#73efff', 25: '#73ef62', 50: '#ffc857', 100: '#ff6fd8' };
+        this.effects.streakCallout(this.player.x, this.player.y - 90, t('moment.streak', { chain: moment.chain }),
+          colors[moment.chain] ?? '#ffffff', moment.chain >= 50 ? 34 : 28);
+      }
+      this.events.emit(Events.RUN_MOMENT, moment);
+    }
+  }
+  /**
+   * A beat of stillness on the heaviest hits (elite and miniboss kills, a boss phase change), so
+   * they land instead of passing like any other kill. The simulation and its clock hold; the
+   * state never changes, so a modal opened in the same step keeps the physics paused on its own.
+   */
+  private hitStop(ms: number) {
+    if (reducedMotion() || this.time.now - this.lastHitStopAt < 350) return;
+    if (this.state !== GameState.PLAYING && this.state !== GameState.BOSS) return;
+    this.lastHitStopAt = this.time.now;
+    this.hitStopUntil = this.time.now + ms;
+    if (!this.hitStopActive) {
+      this.hitStopActive = true;
+      this.physics.pause();
+    }
   }
   private plasmaExplosion(
     x: number,
@@ -1146,7 +1208,7 @@ export class GameScene extends Phaser.Scene {
       this.events.emit(Events.PLAYER_DAMAGED, this.player.health.current, this.player.health.max);
     }
     this.loot.spawnEquipmentDrop();
-    this.audio.play('level_up');
+    this.audio.play('objective_complete');
   }
   /** Every kill path (projectile, arc chain, nova, splash) converges here, so it is the one
    * place contract progress needs to hook into combat. */
@@ -1169,6 +1231,9 @@ export class GameScene extends Phaser.Scene {
     const momentum = this.momentum.kill(this.survivalMs);
     if (momentum.tier > 0 && momentum.chain % 3 === 0) this.audio.play('combo_rise');
     this.applyMomentum(momentum);
+    this.publishMoments([...this.moments.chainReached(momentum.chain), ...this.moments.achievements(this.momentFacts())]);
+    if (defeat.miniboss) this.hitStop(110);
+    else if (elite && !defeat.boss) this.hitStop(45);
     if (defeat.boss) this.telemetry.bossKilled();
     this.impacts.death(
       defeat.x,
@@ -1181,7 +1246,7 @@ export class GameScene extends Phaser.Scene {
       this.loot.spawnEquipmentDrop();
       this.events.emit(Events.MINIBOSS_HEALTH, 0, defeat.maxHealth);
       this.events.emit(Events.MINIBOSS_DEFEATED);
-      this.audio.tone(1180, 0.32, 0.055);
+      this.audio.play('miniboss_death');
     }
     if (defeat.boss) {
       // Freeze combat during the death effect. XP must not open a modal and pause the

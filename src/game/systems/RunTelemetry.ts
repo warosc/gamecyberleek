@@ -141,6 +141,10 @@ export class RunTelemetry {
   }
 
   /** Kills so far this run; read by the live daily board while the run is still going. */
+  get damageTaken() {
+    return this.record.damageTaken;
+  }
+
   get kills() {
     return this.record.kills;
   }

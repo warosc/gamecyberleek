@@ -360,6 +360,78 @@ test('a completed contract raises an achievement plate without pausing play', as
   expect(result.texts.join(' ')).toContain('CONTRATO COMPLETADO');
 });
 
+test('a weapon evolution and an achievement earned in play raise achievement plates', async ({ page }) => {
+  await deploy(page);
+  const plates = await page.evaluate(async () => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const ui = window.combatGame.scene.getScene('UI');
+    const internal = scene as unknown as {
+      offeredAbilities: string[];
+      telemetry: { record: { kills: number } };
+      resolveEnemyDeath: (enemy: unknown) => void;
+    };
+    const texts = () => ui.children.list
+      .filter(child => child.name === 'achievement-toast')
+      .flatMap(plate => (plate as Phaser.GameObjects.Container).list.filter(item => item.type === 'Text'))
+      .map(item => (item as Phaser.GameObjects.Text).text);
+    // The protocol's third level evolves the weapon.
+    const protocol = 'pulse_protocol';
+    scene.abilityLevels.set(protocol, 2);
+    scene.state = 'LEVEL_UP' as GameScene['state'];
+    internal.offeredAbilities = [protocol];
+    scene.selectAbility(protocol);
+    const evolution = texts();
+    // 250 kills in one run earn EXTERMINADOR, which can no longer be lost.
+    internal.telemetry.record.kills = 249;
+    const path = '/src/game/entities/enemies/Enemy.ts';
+    const { Enemy } = await import(path);
+    const enemy = new Enemy(scene, scene.player.x + 300, scene.player.y, 'GRUNT');
+    scene.enemies.add(enemy);
+    internal.resolveEnemyDeath(enemy);
+    // Plates queue: the second waits for the first, so read the queue's head and wait.
+    return { evolution };
+  });
+  expect(plates.evolution.join(' ')).toContain('EVOLUCIÓN DE ARMA');
+  await expect.poll(() => page.evaluate(() => window.combatGame.scene.getScene('UI').children.list
+    .filter(child => child.name === 'achievement-toast')
+    .flatMap(plate => (plate as Phaser.GameObjects.Container).list.filter(item => item.type === 'Text'))
+    .map(item => (item as Phaser.GameObjects.Text).text).join(' ')), { timeout: 8000 }).toContain('LOGRO DESBLOQUEADO');
+});
+
+test('a hit-stop never leaves physics paused when a modal opens during it', async ({ page }) => {
+  await deploy(page);
+  const during = await page.evaluate(async () => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    const internal = scene as unknown as {
+      hitStopActive: boolean;
+      openLevelUp: () => void;
+      resolveEnemyDeath: (enemy: unknown) => void;
+    };
+    const path = '/src/game/entities/enemies/Enemy.ts';
+    const { Enemy } = await import(path);
+    const enemy = new Enemy(scene, scene.player.x + 300, scene.player.y, 'GRUNT');
+    enemy.makeElite();
+    scene.enemies.add(enemy);
+    internal.resolveEnemyDeath(enemy);
+    const frozen = internal.hitStopActive && scene.physics.world.isPaused;
+    internal.openLevelUp();
+    return { frozen, state: scene.state };
+  });
+  expect(during).toEqual({ frozen: true, state: 'LEVEL_UP' });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window.combatGame.scene.getScene('Game') as GameScene).physics.world.isPaused)).toBe(true);
+  await page.keyboard.press('1');
+  await expect.poll(() => page.evaluate(() => (window.combatGame.scene.getScene('Game') as GameScene).state)).toBe('PLAYING');
+  const before = await page.evaluate(() => (window.combatGame.scene.getScene('Game') as GameScene).survivalMs);
+  await page.waitForTimeout(500);
+  const after = await page.evaluate(() => {
+    const scene = window.combatGame.scene.getScene('Game') as GameScene;
+    return { survivalMs: scene.survivalMs, paused: scene.physics.world.isPaused };
+  });
+  expect(after.paused).toBe(false);
+  expect(after.survivalMs).toBeGreaterThan(before);
+});
+
 test('wide Safari landscape fills the complete viewport without side bars', async ({ page }) => {
   // The widened layout is for touch devices; state that here instead of inheriting it from
   // whatever the host machine reports, which differs between a touch-screen PC and CI.

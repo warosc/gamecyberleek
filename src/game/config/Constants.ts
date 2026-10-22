@@ -75,4 +75,6 @@ export const Events = {
   WEAPON_EVOLVED: 'weapon-evolved',
   MOMENTUM_CHANGED: 'momentum-changed',
   CONTRACT_COMPLETED: 'contract-completed',
+  /** A RunMoment (achievement earned in play, new best level, kill-chain milestone). */
+  RUN_MOMENT: 'run-moment',
 } as const;

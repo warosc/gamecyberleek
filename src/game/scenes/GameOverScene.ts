@@ -26,7 +26,15 @@ interface GameOverData {
   dailyStreak?: number;
   /** The threat level this victory opened in its sector, when it opened one. */
   threatUnlocked?: number;
+  /** Personal records this run beat: best level, fastest victory. */
+  recordLevel?: number;
+  recordVictoryMs?: number;
 }
+
+const clock = (ms: number) => {
+  const seconds = Math.floor(ms / 1000);
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+};
 
 export class GameOverScene extends Phaser.Scene {
   private navigating = false;
@@ -107,6 +115,13 @@ export class GameOverScene extends Phaser.Scene {
         text: data.newAchievements.map(a => t('gameover.achievement', { name: td(a.name), reward: a.reward })).join('   ·   '),
         color: '#73ef62', name: 'results-achievements',
       });
+    // Records share one line: with two note slots they must not push the achievements out.
+    const records = [
+      data.recordLevel ? t('gameover.recordLevel', { level: data.recordLevel }) : '',
+      data.recordVictoryMs ? t('gameover.recordTime', { time: clock(data.recordVictoryMs) }) : '',
+    ].filter(Boolean);
+    if (records.length)
+      notes.push({ text: t('gameover.records', { list: records.join('  ·  ') }), color: '#21e6ff', name: 'results-records' });
     if (data.newUnlocks?.length)
       notes.push({ text: t('gameover.unlock', { list: data.newUnlocks.join(' · ') }), color: '#73ef62', name: 'results-unlocks' });
     // Last: a new sector matters more on a first win, and the selector shows the level anyway.

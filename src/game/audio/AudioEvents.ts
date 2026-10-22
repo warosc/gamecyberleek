@@ -40,7 +40,13 @@ export type AudioEventId =
   | 'boss_phase'
   | 'boss_death'
   | 'victory'
-  | 'game_over';
+  | 'game_over'
+  | 'objective_complete'
+  | 'miniboss_spawn'
+  | 'miniboss_death'
+  | 'reroll'
+  | 'streak_milestone'
+  | 'record';
 
 export interface AudioTone {
   frequency: number;
@@ -103,6 +109,54 @@ export const AUDIO_EVENTS: Record<AudioEventId, AudioEventDefinition> = {
       { frequency: 440, durationS: 0.09, volume: 0.032, type: 'triangle' },
       { frequency: 660, durationS: 0.1, volume: 0.03, delayMs: 70, type: 'triangle' },
       { frequency: 880, durationS: 0.15, volume: 0.03, delayMs: 150, type: 'triangle' },
+    ],
+  },
+  // The sector objective used to reuse level_up; a completed objective is its own fanfare now.
+  objective_complete: {
+    category: 'ui',
+    tones: [
+      { frequency: 392, durationS: 0.1, volume: 0.03, type: 'triangle' },
+      { frequency: 523, durationS: 0.1, volume: 0.03, delayMs: 90, type: 'triangle' },
+      { frequency: 784, durationS: 0.22, volume: 0.03, delayMs: 180, type: 'sawtooth' },
+    ],
+  },
+  // A low, rising growl: the miniboss arrived without a sound of its own.
+  miniboss_spawn: {
+    category: 'sfx',
+    tones: [
+      { frequency: 82, durationS: 0.3, volume: 0.045, type: 'sawtooth' },
+      { frequency: 123, durationS: 0.28, volume: 0.03, delayMs: 160, type: 'square' },
+    ],
+  },
+  miniboss_death: {
+    category: 'sfx',
+    tones: [
+      { frequency: 1180, durationS: 0.28, volume: 0.04, type: 'triangle' },
+      { frequency: 590, durationS: 0.3, volume: 0.035, delayMs: 60, type: 'sawtooth' },
+    ],
+  },
+  reroll: {
+    category: 'ui',
+    tones: [
+      { frequency: 660, durationS: 0.06, volume: 0.028, type: 'triangle' },
+      { frequency: 990, durationS: 0.08, volume: 0.024, delayMs: 60, type: 'triangle' },
+    ],
+  },
+  // Higher and brighter than combo_rise, which marks every third kill.
+  streak_milestone: {
+    category: 'ui',
+    tones: [
+      { frequency: 700, durationS: 0.07, volume: 0.03, type: 'square' },
+      { frequency: 935, durationS: 0.07, volume: 0.028, delayMs: 55, type: 'square' },
+      { frequency: 1400, durationS: 0.14, volume: 0.026, delayMs: 110, type: 'triangle' },
+    ],
+  },
+  record: {
+    category: 'ui',
+    tones: [
+      { frequency: 587, durationS: 0.1, volume: 0.03, type: 'triangle' },
+      { frequency: 880, durationS: 0.1, volume: 0.03, delayMs: 100, type: 'triangle' },
+      { frequency: 1175, durationS: 0.26, volume: 0.03, delayMs: 200, type: 'triangle' },
     ],
   },
   ui_confirm: { category: 'ui', tones: [{ frequency: 660, durationS: 0.05, volume: 0.02, type: 'triangle' }] },

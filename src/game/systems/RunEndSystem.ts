@@ -71,6 +71,10 @@ export class RunEndSystem {
       newUnlocks,
       newAchievements,
       dailyBest,
+      // Records only count against an earlier one: a first run or first win is not a "record".
+      recordLevel: before.bestLevel > 1 && after.bestLevel > before.bestLevel ? after.bestLevel : undefined,
+      recordVictoryMs: data.victory && before.lifetime.fastestVictoryMs > 0
+        && after.lifetime.fastestVictoryMs < before.lifetime.fastestVictoryMs ? after.lifetime.fastestVictoryMs : undefined,
     });
     return true;
   }

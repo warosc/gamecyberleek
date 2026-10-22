@@ -243,6 +243,28 @@ export class CombatEffects {
   }
 
   /**
+   * A kill-chain milestone over the player. floatingText fades out as it rises in 550 ms, which
+   * read as one more damage number; this one pops, holds long enough to read, then lifts away.
+   */
+  streakCallout(x: number, y: number, text: string, color: string, size: number) {
+    const label = this.scene.add
+      .text(x, y, text, {
+        fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: `${size}px`, color, stroke: '#04101c', strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setDepth(31);
+    const still = this.reducedMotion;
+    label.setScale(still ? 1 : 0.55);
+    this.scene.tweens.add({
+      targets: label, scale: 1, duration: still ? 1 : 220, ease: 'Back.Out',
+      onComplete: () => this.scene.tweens.add({
+        targets: label, y: y - 40, alpha: 0, delay: 650, duration: 420, ease: 'Quad.In',
+        onComplete: () => label.destroy(),
+      }),
+    });
+  }
+
+  /**
    * Damage number styled by tier. A critical pops in at scale before drifting, which is what
    * separates it from a normal number at a glance in a busy fight.
    */

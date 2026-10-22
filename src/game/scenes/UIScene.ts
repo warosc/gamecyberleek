@@ -22,6 +22,7 @@ import { MomentumHud } from '../ui/MomentumHud';
 import type { MomentumState } from '../systems/CombatMomentum';
 import { ContractHud } from '../ui/ContractHud';
 import { AchievementToast } from '../ui/AchievementToast';
+import type { RunMoment } from '../systems/RunMoments';
 import { contractDescription, type ContractProgress } from '../systems/ContractSystem';
 import { MinibossBanner } from '../ui/MinibossBanner';
 import { buildInventoryPanel, buildLootDecision, showLootBanner } from '../ui/LootPanels';
@@ -188,6 +189,7 @@ export class UIScene extends Phaser.Scene {
     this.gameScene.events.on(Events.WEAPON_EVOLVED, this.onWeaponEvolved, this);
     this.gameScene.events.on(Events.MOMENTUM_CHANGED, this.onMomentumChanged, this);
     this.gameScene.events.on(Events.CONTRACT_COMPLETED, this.onContractCompleted, this);
+    this.gameScene.events.on(Events.RUN_MOMENT, this.onRunMoment, this);
     this.gameScene.events.on(Events.OBJECTIVE_CHANGED, this.onObjectiveChanged, this);
     this.gameScene.events.on(Events.LIVE_BOARD_CHANGED, this.onLiveBoard, this);
     this.gameScene.events.on('live-board-record', this.onLiveRecord, this);
@@ -223,6 +225,7 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.events.off(Events.WEAPON_EVOLVED, this.onWeaponEvolved, this);
       this.gameScene.events.off(Events.MOMENTUM_CHANGED, this.onMomentumChanged, this);
       this.gameScene.events.off(Events.CONTRACT_COMPLETED, this.onContractCompleted, this);
+      this.gameScene.events.off(Events.RUN_MOMENT, this.onRunMoment, this);
       this.gameScene.events.off(Events.OBJECTIVE_CHANGED, this.onObjectiveChanged, this);
       this.gameScene.events.off(Events.LIVE_BOARD_CHANGED, this.onLiveBoard, this);
       this.gameScene.events.off('live-board-record', this.onLiveRecord, this);
@@ -550,21 +553,21 @@ export class UIScene extends Phaser.Scene {
   private onRunPhaseChanged(phase: RunPhaseCallout) {
     this.phaseBanner.show(phase);
   }
+  /** The evolution is the run's biggest upgrade: it gets the achievement plate, not a banner of its own. */
   private onWeaponEvolved(name: string, color: number) {
-    const tint = `#${color.toString(16).padStart(6, '0')}`;
-    const back = this.add.rectangle(GAME_WIDTH / 2, 260, 620, 118, 0x06101d, 0.97)
-      .setStrokeStyle(4, color, 1);
-    const kicker = this.add.text(GAME_WIDTH / 2, 232, t('evolution.title'), {
-      fontFamily: 'monospace', fontSize: hudFont(this, 13), color: tint, letterSpacing: 4,
-    }).setOrigin(0.5);
-    const title = fitText(this.add.text(GAME_WIDTH / 2, 270, td(name), {
-      fontFamily: DISPLAY_FONT, fontStyle: 'bold', fontSize: '30px', color: '#ffffff', letterSpacing: 2,
-    }).setOrigin(0.5), 580, 18);
-    // Under reduced motion it fades in place instead of dropping in.
-    const banner = this.add.container(0, reducedMotion() ? 0 : -30, [back, kicker, title]).setDepth(140).setAlpha(0);
-    this.tweens.add({
-      targets: banner, y: 0, alpha: 1, duration: 240, hold: 1900, yoyo: true,
-      onComplete: () => banner.destroy(true),
+    this.achievements.show({
+      kicker: t('evolution.title'), title: td(name), detail: t('moment.evolutionDetail'), icon: '✦', color,
+    });
+  }
+  /** Achievements earned mid-run and a new best level; kill-chain milestones are world text (GameScene). */
+  private onRunMoment(moment: RunMoment) {
+    if (moment.kind === 'achievement') this.achievements.show({
+      kicker: t('moment.achievement'), title: td(moment.name),
+      detail: t('achievement.credits', { credits: moment.reward }), icon: '★', color: 0xffc857,
+    });
+    else if (moment.kind === 'record') this.achievements.show({
+      kicker: t('moment.record'), title: t('moment.recordLevel', { level: moment.level }),
+      detail: t('moment.recordDetail'), icon: '▲', color: 0x21e6ff,
     });
   }
   private onMomentumChanged(state: MomentumState) {

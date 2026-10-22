@@ -90,6 +90,14 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
     earned: p => p.lifetime.kills >= 5000 },
 ];
 
+/**
+ * Achievements that can be announced during a run because nothing later in it can take them
+ * back: they depend only on totals that never go down. Accuracy, mastery, run count and anything
+ * that needs the victory can still change (or only exists) at the end, so those stay on the
+ * results screen. Paying them is still saveRun's job alone.
+ */
+export const LIVE_ACHIEVEMENTS: readonly string[] = ['exterminator', 'harvester', 'contractor'];
+
 /** Returns the achievements newly earned by this run, in registry order. */
 export function newlyEarned(owned: readonly string[], profile: AchievementContext, run: RunFacts & { victory: boolean }) {
   return ACHIEVEMENTS.filter(achievement => !owned.includes(achievement.id) && achievement.earned(profile, run));
