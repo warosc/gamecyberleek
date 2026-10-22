@@ -15,7 +15,7 @@ describe('mobile viewport layout', () => {
 
   it('never narrows the authored 16:9 layout and only zooms the mobile world', () => {
     expect(logicalWidthForViewport({ width: 667, height: 375, coarsePointer: true })).toBe(1281);
-    expect(mobileWorldZoom(true)).toBe(1.35);
+    expect(mobileWorldZoom(true)).toBe(1.2);
     expect(mobileWorldZoom(false)).toBe(1);
   });
 });

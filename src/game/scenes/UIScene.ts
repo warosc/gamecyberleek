@@ -5,7 +5,7 @@ import { SPECIAL_ABILITIES, type SpecialAbilityId } from '../abilities/SpecialAb
 import type { GameScene } from './GameScene';
 import type { Equipment } from '../loot/Equipment';
 import { loadProfile } from '../systems/ProfileStore';
-import { reducedMotion } from '../systems/RuntimeSettings';
+import { pulseHaptics, reducedMotion } from '../systems/RuntimeSettings';
 import { connectedPad } from '../input/GamepadBridge';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import { ModalOverlay } from '../ui/ModalOverlay';
@@ -35,20 +35,6 @@ import type { BuildSynergy, combatRating } from '../systems/BuildProgression';
 import type { SectorObjectiveState } from '../systems/SectorObjectiveSystem';
 import { DISPLAY_FONT } from '../config/Fonts';
 
-/**
- * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
- * undefined, so a property check is not enough: the value has to be callable. That gap threw
- * on the first hit the player took and killed the game loop on every iPhone run.
- * Haptics are a nicety, so a refusal by the browser must never reach gameplay either.
- */
-function pulseHaptics(durationMs: number) {
-  if (typeof navigator.vibrate !== 'function') return;
-  try {
-    navigator.vibrate(durationMs);
-  } catch {
-    // Ignored on purpose.
-  }
-}
 
 /**
  * On a first run the contract briefing waits until the player has moved and aimed (see

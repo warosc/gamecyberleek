@@ -37,3 +37,18 @@ export function shakeCamera(camera: Phaser.Cameras.Scene2D.Camera, duration: num
   if (!active.screenShake || reducedMotion()) return;
   camera.shake(duration, intensity);
 }
+
+/**
+ * iOS Safari answers `'vibrate' in navigator` with true while `navigator.vibrate` is
+ * undefined, so a property check is not enough: the value has to be callable. That gap threw
+ * on the first hit the player took and killed the game loop on every iPhone run.
+ * Haptics are a nicety, so a refusal by the browser must never reach gameplay either.
+ */
+export function pulseHaptics(durationMs: number) {
+  if (typeof navigator.vibrate !== 'function') return;
+  try {
+    navigator.vibrate(durationMs);
+  } catch {
+    // Ignored on purpose.
+  }
+}

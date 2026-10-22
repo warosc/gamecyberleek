@@ -32,4 +32,6 @@ export function currentViewportShape(): ViewportShape {
   };
 }
 
-export const mobileWorldZoom = (coarsePointer: boolean) => coarsePointer ? 1.35 : 1;
+// 1.35 showed a phone player 26 % less arena height than desktop, so enemies arrived on top of them;
+// 1.2 keeps the sprites readable while giving back most of that warning time.
+export const mobileWorldZoom = (coarsePointer: boolean) => coarsePointer ? 1.2 : 1;

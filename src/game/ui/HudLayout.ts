@@ -74,3 +74,55 @@ export function rightColumn(mobile: boolean, compact = false): HudColumn {
 
 /** Horizontal centres that line the column's panels up on one right edge (GAME_WIDTH - 20). */
 export const RIGHT_EDGE_INSET = 20;
+
+export interface TouchCircle { x: number; y: number; r: number }
+
+export interface TouchLayout {
+  /** Where the floating move stick rests until the left thumb touches down. */
+  moveAnchor: { x: number; y: number };
+  /** Left edge of the right-thumb half: touches left of it move, right of it aim or act. */
+  splitX: number;
+  /** Highest point a stick may start from, below the HP panel and the top row of buttons. */
+  stickTop: number;
+  stickRadius: number;
+  knobRadius: number;
+  /** The manual aim stick's resting place, left of the action cluster. */
+  aimAnchor: { x: number; y: number };
+  dash: TouchCircle;
+  /** Q, E, R in that order, arced around the dash pad for the right thumb. */
+  abilities: [TouchCircle, TouchCircle, TouchCircle];
+  /** The auto-fire pill, in the top row beside INV and pause. */
+  auto: { x: number; y: number; width: number; height: number; hitHeight: number };
+}
+
+/**
+ * Touch layout for one-thumb play with auto-aim. The left thumb moves with a floating stick that
+ * starts wherever it lands on the left half; the right thumb owns an action cluster (dash in the
+ * corner, the three powers arced around it) and can still drag on the empty right side to aim by
+ * hand. Before, the powers sat in the bottom centre, out of reach of both thumbs, and the sticks
+ * were 74 px wide on screen.
+ *
+ * Every circle stays at least 44 CSS px across at the smallest phone scale (0.46), and the cluster
+ * stays below the live board (compact: ends near 376) and above the XP bar (from GAME_HEIGHT - 37).
+ */
+export function touchLayout(width: number, height: number, compact: boolean): TouchLayout {
+  const dashR = compact ? 66 : 54;
+  const powerR = compact ? 50 : 42;
+  const dash = { x: width - (compact ? 150 : 128), y: height - (compact ? 165 : 150), r: dashR };
+  const scale = compact ? 1 : 0.84;
+  const around = (dx: number, dy: number): TouchCircle => ({ x: dash.x + dx * scale, y: dash.y + dy * scale, r: powerR });
+  const autoWidth = compact ? 150 : 104;
+  // Top row, right to left: pause (90 wide, from the edge inset 16), INV (68), then this pill.
+  const autoX = width - 16 - 90 - 12 - 68 - 12 - autoWidth / 2;
+  return {
+    moveAnchor: { x: compact ? 170 : 150, y: height - (compact ? 175 : 160) },
+    splitX: width / 2,
+    stickTop: compact ? 160 : 140,
+    stickRadius: compact ? 100 : 84,
+    knobRadius: compact ? 40 : 34,
+    aimAnchor: { x: width - (compact ? 560 : 470), y: height - (compact ? 175 : 160) },
+    dash,
+    abilities: [around(-200, 60), around(-170, -70), around(-50, -125)],
+    auto: { x: autoX, y: 42, width: autoWidth, height: compact ? 52 : 44, hitHeight: 100 },
+  };
+}

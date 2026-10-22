@@ -12,6 +12,7 @@ import { ExperienceSystem } from '../systems/ExperienceSystem';
 import { getAbilityById, isSignatureAbility, upgradeOffer } from '../abilities/AbilityRegistry';
 import { ExperienceOrb } from '../entities/experience/ExperienceOrb';
 import { orbPullSpeed } from '../systems/OrbMagnet';
+import { autoAimTarget } from '../systems/AutoAim';
 import { clampThreat } from '../config/EnemyScaling';
 import { setRunSeed } from '../systems/RunRandom';
 import { AudioManager } from '../managers/AudioManager';
@@ -58,7 +59,11 @@ export class GameScene extends Phaser.Scene {
     firing: false,
     dash: false,
     autoFire: false,
+    /** The right thumb is on the aim stick: manual aim wins over auto-aim while it is held. */
+    aimHeld: false,
   };
+  /** Last auto-aim direction, kept when no enemy is in reach so the gun does not swing to a stale touch. */
+  private readonly autoAimDir = new Phaser.Math.Vector2(1, 0);
   /** Analog gamepad input; used instead of `mobileInput` while the pad is the active device. */
   readonly padInput: VirtualPlayerInput = {
     active: true,
@@ -475,6 +480,13 @@ export class GameScene extends Phaser.Scene {
     if (this.live && this.survivalMs >= this.nextLiveUpdateAt) {
       this.nextLiveUpdateAt = this.survivalMs + 2000;
       this.live.update(this.liveScore, this.survivalMs / 1000);
+    }
+    // Auto-aim: on a phone with auto-fire, shots go at the nearest enemy unless the right thumb is
+    // aiming by hand, so the left thumb alone can play the run.
+    if (!this.padEngaged && this.mobileInput.active && this.mobileInput.autoFire && !this.mobileInput.aimHeld) {
+      const target = autoAimTarget(this.player, this.enemies.children as Set<Enemy>);
+      if (target) this.autoAimDir.set(target.x - this.player.x, target.y - this.player.y).normalize();
+      this.mobileInput.aim.copy(this.autoAimDir);
     }
     this.player.update(
       this.survivalMs,
