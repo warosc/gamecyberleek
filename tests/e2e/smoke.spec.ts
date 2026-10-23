@@ -128,6 +128,9 @@ test('boots, survives a run, and redeploys without killing the game loop', async
 
 test('starts a fresh run after the player dies', async ({ page }) => {
   const telemetry = watch(page);
+  // A player who stands still: on phones auto-fire and auto-aim would otherwise defend the run
+  // well enough that it never ends inside the test's minute.
+  await page.addInitScript(() => localStorage.setItem('leek-ops-profile-v5', JSON.stringify({ autoFire: false })));
   await page.goto('/');
   const at = await canvasMapper(page);
 

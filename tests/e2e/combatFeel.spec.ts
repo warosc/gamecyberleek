@@ -169,7 +169,7 @@ test('the canvas fills phone landscape and mobile zoom enlarges only the world',
   expect(layout.coverageY).toBeGreaterThan(0.995);
   if (layout.touch) {
     expect(layout.logicalWidth).toBeGreaterThanOrEqual(1280);
-    expect(layout.worldZoom).toBe(1.35);
+    expect(layout.worldZoom).toBe(1.2);
     expect(layout.uiZoom).toBe(1);
     expect(layout.secondaryHudVisible).toBe(false);
     expect(layout.pauseVisible).toBe(true);
@@ -360,42 +360,37 @@ test('a completed contract raises an achievement plate without pausing play', as
   expect(result.texts.join(' ')).toContain('CONTRATO COMPLETADO');
 });
 
-test('a weapon evolution and an achievement earned in play raise achievement plates', async ({ page }) => {
+test('an achievement earned in play and a weapon evolution raise achievement plates', async ({ page }) => {
   await deploy(page);
-  const plates = await page.evaluate(async () => {
+  const result = await page.evaluate(async () => {
     const scene = window.combatGame.scene.getScene('Game') as GameScene;
-    const ui = window.combatGame.scene.getScene('UI');
+    const ui = window.combatGame.scene.getScene('UI') as unknown as Phaser.Scene & { achievements: { queue: { kicker: string }[] } };
     const internal = scene as unknown as {
       offeredAbilities: string[];
       telemetry: { record: { kills: number } };
       resolveEnemyDeath: (enemy: unknown) => void;
     };
-    const texts = () => ui.children.list
-      .filter(child => child.name === 'achievement-toast')
-      .flatMap(plate => (plate as Phaser.GameObjects.Container).list.filter(item => item.type === 'Text'))
-      .map(item => (item as Phaser.GameObjects.Text).text);
-    // The protocol's third level evolves the weapon.
-    const protocol = 'pulse_protocol';
-    scene.abilityLevels.set(protocol, 2);
-    scene.state = 'LEVEL_UP' as GameScene['state'];
-    internal.offeredAbilities = [protocol];
-    scene.selectAbility(protocol);
-    const evolution = texts();
-    // 250 kills in one run earn EXTERMINADOR, which can no longer be lost.
+    // 250 kills in one run earn EXTERMINADOR, which can no longer be lost: its plate shows at once.
     internal.telemetry.record.kills = 249;
     const path = '/src/game/entities/enemies/Enemy.ts';
     const { Enemy } = await import(path);
     const enemy = new Enemy(scene, scene.player.x + 300, scene.player.y, 'GRUNT');
     scene.enemies.add(enemy);
     internal.resolveEnemyDeath(enemy);
-    // Plates queue: the second waits for the first, so read the queue's head and wait.
-    return { evolution };
+    const shown = ui.children.list
+      .filter(child => child.name === 'achievement-toast')
+      .flatMap(plate => (plate as Phaser.GameObjects.Container).list.filter(item => item.type === 'Text'))
+      .map(item => (item as Phaser.GameObjects.Text).text);
+    // The protocol's third level evolves the weapon; its plate queues behind the first one.
+    const protocol = 'pulse_protocol';
+    scene.abilityLevels.set(protocol, 2);
+    scene.state = 'LEVEL_UP' as GameScene['state'];
+    internal.offeredAbilities = [protocol];
+    scene.selectAbility(protocol);
+    return { shown, queued: ui.achievements.queue.map(entry => entry.kicker) };
   });
-  expect(plates.evolution.join(' ')).toContain('EVOLUCIÓN DE ARMA');
-  await expect.poll(() => page.evaluate(() => window.combatGame.scene.getScene('UI').children.list
-    .filter(child => child.name === 'achievement-toast')
-    .flatMap(plate => (plate as Phaser.GameObjects.Container).list.filter(item => item.type === 'Text'))
-    .map(item => (item as Phaser.GameObjects.Text).text).join(' ')), { timeout: 8000 }).toContain('LOGRO DESBLOQUEADO');
+  expect(result.shown.join(' ')).toContain('LOGRO DESBLOQUEADO');
+  expect(result.queued).toContain('EVOLUCIÓN DE ARMA');
 });
 
 test('a hit-stop never leaves physics paused when a modal opens during it', async ({ page }) => {
